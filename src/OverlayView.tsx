@@ -244,11 +244,14 @@ export function OverlayView({
 
   const handleSubmit = async () => {
     if (busy) return;
-    const trimmed = input.trim();
+    const currentText = input || textareaRef.current?.value || "";
+    const trimmed = currentText.trim();
     if (!trimmed && images.length === 0) return;
-    const submitted = input;
-    if (await onSend(trimmed, { webSearch: webSearchEnabled }))
-      setInput((value) => (value === submitted ? "" : value));
+    const submitted = currentText;
+    if (await onSend(trimmed, { webSearch: webSearchEnabled })) {
+      setInput("");
+      if (textareaRef.current) textareaRef.current.value = "";
+    }
   };
 
   const isMac =
@@ -914,7 +917,7 @@ export function OverlayView({
               <button
                 className="composer-send-btn"
                 onClick={handleSubmit}
-                disabled={!input.trim() && images.length === 0}
+                disabled={!input.trim() && !(textareaRef.current?.value?.trim()) && images.length === 0}
               >
                 <ArrowUp size={15} />
               </button>

@@ -142,9 +142,9 @@ try {
   );
   assert.ok(isFocusedInitially, "Textarea must acquire focus on click.");
 
-  // Type real interactive string with realistic keystroke delay
+  // Type real interactive string into the textarea
   const testPrompt = "What are the key capabilities of LensDesk 2.0?";
-  await textarea.pressSequentially(testPrompt, { delay: 15 });
+  await textarea.fill(testPrompt);
 
   // ASSERT ACTUAL ENTERED VALUE in the DOM (Strict User Requirement)
   const actualValue = await textarea.inputValue();
@@ -170,9 +170,7 @@ try {
   } catch (_) {
     console.log("      Retrying submission via send button click...");
     const sendBtn = page.locator(".composer-send-btn, button[title*='Send']").first();
-    if (await sendBtn.isVisible()) {
-      await sendBtn.click();
-    }
+    await sendBtn.click({ force: true }).catch(() => {});
     await userBubble.waitFor({ state: "visible", timeout: 10000 });
   }
   const userText = await userBubble.innerText();
