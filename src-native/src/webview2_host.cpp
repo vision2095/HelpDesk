@@ -1,0 +1,348 @@
+#include "../include/webview2_host.hpp"
+#include "../include/service_dispatcher.hpp"
+#include <wrl/event.h>
+
+using namespace Microsoft::WRL;
+
+namespace LensDesk {
+
+WebView2Host::WebView2Host() = default;
+
+WebView2Host::~WebView2Host() {
+    Shutdown();
+}
+
+bool WebView2Host::Initialize(HWND hwnd, IDCompositionVisual* hudVisual, const std::filesystem::path& distPath, ServiceDispatcher* dispatcher) {
+    if (!hwnd || !hudVisual || !dispatcher) return false;
+    m_hwnd = hwnd;
+    m_distPath = distPath;
+    m_dispatcher = dispatcher;
+
+    std::filesystem::path userDataDir = GetAppDataDirectory() / L"WebView2_Data";
+    std::filesystem::create_directories(userDataDir);
+
+    auto options = Make<CoreWebView2EnvironmentOptions>();
+    options->put_AdditionalBrowserArguments(
+        L"--enable-features=msWebView2BrowserHitTransparent --disable-background-timer-throttling --disable-features=msSmartScreenProtection"
+    );
+
+    HRESULT hr = CreateCoreWebView2EnvironmentWithOptions(
+        nullptr,
+        userDataDir.c_str(),
+        options.Get(),
+        Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
+            [this, hwnd, hudVisual](HRESULT hr, ICoreWebView2Environment* env) -> HRESULT {
+                if (FAILED(hr) || !env) return hr;
+                m_environment = env;
+
+                ComPtr<ICoreWebView2Environment3> env3;
+                hr = env->QueryInterface(IID_PPV_ARGS(&env3));
+                if (FAILED(hr)) return hr;
+
+                hr = env3->CreateCoreWebView2CompositionController(
+                    hwnd,
+                    Callback<ICoreWebView2CreateCoreWebView2CompositionControllerCompletedHandler>(
+                        [this, hudVisual](HRESULT hr, ICoreWebView2CompositionController* compController) -> HRESULT {
+                            if (FAILED(hr) || !compController) return hr;
+                            m_compositionController = compController;
+
+                            hr = compController->QueryInterface(IID_PPV_ARGS(&m_controller));
+                            if (FAILED(hr)) return hr;
+
+                            // 1. Root visual to DirectComposition
+                            compController->put_RootVisualTarget(hudVisual);
+
+                            // 2. Query webView
+                            m_controller->get_CoreWebView2(&m_webView);
+                            if (!m_webView) return E_FAIL;
+
+                            // 3. Make background 100% transparent
+                            COREWEBVIEW2_COLOR transparentColor{ 0, 0, 0, 0 };
+                            ComPtr<ICoreWebView2Controller2> controller2;
+                            if (SUCCEEDED(m_controller.As(&controller2))) {
+                                controller2->put_DefaultBackgroundColor(transparentColor);
+                            }
+
+                            // 4. Set initial bounds
+                            RECT rc{};
+                            GetClientRect(m_hwnd, &rc);
+                            m_controller->put_Bounds(rc);
+                            m_controller->put_IsVisible(TRUE);
+
+                            // 5. Virtual host mapping to dist folder
+                            ComPtr<ICoreWebView2_3> webView3;
+                            if (SUCCEEDED(m_webView.As(&webView3))) {
+                                webView3->SetVirtualHostNameToFolderMapping(
+                                    L"lensdesk.local",
+                                    m_distPath.c_str(),
+                                    COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW
+                                );
+                            }
+
+                            // 6. Inject the window.lens bridge
+                            InjectLensDeskBridge();
+
+                            // 7. Setup WebMessage handling
+                            SetupWebMessageHandling();
+
+                            // 8. Navigate to React 19 app
+                            m_webView->Navigate(L"https://lensdesk.local/index.html");
+
+                            m_isReady = true;
+                            return S_OK;
+                        }
+                    ).Get()
+                );
+
+                return hr;
+            }
+        ).Get()
+    );
+
+    return SUCCEEDED(hr);
+}
+
+void WebView2Host::Shutdown() {
+    if (m_webView && m_webMessageToken.value != 0) {
+        m_webView->remove_WebMessageReceived(m_webMessageToken);
+        m_webMessageToken.value = 0;
+    }
+    if (m_controller) {
+        m_controller->Close();
+    }
+    m_webView.Reset();
+    m_compositionController.Reset();
+    m_controller.Reset();
+    m_environment.Reset();
+    m_isReady = false;
+}
+
+void WebView2Host::Resize(int width, int height) {
+    if (m_controller) {
+        RECT rc{ 0, 0, width, height };
+        m_controller->put_Bounds(rc);
+    }
+}
+
+void WebView2Host::SetBounds(int x, int y, int width, int height) {
+    if (m_controller) {
+        RECT rc{ x, y, x + width, y + height };
+        m_controller->put_Bounds(rc);
+    }
+}
+
+void WebView2Host::SetVisible(bool visible) {
+    if (m_controller) {
+        m_controller->put_IsVisible(visible ? TRUE : FALSE);
+    }
+}
+
+void WebView2Host::SendMouseInput(UINT msg, WPARAM wParam, LPARAM lParam) {
+    if (!m_compositionController) return;
+
+    POINT pt{ GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+    COREWEBVIEW2_MOUSE_EVENT_KIND mouseKind = COREWEBVIEW2_MOUSE_EVENT_KIND_MOVE;
+    COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS virtKeys = COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS_NONE;
+    UINT32 mouseData = 0;
+
+    switch (msg) {
+        case WM_MOUSEMOVE:
+            mouseKind = COREWEBVIEW2_MOUSE_EVENT_KIND_MOVE;
+            break;
+        case WM_LBUTTONDOWN:
+            mouseKind = COREWEBVIEW2_MOUSE_EVENT_KIND_LEFT_BUTTON_DOWN;
+            break;
+        case WM_LBUTTONUP:
+            mouseKind = COREWEBVIEW2_MOUSE_EVENT_KIND_LEFT_BUTTON_UP;
+            break;
+        case WM_RBUTTONDOWN:
+            mouseKind = COREWEBVIEW2_MOUSE_EVENT_KIND_RIGHT_BUTTON_DOWN;
+            break;
+        case WM_RBUTTONUP:
+            mouseKind = COREWEBVIEW2_MOUSE_EVENT_KIND_RIGHT_BUTTON_UP;
+            break;
+        case WM_MOUSEWHEEL:
+            mouseKind = COREWEBVIEW2_MOUSE_EVENT_KIND_WHEEL;
+            mouseData = GET_WHEEL_DELTA_WPARAM(wParam);
+            break;
+        default:
+            return;
+    }
+
+    if (wParam & MK_LBUTTON) virtKeys |= COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS_LEFT_BUTTON;
+    if (wParam & MK_RBUTTON) virtKeys |= COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS_RIGHT_BUTTON;
+    if (wParam & MK_SHIFT)   virtKeys |= COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS_SHIFT;
+    if (wParam & MK_CONTROL) virtKeys |= COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS_CONTROL;
+
+    m_compositionController->SendMouseInput(mouseKind, virtKeys, mouseData, pt);
+}
+
+void WebView2Host::SendKeyboardInput(UINT msg, WPARAM wParam, LPARAM lParam) {
+    if (!m_compositionController) return;
+
+    COREWEBVIEW2_KEY_EVENT_KIND keyKind = COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN;
+    switch (msg) {
+        case WM_KEYDOWN:
+        case WM_SYSKEYDOWN:
+            keyKind = COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN;
+            break;
+        case WM_KEYUP:
+        case WM_SYSKEYUP:
+            keyKind = COREWEBVIEW2_KEY_EVENT_KIND_KEY_UP;
+            break;
+        case WM_CHAR:
+        case WM_SYSCHAR:
+            keyKind = COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN;
+            break;
+        default:
+            return;
+    }
+
+    m_compositionController->SendKeyboardInput(
+        keyKind,
+        static_cast<UINT32>(wParam),
+        static_cast<INT64>(lParam)
+    );
+}
+
+void WebView2Host::MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON reason) {
+    if (m_controller) {
+        m_controller->MoveFocus(reason);
+    }
+}
+
+void WebView2Host::InjectLensDeskBridge() {
+    if (!m_webView) return;
+
+    const wchar_t* bridgeJs = LR"JS(
+(function() {
+  if (window.lens) return;
+  var nextId = 1;
+  var pending = new Map();
+  var listeners = {
+    gate: new Set(),
+    preferences: new Set(),
+    browserState: new Set(),
+    browserFocusAddress: new Set(),
+    browserFocusFind: new Set(),
+    chat: new Set(),
+    shortcut: new Set(),
+    overlay: new Set(),
+    clickThrough: new Set(),
+    globalKey: new Set()
+  };
+
+  window.chrome.webview.addEventListener('message', function(event) {
+    var msg = event.data;
+    if (!msg) return;
+    if (msg.type === 'response') {
+      var p = pending.get(msg.id);
+      if (p) {
+        pending.delete(msg.id);
+        if (msg.error) p.reject(new Error(msg.error));
+        else p.resolve(msg.result);
+      }
+    } else if (msg.type === 'event') {
+      var evName = msg.event;
+      var data = msg.data;
+      if (evName === 'lens:gate') listeners.gate.forEach(function(fn) { fn(data); });
+      else if (evName === 'lens:preferences') listeners.preferences.forEach(function(fn) { fn(data); });
+      else if (evName === 'lens:browser-state') listeners.browserState.forEach(function(fn) { fn(data); });
+      else if (evName === 'lens:browser-focus-address') listeners.browserFocusAddress.forEach(function(fn) { fn(); });
+      else if (evName === 'lens:browser-focus-find') listeners.browserFocusFind.forEach(function(fn) { fn(); });
+      else if (evName === 'lens:chat') listeners.chat.forEach(function(fn) { fn(data); });
+      else if (evName === 'lens:shortcut') listeners.shortcut.forEach(function(fn) { fn(data); });
+      else if (evName === 'lens:overlay') listeners.overlay.forEach(function(fn) { fn(data); });
+      else if (evName === 'lens:clickThrough') listeners.clickThrough.forEach(function(fn) { fn(data); });
+      else if (evName === 'gkey') listeners.globalKey.forEach(function(fn) { fn(data); });
+    }
+  });
+
+  window.lens = {
+    platform: 'win32',
+    invoke: function(action, payload) {
+      return new Promise(function(resolve, reject) {
+        var id = nextId++;
+        pending.set(id, { resolve: resolve, reject: reject });
+        window.chrome.webview.postMessage({ id: id, action: action, payload: payload || {} });
+      });
+    },
+    onGate: function(fn) { listeners.gate.add(fn); return function() { listeners.gate.delete(fn); }; },
+    onPreferences: function(fn) { listeners.preferences.add(fn); return function() { listeners.preferences.delete(fn); }; },
+    onBrowserState: function(fn) { listeners.browserState.add(fn); return function() { listeners.browserState.delete(fn); }; },
+    onBrowserFocusAddress: function(fn) { listeners.browserFocusAddress.add(fn); return function() { listeners.browserFocusAddress.delete(fn); }; },
+    onBrowserFocusFind: function(fn) { listeners.browserFocusFind.add(fn); return function() { listeners.browserFocusFind.delete(fn); }; },
+    onChatEvent: function(fn) { listeners.chat.add(fn); return function() { listeners.chat.delete(fn); }; },
+    onShortcut: function(fn) { listeners.shortcut.add(fn); return function() { listeners.shortcut.delete(fn); }; },
+    onOverlay: function(fn) { listeners.overlay.add(fn); return function() { listeners.overlay.delete(fn); }; },
+    onClickThrough: function(fn) { listeners.clickThrough.add(fn); return function() { listeners.clickThrough.delete(fn); }; },
+    onGlobalKey: function(fn) { listeners.globalKey.add(fn); return function() { listeners.globalKey.delete(fn); }; }
+  };
+})();
+)JS";
+
+    m_webView->AddScriptToExecuteOnDocumentCreated(bridgeJs, nullptr);
+}
+
+void WebView2Host::SetupWebMessageHandling() {
+    if (!m_webView || !m_dispatcher) return;
+
+    m_webView->add_WebMessageReceived(
+        Callback<ICoreWebView2WebMessageReceivedEventHandler>(
+            [this](ICoreWebView2* sender, ICoreWebView2WebMessageReceivedEventArgs* args) -> HRESULT {
+                LPWSTR rawJson = nullptr;
+                HRESULT hr = args->get_WebMessageAsJson(&rawJson);
+                if (FAILED(hr) || !rawJson) return hr;
+
+                std::wstring wideJson(rawJson);
+                CoTaskMemFree(rawJson);
+
+                std::string utf8Json = WideToUtf8(wideJson);
+                try {
+                    auto parsed = json::parse(utf8Json);
+                    int id = parsed.value("id", 0);
+                    std::string action = parsed.value("action", "");
+                    json payload = parsed.value("payload", json::object());
+
+                    m_dispatcher->Dispatch(
+                        action,
+                        payload,
+                        [this, id](const json& result, bool isError) {
+                            json resp;
+                            resp["type"] = "response";
+                            resp["id"] = id;
+                            if (isError) {
+                                resp["error"] = result.is_string() ? result.get<std::string>() : "Action failed";
+                            } else {
+                                resp["result"] = result;
+                            }
+                            PostWebMessage(resp);
+                        }
+                    );
+                } catch (const std::exception& ex) {
+                    std::cerr << "WebMessage parse error: " << ex.what() << std::endl;
+                }
+
+                return S_OK;
+            }
+        ).Get(),
+        &m_webMessageToken
+    );
+}
+
+void WebView2Host::PostWebMessage(const json& message) {
+    if (!m_webView) return;
+    std::string dump = message.dump();
+    std::wstring wide = Utf8ToWide(dump);
+    m_webView->PostWebMessageAsJson(wide.c_str());
+}
+
+void WebView2Host::BroadcastEvent(const std::string& eventName, const json& eventData) {
+    json msg;
+    msg["type"] = "event";
+    msg["event"] = eventName;
+    msg["data"] = eventData;
+    PostWebMessage(msg);
+}
+
+} // namespace LensDesk
