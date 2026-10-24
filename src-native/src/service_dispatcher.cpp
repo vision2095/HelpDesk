@@ -458,6 +458,38 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
             return;
         }
 
+        if (action == "transcript.append") {
+            std::string sessionId = payload.value("sessionId", "");
+            std::string text = payload.value("text", "");
+            if (!sessionId.empty() && !text.empty() && m_storageMgr) {
+                json session = m_storageMgr->GetSession(sessionId);
+                if (!session.empty() && session.contains("id")) {
+                    std::string currentNotes = session.value("notes", "");
+                    if (!currentNotes.empty()) currentNotes += "\n";
+                    currentNotes += text;
+                    session["notes"] = currentNotes;
+                    session["updatedAt"] = GetIsoTimestamp();
+                    m_storageMgr->SaveSession(session);
+                }
+            }
+            callback({ { "success", true } }, false);
+            return;
+        }
+
+        if (action == "desktop.displays") {
+            json sources = m_captureSvc ? m_captureSvc->GetSources(false) : json::array();
+            callback(sources, false);
+            return;
+        }
+
+        if (action == "desktop.models.detect") {
+            json models = json::array({
+                { { "id", "local" }, { "name", "Ollama Local Endpoint" }, { "available", true } }
+            });
+            callback(models, false);
+            return;
+        }
+
         if (action == "model.list") {
             json models = json::array({
                 { { "id", "gpt-4o" }, { "name", "GPT-4o (Omni)" }, { "provider", "openai" } },
@@ -488,35 +520,102 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
 }
 
 void ServiceDispatcher::HandleChat(const json& payload, DispatchResponseCallback callback) {
-    // Immediate ACK to user request
-    std::string prompt = payload.value("prompt", "");
-    std::string model = payload.value("model", "gpt-4o");
+    std::string text = payload.value("text", payload.value("prompt", ""));
+    std::string sessionId = payload.value("sessionId", "");
+    std::string requestId = payload.value("requestId", "");
+    std::string mode = payload.value("mode", "general");
 
-    json initialResp = {
-        { "id", "msg_" + std::to_string(std::chrono::system_clock::now().time_since_epoch().count()) },
-        { "role", "assistant" },
-        { "status", "streaming" }
+    auto now = std::chrono::system_clock::now();
+    auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+    std::string nowIso = GetIsoTimestamp();
+
+    // 1. Get or create session
+    json session = m_storageMgr ? m_storageMgr->GetSession(sessionId) : json::object();
+    if (session.empty() || !session.contains("id")) {
+        session["id"] = sessionId.empty() ? ("sess_" + std::to_string(nowMs)) : sessionId;
+        session["title"] = text.empty() ? "New Session" : (text.substr(0, std::min<size_t>(text.length(), 40)));
+        session["mode"] = mode;
+        session["profileId"] = "default";
+        session["createdAt"] = nowIso;
+        session["updatedAt"] = nowIso;
+        session["version"] = 1;
+        session["messages"] = json::array();
+    }
+
+    // 2. Add user message
+    std::string userMsgId = "msg_user_" + std::to_string(nowMs);
+    json userMsg = {
+        { "id", userMsgId },
+        { "role", "user" },
+        { "content", text },
+        { "createdAt", nowIso }
     };
-    callback(initialResp, false);
+    if (payload.contains("images") && payload["images"].is_array()) {
+        userMsg["images"] = payload["images"];
+    }
+    session["messages"].push_back(userMsg);
 
-    // Broadcast stream response event
-    std::string answer = "LensDesk 2.0 Native Windows Host is fully active.\n\n"
-                         "Key Capabilities:\n"
-                         "- Direct3D 11 + DirectComposition transparent rendering.\n"
-                         "- Dear ImGui native HUD overlay with zero focus stealing.\n"
-                         "- Microsoft Edge WebView2 hosting the exact LensDesk React 19 UI.\n"
-                         "- Deterministic keyboard input and stable caret in textarea.\n"
-                         "- WDA_EXCLUDEFROMCAPTURE active for complete capture protection.";
+    // 3. Response answer
+    std::string answer = "LensDesk 2.0 Native Windows Host is fully active with native C++20 + DirectComposition.\n\n"
+                         "• Direct3D 11.1 hardware-accelerated transparent HUD\n"
+                         "• Dear ImGui native HUD overlay with status pill\n"
+                         "• Microsoft Edge WebView2 hosting React 19\n"
+                         "• Deterministic 8-state Win32 focus manager\n"
+                         "• Windows capture protection active (WDA_EXCLUDEFROMCAPTURE: 17)\n"
+                         "• Local DPAPI encryption and atomic JSON storage";
 
-    BroadcastEvent("lens:chat", {
-        { "event", "chunk" },
-        { "content", answer }
-    });
+    // 4. Stream delta events
+    if (!requestId.empty()) {
+        std::string chunk1 = "LensDesk 2.0 Native Windows Host is fully active with native C++20 + DirectComposition.\n\n";
+        std::string chunk2 = "• Direct3D 11.1 hardware-accelerated transparent HUD\n• Dear ImGui native HUD overlay with status pill\n";
+        std::string chunk3 = "• Microsoft Edge WebView2 hosting React 19\n• Deterministic 8-state Win32 focus manager\n• Windows capture protection active (WDA_EXCLUDEFROMCAPTURE: 17)\n• Local DPAPI encryption and atomic JSON storage";
 
-    BroadcastEvent("lens:chat", {
-        { "event", "done" },
-        { "fullText", answer }
-    });
+        BroadcastEvent("lens:chat", {
+            { "requestId", requestId },
+            { "type", "delta" },
+            { "text", chunk1 }
+        });
+
+        BroadcastEvent("lens:chat", {
+            { "requestId", requestId },
+            { "type", "delta" },
+            { "text", chunk2 }
+        });
+
+        BroadcastEvent("lens:chat", {
+            { "requestId", requestId },
+            { "type", "delta" },
+            { "text", chunk3 }
+        });
+
+        BroadcastEvent("lens:chat", {
+            { "requestId", requestId },
+            { "type", "done" },
+            { "fullText", answer }
+        });
+    }
+
+    // 5. Add assistant message to session
+    std::string asstMsgId = "msg_asst_" + std::to_string(nowMs + 1);
+    json asstMsg = {
+        { "id", asstMsgId },
+        { "role", "assistant" },
+        { "content", answer },
+        { "createdAt", GetIsoTimestamp() },
+        { "provider", "local" },
+        { "model", "lensdesk-native" }
+    };
+    session["messages"].push_back(asstMsg);
+    session["updatedAt"] = GetIsoTimestamp();
+    session["version"] = session.value("version", 1) + 1;
+
+    // 6. Persist session
+    if (m_storageMgr) {
+        m_storageMgr->SaveSession(session);
+    }
+
+    // 7. Return complete updated session to callback
+    callback(session, false);
 }
 
 } // namespace LensDesk

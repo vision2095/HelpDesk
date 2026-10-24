@@ -111,4 +111,18 @@ inline std::string Base64Encode(const unsigned char* data, size_t len) {
     return encoded;
 }
 
+inline std::string GetIsoTimestamp() {
+    auto now = std::chrono::system_clock::now();
+    std::time_t t = std::chrono::system_clock::to_time_t(now);
+    std::tm tmBuf{};
+#if defined(_WIN32)
+    gmtime_s(&tmBuf, &t);
+#else
+    gmtime_r(&t, &tmBuf);
+#endif
+    char buf[64];
+    std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &tmBuf);
+    return std::string(buf);
+}
+
 } // namespace LensDesk

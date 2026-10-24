@@ -1,0 +1,32 @@
+================================================================================
+LensDesk 2.0 (Windows Native Edition)
+================================================================================
+
+Architecture:
+  - 100% Native C++20 Win32 Executable (RuntimeHost.exe)
+  - Hardware Acceleration: Direct3D 11.1 + DirectComposition
+  - Native HUD Overlay: Dear ImGui v1.91.x
+  - Frontend Runtime: Microsoft Edge WebView2 (Hosting React 19)
+  - Protection: Hardware capture exclusion (WDA_EXCLUDEFROMCAPTURE: 17)
+  - Security: Windows DPAPI (CryptProtectData) encrypted credentials
+
+System Requirements:
+  - Windows 10 (version 1809 or higher) / Windows 11 (64-bit AMD64)
+  - Microsoft Edge WebView2 Runtime (pre-installed on Windows 11 and modern Windows 10;
+    downloadable from https://go.microsoft.com/fwlink/p/?LinkId=2124703)
+
+Default Global Shortcuts:
+  - Toggle Overlay:       Ctrl + Shift + L  (or Ctrl + \)
+  - Hide Overlay:         Shift + H
+  - Toggle Click-Through: Shift + M
+  - Capture Screen:       Ctrl + Shift + S
+  - Auto-Type Answer:     Ctrl + Shift + T
+  - Radial Action Menu:   Middle Click (or custom binding)
+
+Running the Application:
+  - Simply double-click 'RuntimeHost.exe'.
+  - To exit, click the tray icon in the Windows taskbar and choose 'Quit LensDesk',
+    or trigger the quit command from the assistant interface.
+
+Support & Updates: https://lensdesk.com
+================================================================================

@@ -131,4 +131,11 @@ test('LensDesk 2.0 Native Windows Host Architecture', async (t) => {
       assert.match(focusHeader, new RegExp(`\\b${s}\\b`), `Missing state ${s} in FocusState enum`);
     }
   });
+
+  await t.test('10. Real Windows Runtime Integration Script and Quickstart Exist', () => {
+    assert.ok(fs.existsSync(path.join(ROOT, 'scripts/test-windows-runtime.ps1')), 'Missing test-windows-runtime.ps1');
+    assert.ok(fs.existsSync(path.join(ROOT, 'QUICKSTART.txt')), 'Missing QUICKSTART.txt');
+    const nsi = fs.readFileSync(path.join(ROOT, 'installer/installer.nsi'), 'utf8');
+    assert.match(nsi, /F3017226-FE2A-4295-8BDF-00C3A9A7E4C5/, 'Missing WebView2 detection in installer.nsi');
+  });
 });

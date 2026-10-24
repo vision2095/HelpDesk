@@ -7,6 +7,7 @@
 !define PRODUCT_UNINST_ROOT_KEY "HKCU"
 
 !include "MUI2.nsh"
+!include "LogicLib.nsh"
 
 ; MUI Settings
 !define MUI_ABORTWARNING
@@ -35,6 +36,18 @@ ShowInstDetails show
 ShowUnInstDetails show
 RequestExecutionLevel user
 
+Function .onInit
+  ; Detect Microsoft Edge WebView2 Runtime
+  ReadRegStr $0 HKLM "SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" "pv"
+  ${If} $0 == ""
+    ReadRegStr $0 HKCU "SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" "pv"
+  ${EndIf}
+  ${If} $0 == ""
+    MessageBox MB_ICONQUESTION|MB_YESNO|MB_DEFBUTTON1 "LensDesk 2.0 requires the Microsoft Edge WebView2 Runtime to render its interface.$\n$\nWould you like to open Microsoft's download page for the WebView2 Runtime bootstrapper now?" IDNO +2
+    ExecShell "open" "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
+  ${EndIf}
+FunctionEnd
+
 Section "MainSection" SEC01
   SetOutPath "$INSTDIR"
   SetOverwrite try
@@ -42,6 +55,8 @@ Section "MainSection" SEC01
   File "..\build-native\bin\Release\RuntimeHost.exe"
   File "..\src-native\third_party\webview2\lib\x64\WebView2Loader.dll"
   File "..\src-native\resources\app.ico"
+  File /nonfatal "..\LICENSE"
+  File /nonfatal "..\README.md"
 
   ; Dist folder
   SetOutPath "$INSTDIR\dist"
@@ -87,6 +102,8 @@ Section Uninstall
   Delete "$INSTDIR\RuntimeHost.exe"
   Delete "$INSTDIR\WebView2Loader.dll"
   Delete "$INSTDIR\app.ico"
+  Delete "$INSTDIR\LICENSE"
+  Delete "$INSTDIR\README.md"
 
   RMDir /r "$INSTDIR\dist"
 

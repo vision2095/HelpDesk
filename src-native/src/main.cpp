@@ -89,6 +89,21 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     if (!std::filesystem::exists(distPath)) {
         distPath = exeDir.parent_path() / L"dist";
     }
+    if (!std::filesystem::exists(distPath)) {
+        distPath = exeDir.parent_path().parent_path() / L"dist";
+    }
+    if (!std::filesystem::exists(distPath)) {
+        distPath = exeDir.parent_path().parent_path().parent_path() / L"dist";
+    }
+    if (!std::filesystem::exists(distPath)) {
+        MessageBoxW(
+            hwnd,
+            L"LensDesk 2.0 Web Assets ('dist' directory) could not be located.\n\n"
+            L"Please verify that the application was installed correctly.",
+            L"LensDesk - Missing Assets",
+            MB_ICONWARNING | MB_OK
+        );
+    }
 
     // 11. Wire Services & Dispatcher
     dispatcher.Initialize(

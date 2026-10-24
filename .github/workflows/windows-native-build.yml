@@ -54,6 +54,11 @@ jobs:
         run: |
           node --test tests/native-architecture.test.mjs
 
+      - name: Execute Real Windows Runtime & Win32 Integration Test
+        shell: pwsh
+        run: |
+          pwsh scripts/test-windows-runtime.ps1 -BinaryPath build-native/bin/Release/RuntimeHost.exe
+
       - name: Package Standalone Portable Zip
         shell: pwsh
         run: |
@@ -61,6 +66,10 @@ jobs:
           New-Item -ItemType Directory -Path $Staging -Force | Out-Null
           Copy-Item "build-native/bin/Release/RuntimeHost.exe" $Staging
           Copy-Item "src-native/third_party/webview2/lib/x64/WebView2Loader.dll" $Staging
+          Copy-Item "src-native/resources/app.ico" $Staging
+          if (Test-Path "LICENSE") { Copy-Item "LICENSE" $Staging }
+          if (Test-Path "README.md") { Copy-Item "README.md" $Staging }
+          if (Test-Path "QUICKSTART.txt") { Copy-Item "QUICKSTART.txt" $Staging }
           Copy-Item -Recurse "dist" "$Staging/dist"
           Compress-Archive -Path "$Staging/*" -DestinationPath "release/LensDesk-2.0.0-Windows-x64.zip" -Force
 
