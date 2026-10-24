@@ -175,7 +175,7 @@ try {
     }
 
     $windows = [WindowFinder]::GetProcessWindows([uint32]$targetPid)
-    Write-Host "      Total Windows Owned by Process $targetPid: $($windows.Count)"
+    Write-Host "      Total Windows Owned by Process ${targetPid}: $($windows.Count)"
     foreach ($w in $windows) {
         Write-Host "        -> HWND: 0x$($w.Hwnd.ToString('X')), Class: '$($w.ClassName)', Title: '$($w.Title)'"
     }
