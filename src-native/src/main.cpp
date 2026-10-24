@@ -87,7 +87,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     std::filesystem::path exeDir = GetExecutableDirectory();
     std::filesystem::path distPath = exeDir / L"dist";
     if (!std::filesystem::exists(distPath)) {
-        // Fallback to parent path if running from build/Release
         distPath = exeDir.parent_path() / L"dist";
     }
 
@@ -99,20 +98,25 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
         &inputMgr,
         &captureSvc,
         &storageMgr,
-        &imguiOverlay
+        &imguiOverlay,
+        &focusMgr
     );
 
-    // 12. Initialize WebView2 Host (hosts React 19 app)
-    webHost.Initialize(hwnd, dcompEngine.GetHudVisual(), distPath, &dispatcher);
-
-    // 13. Initialize Embedded Browser Manager
-    // Initialized after environment is ready in webHost
-    browserMgr.Initialize(hwnd, webHost.GetWebView() ? nullptr : nullptr, dcompEngine.GetBrowserVisual());
-
-    // 14. Initialize Focus Manager
+    // 12. Initialize Focus Manager
     focusMgr.Initialize(hwnd, &webHost, &browserMgr, &imguiOverlay);
 
-    // 15. Connect Window Message Router
+    // 13. Initialize WebView2 Host (hosts React 19 app) & Embedded Browser
+    webHost.Initialize(
+        hwnd,
+        dcompEngine.GetHudVisual(),
+        distPath,
+        &dispatcher,
+        [hwnd, &dcompEngine, &browserMgr](ICoreWebView2Environment* env) {
+            browserMgr.Initialize(hwnd, env, dcompEngine.GetBrowserVisual());
+        }
+    );
+
+    // 14. Connect Window Message Router
     winMgr.SetMessageCallback(
         [&focusMgr, &d3dRenderer, &webHost, &browserMgr, &inputMgr, &dispatcher, &winMgr](
             HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, bool& handled
@@ -138,7 +142,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
         }
     );
 
-    // 16. Message & Render Loop
+    // 15. Message & Render Loop
     MSG msg{};
     bool running = true;
     while (running) {
@@ -167,7 +171,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
         Sleep(16);
     }
 
-    // 17. Teardown
+    // 16. Teardown
     inputMgr.Shutdown();
     browserMgr.Shutdown();
     webHost.Shutdown();

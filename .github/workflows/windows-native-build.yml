@@ -1,0 +1,80 @@
+name: LensDesk 2.0 Native Windows Build & Verification
+
+on:
+  push:
+    branches: ["main", "native-windows-host", "windows-native-final-rebuild"]
+    tags: ["v*"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows-native:
+    name: Build & Verify Native Windows x64 Host
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install Node Dependencies
+        run: npm ci
+
+      - name: Run Core Test Suite
+        run: npm test
+
+      - name: Build React 19 Production Bundle
+        run: npm run build
+
+      - name: Install NSIS
+        run: choco install nsis -y --no-progress
+
+      - name: Configure CMake Native Host (MSVC C++20)
+        run: |
+          cmake -S src-native -B build-native -A x64 -DCMAKE_BUILD_TYPE=Release
+
+      - name: Compile RuntimeHost.exe (C++20 MSVC)
+        run: |
+          cmake --build build-native --config Release --verbose --target RuntimeHost
+
+      - name: Verify PE Binary Architecture (Zero Electron Audit)
+        run: |
+          node scripts/verify-native-binary.mjs build-native/bin/Release/RuntimeHost.exe
+
+      - name: Run Native Architecture Unit Tests
+        run: |
+          node --test tests/native-architecture.test.mjs
+
+      - name: Package Standalone Portable Zip
+        shell: pwsh
+        run: |
+          $Staging = "release/LensDesk-2.0.0-Windows-x64"
+          New-Item -ItemType Directory -Path $Staging -Force | Out-Null
+          Copy-Item "build-native/bin/Release/RuntimeHost.exe" $Staging
+          Copy-Item "src-native/third_party/webview2/lib/x64/WebView2Loader.dll" $Staging
+          Copy-Item -Recurse "dist" "$Staging/dist"
+          Compress-Archive -Path "$Staging/*" -DestinationPath "release/LensDesk-2.0.0-Windows-x64.zip" -Force
+
+      - name: Compile NSIS Windows Installer
+        run: |
+          makensis installer/installer.nsi
+
+      - name: Upload Native Windows Release Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: LensDesk-2.0.0-Windows-x64-Native
+          path: |
+            build-native/bin/Release/RuntimeHost.exe
+            src-native/third_party/webview2/lib/x64/WebView2Loader.dll
+            release/LensDesk-2.0.0-Windows-x64.zip
+            release/LensDesk-2.0.0-Setup.exe
+          if-no-files-found: error

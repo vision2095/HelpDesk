@@ -10,6 +10,7 @@ class InputManager;
 class CaptureService;
 class StorageManager;
 class ImGuiOverlay;
+class FocusManager;
 
 using DispatchResponseCallback = std::function<void(const json& result, bool isError)>;
 
@@ -25,7 +26,8 @@ public:
         InputManager* inputMgr,
         CaptureService* captureSvc,
         StorageManager* storageMgr,
-        ImGuiOverlay* imguiOverlay
+        ImGuiOverlay* imguiOverlay,
+        FocusManager* focusMgr = nullptr
     );
 
     void Dispatch(const std::string& action, const json& payload, DispatchResponseCallback callback);
@@ -42,6 +44,7 @@ private:
     CaptureService* m_captureSvc = nullptr;
     StorageManager* m_storageMgr = nullptr;
     ImGuiOverlay* m_imguiOverlay = nullptr;
+    FocusManager* m_focusMgr = nullptr;
 };
 
 } // namespace LensDesk

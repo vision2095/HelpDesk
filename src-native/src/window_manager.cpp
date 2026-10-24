@@ -1,4 +1,5 @@
 #include "../include/window_manager.hpp"
+#include <algorithm>
 
 namespace LensDesk {
 
@@ -40,8 +41,8 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
 
     int screenW = mi.rcWork.right - mi.rcWork.left;
     int screenH = mi.rcWork.bottom - mi.rcWork.top;
-    int initW = min(1040, screenW - 100);
-    int initH = min(740, screenH - 100);
+    int initW = std::min(1040, screenW - 100);
+    int initH = std::min(740, screenH - 100);
     int initX = mi.rcWork.left + (screenW - initW) / 2;
     int initY = mi.rcWork.top + (screenH - initH) / 2;
 
@@ -137,7 +138,7 @@ void WindowManager::SetCaptureProtection(bool enable) {
 }
 
 void WindowManager::SetOpacity(float opacity) {
-    m_opacity = max(0.0f, min(1.0f, opacity));
+    m_opacity = std::max(0.0f, std::min(1.0f, opacity));
     // DirectComposition visual opacity handles fine-grained alpha without WS_EX_LAYERED artifacts
 }
 

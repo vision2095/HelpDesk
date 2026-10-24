@@ -6,6 +6,7 @@
 #include "../include/capture_service.hpp"
 #include "../include/storage_manager.hpp"
 #include "../include/imgui_overlay.hpp"
+#include "../include/focus_manager.hpp"
 
 namespace LensDesk {
 
@@ -19,7 +20,8 @@ void ServiceDispatcher::Initialize(
     InputManager* inputMgr,
     CaptureService* captureSvc,
     StorageManager* storageMgr,
-    ImGuiOverlay* imguiOverlay
+    ImGuiOverlay* imguiOverlay,
+    FocusManager* focusMgr
 ) {
     m_winMgr = winMgr;
     m_webHost = webHost;
@@ -28,6 +30,7 @@ void ServiceDispatcher::Initialize(
     m_captureSvc = captureSvc;
     m_storageMgr = storageMgr;
     m_imguiOverlay = imguiOverlay;
+    m_focusMgr = focusMgr;
 
     // Connect browser state updates to WebView2 host push
     if (m_browserMgr) {
@@ -307,6 +310,12 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
         if (action == "desktop.quit") {
             PostQuitMessage(0);
             callback({ { "success", true } }, false);
+            return;
+        }
+
+        if (action == "desktop.diagnostics") {
+            json diag = m_focusMgr ? m_focusMgr->GetDiagnosticsJson() : json::object();
+            callback(diag, false);
             return;
         }
 

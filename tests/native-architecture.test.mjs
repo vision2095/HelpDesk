@@ -99,4 +99,36 @@ test('LensDesk 2.0 Native Windows Host Architecture', async (t) => {
     assert.strictEqual(pkg.version, '2.0.0');
     assert.ok(pkg.scripts['build']);
   });
+
+  await t.test('8. Strict Check: No Non-Existent SendKeyboardInput Calls', () => {
+    const srcNativeFiles = [
+      'src-native/include/webview2_host.hpp',
+      'src-native/src/webview2_host.cpp',
+      'src-native/include/browser_tabs.hpp',
+      'src-native/src/browser_tabs.cpp',
+      'src-native/include/focus_manager.hpp',
+      'src-native/src/focus_manager.cpp',
+    ];
+    for (const f of srcNativeFiles) {
+      const content = fs.readFileSync(path.join(ROOT, f), 'utf8');
+      assert.ok(!content.includes('SendKeyboardInput'), `Found invalid SendKeyboardInput in ${f}`);
+    }
+  });
+
+  await t.test('9. Focus State Machine Has All 8 Required States', () => {
+    const focusHeader = fs.readFileSync(path.join(ROOT, 'src-native/include/focus_manager.hpp'), 'utf8');
+    const requiredStates = [
+      'INACTIVE',
+      'ACTIVATING',
+      'FOCUSED_ASSISTANT',
+      'FOCUSED_BROWSER',
+      'FOCUSED_NATIVE_CONTROL',
+      'SWITCHING_VIEW',
+      'FOCUS_LOST',
+      'RESTORING'
+    ];
+    for (const s of requiredStates) {
+      assert.match(focusHeader, new RegExp(`\\b${s}\\b`), `Missing state ${s} in FocusState enum`);
+    }
+  });
 });

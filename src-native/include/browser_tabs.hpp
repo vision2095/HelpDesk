@@ -47,16 +47,20 @@ public:
     json GetStateSnapshot() const;
 
     void SendMouseInput(UINT msg, WPARAM wParam, LPARAM lParam);
-    void SendKeyboardInput(UINT msg, WPARAM wParam, LPARAM lParam);
     void MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON reason);
 
     using StateChangedCallback = std::function<void(const json& state)>;
     void SetStateChangedCallback(StateChangedCallback cb) { m_stateCallback = cb; }
 
+    using FocusChangedCallback = std::function<void(bool hasFocus)>;
+    void SetFocusChangedCallback(FocusChangedCallback cb) { m_focusCallback = cb; }
+
     bool HasActiveTab() const { return !m_activeTabId.empty() && m_layout.visible; }
+    bool HasFocus() const { return m_hasFocus; }
 
 private:
     void NotifyStateChanged();
+    void SetupFocusAndAcceleratorHandling();
 
     HWND m_hwnd = nullptr;
     ComPtr<ICoreWebView2Environment> m_env;
@@ -68,7 +72,15 @@ private:
     std::unordered_map<std::string, BrowserTab> m_tabs;
     std::string m_activeTabId;
     BrowserLayout m_layout{};
+    bool m_hasFocus = false;
+
+    EventRegistrationToken m_gotFocusToken{};
+    EventRegistrationToken m_lostFocusToken{};
+    EventRegistrationToken m_moveFocusRequestedToken{};
+    EventRegistrationToken m_acceleratorToken{};
+
     StateChangedCallback m_stateCallback = nullptr;
+    FocusChangedCallback m_focusCallback = nullptr;
 };
 
 } // namespace LensDesk

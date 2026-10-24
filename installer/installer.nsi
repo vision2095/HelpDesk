@@ -39,7 +39,7 @@ Section "MainSection" SEC01
   SetOutPath "$INSTDIR"
   SetOverwrite try
 
-  File "..\build\bin\Release\RuntimeHost.exe"
+  File "..\build-native\bin\Release\RuntimeHost.exe"
   File "..\src-native\third_party\webview2\lib\x64\WebView2Loader.dll"
   File "..\src-native\resources\app.ico"
 

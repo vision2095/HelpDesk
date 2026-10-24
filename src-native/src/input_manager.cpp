@@ -1,6 +1,7 @@
 #include "../include/input_manager.hpp"
 #include <thread>
 #include <chrono>
+#include <algorithm>
 
 namespace LensDesk {
 
@@ -74,7 +75,7 @@ bool InputManager::StartAutoType(const std::string& text, int delayMs) {
     m_isAutoTyping = true;
 
     std::wstring wideText = Utf8ToWide(text);
-    m_autoTypeThread = std::thread(&InputManager::AutoTypeWorker, this, wideText, max(5, delayMs));
+    m_autoTypeThread = std::thread(&InputManager::AutoTypeWorker, this, wideText, std::max(5, delayMs));
     return true;
 }
 

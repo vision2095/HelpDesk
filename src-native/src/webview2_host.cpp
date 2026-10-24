@@ -12,7 +12,13 @@ WebView2Host::~WebView2Host() {
     Shutdown();
 }
 
-bool WebView2Host::Initialize(HWND hwnd, IDCompositionVisual* hudVisual, const std::filesystem::path& distPath, ServiceDispatcher* dispatcher) {
+bool WebView2Host::Initialize(
+    HWND hwnd,
+    IDCompositionVisual* hudVisual,
+    const std::filesystem::path& distPath,
+    ServiceDispatcher* dispatcher,
+    std::function<void(ICoreWebView2Environment*)> onReady
+) {
     if (!hwnd || !hudVisual || !dispatcher) return false;
     m_hwnd = hwnd;
     m_distPath = distPath;
@@ -31,7 +37,7 @@ bool WebView2Host::Initialize(HWND hwnd, IDCompositionVisual* hudVisual, const s
         userDataDir.c_str(),
         options.Get(),
         Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
-            [this, hwnd, hudVisual](HRESULT hr, ICoreWebView2Environment* env) -> HRESULT {
+            [this, hwnd, hudVisual, onReady](HRESULT hr, ICoreWebView2Environment* env) -> HRESULT {
                 if (FAILED(hr) || !env) return hr;
                 m_environment = env;
 
@@ -42,7 +48,7 @@ bool WebView2Host::Initialize(HWND hwnd, IDCompositionVisual* hudVisual, const s
                 hr = env3->CreateCoreWebView2CompositionController(
                     hwnd,
                     Callback<ICoreWebView2CreateCoreWebView2CompositionControllerCompletedHandler>(
-                        [this, hudVisual](HRESULT hr, ICoreWebView2CompositionController* compController) -> HRESULT {
+                        [this, hudVisual, onReady](HRESULT hr, ICoreWebView2CompositionController* compController) -> HRESULT {
                             if (FAILED(hr) || !compController) return hr;
                             m_compositionController = compController;
 
@@ -85,10 +91,18 @@ bool WebView2Host::Initialize(HWND hwnd, IDCompositionVisual* hudVisual, const s
                             // 7. Setup WebMessage handling
                             SetupWebMessageHandling();
 
-                            // 8. Navigate to React 19 app
+                            // 8. Setup focus and accelerator handling
+                            SetupFocusAndAcceleratorHandling();
+
+                            // 9. Navigate to React 19 app
                             m_webView->Navigate(L"https://lensdesk.local/index.html");
 
                             m_isReady = true;
+
+                            if (onReady && m_environment) {
+                                onReady(m_environment.Get());
+                            }
+
                             return S_OK;
                         }
                     ).Get()
@@ -103,18 +117,23 @@ bool WebView2Host::Initialize(HWND hwnd, IDCompositionVisual* hudVisual, const s
 }
 
 void WebView2Host::Shutdown() {
+    if (m_controller) {
+        if (m_gotFocusToken.value != 0) m_controller->remove_GotFocus(m_gotFocusToken);
+        if (m_lostFocusToken.value != 0) m_controller->remove_LostFocus(m_lostFocusToken);
+        if (m_moveFocusRequestedToken.value != 0) m_controller->remove_MoveFocusRequested(m_moveFocusRequestedToken);
+        if (m_acceleratorToken.value != 0) m_controller->remove_AcceleratorKeyPressed(m_acceleratorToken);
+        m_controller->Close();
+    }
     if (m_webView && m_webMessageToken.value != 0) {
         m_webView->remove_WebMessageReceived(m_webMessageToken);
         m_webMessageToken.value = 0;
-    }
-    if (m_controller) {
-        m_controller->Close();
     }
     m_webView.Reset();
     m_compositionController.Reset();
     m_controller.Reset();
     m_environment.Reset();
     m_isReady = false;
+    m_hasFocus = false;
 }
 
 void WebView2Host::Resize(int width, int height) {
@@ -177,38 +196,69 @@ void WebView2Host::SendMouseInput(UINT msg, WPARAM wParam, LPARAM lParam) {
     m_compositionController->SendMouseInput(mouseKind, virtKeys, mouseData, pt);
 }
 
-void WebView2Host::SendKeyboardInput(UINT msg, WPARAM wParam, LPARAM lParam) {
-    if (!m_compositionController) return;
-
-    COREWEBVIEW2_KEY_EVENT_KIND keyKind = COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN;
-    switch (msg) {
-        case WM_KEYDOWN:
-        case WM_SYSKEYDOWN:
-            keyKind = COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN;
-            break;
-        case WM_KEYUP:
-        case WM_SYSKEYUP:
-            keyKind = COREWEBVIEW2_KEY_EVENT_KIND_KEY_UP;
-            break;
-        case WM_CHAR:
-        case WM_SYSCHAR:
-            keyKind = COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN;
-            break;
-        default:
-            return;
-    }
-
-    m_compositionController->SendKeyboardInput(
-        keyKind,
-        static_cast<UINT32>(wParam),
-        static_cast<INT64>(lParam)
-    );
-}
-
 void WebView2Host::MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON reason) {
     if (m_controller) {
         m_controller->MoveFocus(reason);
     }
+}
+
+void WebView2Host::SetupFocusAndAcceleratorHandling() {
+    if (!m_controller) return;
+
+    // 1. GotFocus event
+    m_controller->add_GotFocus(
+        Callback<ICoreWebView2FocusChangedEventHandler>(
+            [this](ICoreWebView2Controller* sender, IUnknown* args) -> HRESULT {
+                m_hasFocus = true;
+                if (m_focusCallback) m_focusCallback(true);
+                return S_OK;
+            }
+        ).Get(),
+        &m_gotFocusToken
+    );
+
+    // 2. LostFocus event
+    m_controller->add_LostFocus(
+        Callback<ICoreWebView2FocusChangedEventHandler>(
+            [this](ICoreWebView2Controller* sender, IUnknown* args) -> HRESULT {
+                m_hasFocus = false;
+                if (m_focusCallback) m_focusCallback(false);
+                return S_OK;
+            }
+        ).Get(),
+        &m_lostFocusToken
+    );
+
+    // 3. MoveFocusRequested event (Tab / Shift-Tab boundary handoff)
+    m_controller->add_MoveFocusRequested(
+        Callback<ICoreWebView2MoveFocusRequestedEventHandler>(
+            [this](ICoreWebView2Controller* sender, ICoreWebView2MoveFocusRequestedEventArgs* args) -> HRESULT {
+                COREWEBVIEW2_MOVE_FOCUS_REASON reason = COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC;
+                args->get_Reason(&reason);
+                if (m_moveFocusRequestedCallback) {
+                    m_moveFocusRequestedCallback(reason);
+                }
+                args->put_Handled(TRUE);
+                return S_OK;
+            }
+        ).Get(),
+        &m_moveFocusRequestedToken
+    );
+
+    // 4. AcceleratorKeyPressed event (ensures standard key combinations flow to DOM)
+    m_controller->add_AcceleratorKeyPressed(
+        Callback<ICoreWebView2AcceleratorKeyPressedEventHandler>(
+            [this](ICoreWebView2Controller* sender, ICoreWebView2AcceleratorKeyPressedEventArgs* args) -> HRESULT {
+                UINT virtualKey = 0;
+                args->get_VirtualKey(&virtualKey);
+
+                // Let WebView2 process all standard keys, text inputs, shortcuts, and IME natively
+                args->put_Handled(FALSE);
+                return S_OK;
+            }
+        ).Get(),
+        &m_acceleratorToken
+    );
 }
 
 void WebView2Host::InjectLensDeskBridge() {

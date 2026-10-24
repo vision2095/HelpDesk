@@ -41,6 +41,9 @@ bool BrowserTabsManager::Initialize(HWND hwnd, ICoreWebView2Environment* env, ID
                     c2->put_DefaultBackgroundColor(whiteBg);
                 }
 
+                // Focus and accelerator handling
+                SetupFocusAndAcceleratorHandling();
+
                 // Listen to navigation events
                 if (m_webView) {
                     m_webView->add_NavigationStarting(
@@ -118,6 +121,10 @@ bool BrowserTabsManager::Initialize(HWND hwnd, ICoreWebView2Environment* env, ID
 
 void BrowserTabsManager::Shutdown() {
     if (m_controller) {
+        if (m_gotFocusToken.value != 0) m_controller->remove_GotFocus(m_gotFocusToken);
+        if (m_lostFocusToken.value != 0) m_controller->remove_LostFocus(m_lostFocusToken);
+        if (m_moveFocusRequestedToken.value != 0) m_controller->remove_MoveFocusRequested(m_moveFocusRequestedToken);
+        if (m_acceleratorToken.value != 0) m_controller->remove_AcceleratorKeyPressed(m_acceleratorToken);
         m_controller->Close();
     }
     m_webView.Reset();
@@ -125,6 +132,57 @@ void BrowserTabsManager::Shutdown() {
     m_controller.Reset();
     m_tabs.clear();
     m_activeTabId.clear();
+    m_hasFocus = false;
+}
+
+void BrowserTabsManager::SetupFocusAndAcceleratorHandling() {
+    if (!m_controller) return;
+
+    // GotFocus
+    m_controller->add_GotFocus(
+        Callback<ICoreWebView2FocusChangedEventHandler>(
+            [this](ICoreWebView2Controller* sender, IUnknown* args) -> HRESULT {
+                m_hasFocus = true;
+                if (m_focusCallback) m_focusCallback(true);
+                return S_OK;
+            }
+        ).Get(),
+        &m_gotFocusToken
+    );
+
+    // LostFocus
+    m_controller->add_LostFocus(
+        Callback<ICoreWebView2FocusChangedEventHandler>(
+            [this](ICoreWebView2Controller* sender, IUnknown* args) -> HRESULT {
+                m_hasFocus = false;
+                if (m_focusCallback) m_focusCallback(false);
+                return S_OK;
+            }
+        ).Get(),
+        &m_lostFocusToken
+    );
+
+    // MoveFocusRequested
+    m_controller->add_MoveFocusRequested(
+        Callback<ICoreWebView2MoveFocusRequestedEventHandler>(
+            [this](ICoreWebView2Controller* sender, ICoreWebView2MoveFocusRequestedEventArgs* args) -> HRESULT {
+                args->put_Handled(TRUE);
+                return S_OK;
+            }
+        ).Get(),
+        &m_moveFocusRequestedToken
+    );
+
+    // AcceleratorKeyPressed (allow browser shortcuts & normal text input)
+    m_controller->add_AcceleratorKeyPressed(
+        Callback<ICoreWebView2AcceleratorKeyPressedEventHandler>(
+            [this](ICoreWebView2Controller* sender, ICoreWebView2AcceleratorKeyPressedEventArgs* args) -> HRESULT {
+                args->put_Handled(FALSE);
+                return S_OK;
+            }
+        ).Get(),
+        &m_acceleratorToken
+    );
 }
 
 std::string BrowserTabsManager::CreateTab(const std::string& initialUrl) {
@@ -298,18 +356,6 @@ void BrowserTabsManager::SendMouseInput(UINT msg, WPARAM wParam, LPARAM lParam) 
     if (wParam & MK_CONTROL) virtKeys |= COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS_CONTROL;
 
     m_compositionController->SendMouseInput(mouseKind, virtKeys, mouseData, pt);
-}
-
-void BrowserTabsManager::SendKeyboardInput(UINT msg, WPARAM wParam, LPARAM lParam) {
-    if (!m_compositionController || !m_layout.visible) return;
-
-    COREWEBVIEW2_KEY_EVENT_KIND keyKind = (msg == WM_KEYUP || msg == WM_SYSKEYUP)
-        ? COREWEBVIEW2_KEY_EVENT_KIND_KEY_UP
-        : ((msg == WM_CHAR || msg == WM_SYSCHAR)
-            ? COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN
-            : COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN);
-
-    m_compositionController->SendKeyboardInput(keyKind, static_cast<UINT32>(wParam), static_cast<INT64>(lParam));
 }
 
 void BrowserTabsManager::MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON reason) {

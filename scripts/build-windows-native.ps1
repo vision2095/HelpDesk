@@ -46,7 +46,10 @@ if (-not (Test-Path $ReleaseDir)) {
     New-Item -ItemType Directory -Path $ReleaseDir | Out-Null
 }
 
-$OutputDir = Join-Path $BuildDir "Release"
+$OutputDir = Join-Path $BuildDir "bin\Release"
+if (-not (Test-Path (Join-Path $OutputDir "RuntimeHost.exe"))) {
+    $OutputDir = Join-Path $BuildDir "Release"
+}
 $ExePath = Join-Path $OutputDir "RuntimeHost.exe"
 $LoaderDll = Join-Path $WorkspaceRoot "src-native\third_party\webview2\lib\x64\WebView2Loader.dll"
 $DistDir = Join-Path $WorkspaceRoot "dist"
