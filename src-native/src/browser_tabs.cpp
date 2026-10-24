@@ -291,11 +291,11 @@ void BrowserTabsManager::SetZoom(const std::string& id, float factor) {
 void BrowserTabsManager::ClearData() {
     if (!m_webView) return;
     ComPtr<ICoreWebView2_13> webView13;
-    if (SUCCEEDED(m_webView.As(&webView13))) {
+    if (SUCCEEDED(m_webView.As(&webView13)) && webView13) {
         ComPtr<ICoreWebView2Profile> profile;
-        if (SUCCEEDED(m_webView->get_Profile(&profile)) && profile) {
+        if (SUCCEEDED(webView13->get_Profile(&profile)) && profile) {
             ComPtr<ICoreWebView2Profile2> profile2;
-            if (SUCCEEDED(profile.As(&profile2))) {
+            if (SUCCEEDED(profile.As(&profile2)) && profile2) {
                 profile2->ClearBrowsingDataAll(nullptr);
             }
         }
