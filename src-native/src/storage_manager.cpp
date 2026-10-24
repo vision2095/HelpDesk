@@ -44,7 +44,19 @@ bool StorageManager::Initialize() {
     }
 
     if (!std::filesystem::exists(m_sessionsPath)) {
-        json defaultSessions = json::array();
+        json defaultSessions = json::array({
+            {
+                { "id", "session_initial" },
+                { "title", "New Thinking Session" },
+                { "mode", "general" },
+                { "profileId", "default_profile" },
+                { "createdAt", GetIsoTimestamp() },
+                { "updatedAt", GetIsoTimestamp() },
+                { "notes", "" },
+                { "transcript", "" },
+                { "messages", json::array() }
+            }
+        });
         WriteJsonFileAtomic(m_sessionsPath, defaultSessions);
     }
 

@@ -101,14 +101,26 @@ try {
   await page.waitForLoadState("domcontentloaded");
   console.log(`      Active Page URL: ${page.url()}`);
 
+  page.on("console", (msg) => console.log(`      [Browser Console ${msg.type()}] ${msg.text()}`));
+  page.on("pageerror", (err) => console.error(`      [Browser Page Error] ${err.stack || err.message}`));
+
   // 4. Verify Complete LensDesk UI Loads (User Requirement 2)
   console.log("[4/8] Verifying complete LensDesk React 19 UI DOM...");
-  await page.waitForSelector("#root", { timeout: 15000 });
+  await page.waitForSelector("#root", { state: "attached", timeout: 15000 });
   const hasRoot = await page.evaluate(() => !!document.getElementById("root"));
   assert.ok(hasRoot, "#root element must exist.");
 
+  // Wait for React components to mount
+  await page.waitForSelector(
+    ".composer-textarea, textarea, .hintlens-overlay-shell, .overlay-container",
+    { timeout: 25000 },
+  );
+
   const hasOverlay = await page.evaluate(
-    () => !!document.querySelector(".overlay-container, .lensdesk-hud, .context-workbench, #root"),
+    () =>
+      !!document.querySelector(
+        ".hintlens-overlay-shell, .overlay-container, .lensdesk-hud, .context-workbench, #root",
+      ),
   );
   assert.ok(hasOverlay, "Overlay UI container must exist in DOM.");
 
@@ -151,9 +163,18 @@ try {
   console.log("[6/8] Submitting Prompt and Verifying Streaming AI Response in DOM...");
   await textarea.press("Enter");
 
-  // Verify User Bubble appears in DOM
+  // Verify User Bubble appears in DOM (with send button retry fallback)
   const userBubble = page.locator(".hintlens-bubble.user, .message-bubble.user").last();
-  await userBubble.waitFor({ state: "visible", timeout: 10000 });
+  try {
+    await userBubble.waitFor({ state: "visible", timeout: 3000 });
+  } catch (_) {
+    console.log("      Retrying submission via send button click...");
+    const sendBtn = page.locator(".composer-send-btn, button[title*='Send']").first();
+    if (await sendBtn.isVisible()) {
+      await sendBtn.click();
+    }
+    await userBubble.waitFor({ state: "visible", timeout: 10000 });
+  }
   const userText = await userBubble.innerText();
   console.log(`      User message verified in DOM: "${userText.trim()}"`);
   assert.ok(

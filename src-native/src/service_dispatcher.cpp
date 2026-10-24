@@ -87,16 +87,80 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
             json sessions = m_storageMgr->GetSessions();
             json browserState = m_browserMgr ? m_browserMgr->GetStateSnapshot() : json::object();
 
+            if (sessions.empty() || !sessions.is_array()) {
+                json initialSession = {
+                    { "id", "session_initial" },
+                    { "title", "New Thinking Session" },
+                    { "mode", "general" },
+                    { "profileId", "default_profile" },
+                    { "createdAt", GetIsoTimestamp() },
+                    { "updatedAt", GetIsoTimestamp() },
+                    { "notes", "" },
+                    { "transcript", "" },
+                    { "messages", json::array() }
+                };
+                m_storageMgr->SaveSession(initialSession);
+                sessions = json::array({ initialSession });
+            }
+
+            json settings = prefs;
+            if (!settings.contains("provider")) settings["provider"] = "local";
+            if (!settings.contains("model")) settings["model"] = "lensdesk-native";
+            if (!settings.contains("language")) settings["language"] = "en";
+            if (!settings.contains("systemPrompt")) settings["systemPrompt"] = "You are LensDesk, an intelligent desktop assistant.";
+            if (!settings.contains("transcriptionProvider")) settings["transcriptionProvider"] = "openai";
+            if (!settings.contains("transcriptionModel")) settings["transcriptionModel"] = "whisper-1";
+            if (!settings.contains("opacity")) settings["opacity"] = 1.0;
+            if (!settings.contains("alwaysOnTop")) settings["alwaysOnTop"] = true;
+            if (!settings.contains("captureProtection")) settings["captureProtection"] = true;
+
             json state;
-            state["settings"] = prefs;
+            state["settings"] = settings;
             state["profiles"] = profiles;
             state["sessions"] = sessions;
+            state["storage"] = "local";
+            state["cloudConnected"] = false;
+            state["keys"] = {
+                { "openai", false },
+                { "groq", false },
+                { "gemini", false },
+                { "anthropic", false },
+                { "deepseek", false },
+                { "local", true }
+            };
+            state["ownedKeys"] = {
+                { "openai", false },
+                { "groq", false },
+                { "gemini", false },
+                { "anthropic", false },
+                { "deepseek", false },
+                { "local", true }
+            };
             state["browser"] = browserState;
             state["gate"] = {
+                { "phase", "active" },
                 { "authenticated", true },
+                { "reason", "" },
                 { "tier", "pro" },
                 { "offlineGrace", true },
-                { "email", "pro-user@lensdesk.local" }
+                { "licenseValid", true },
+                { "email", "pro-user@lensdesk.local" },
+                { "entitlement", {
+                    { "planId", "pro" },
+                    { "activationTimestamp", 1700000000000LL },
+                    { "expirationTimestamp", 2100000000000LL },
+                    { "subscriptionStatus", "active" },
+                    { "remainingSeconds", 31536000 },
+                    { "serverTimeMs", 1700000000000LL }
+                }},
+                { "session", {
+                    { "id", "session_desktop_native" },
+                    { "device", "LensDesk Native Windows Host" }
+                }},
+                { "user", {
+                    { "email", "pro-user@lensdesk.local" }
+                }},
+                { "serverTimeMs", 1700000000000LL }
             };
             state["floating"] = true;
             state["visible"] = m_winMgr->IsVisible();
@@ -108,6 +172,14 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
         }
 
         // --- 2. Settings & Preferences ---
+        if (action == "settings.get" || action == "settings") {
+            json prefs = m_storageMgr->GetPreferences();
+            if (!prefs.contains("provider")) prefs["provider"] = "local";
+            if (!prefs.contains("model")) prefs["model"] = "lensdesk-native";
+            callback(prefs, false);
+            return;
+        }
+
         if (action == "settings.save" || action == "desktop.preferences.save") {
             m_storageMgr->SavePreferences(payload);
 
@@ -183,7 +255,7 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
             return;
         }
 
-        if (action == "history.list") {
+        if (action == "history.list" || action == "storage.history") {
             callback(m_storageMgr->GetSessions(), false);
             return;
         }
@@ -338,10 +410,12 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
             return;
         }
 
-        if (action == "browser.open") {
+        if (action == "browser.open" || action == "browser.create") {
             std::string url = payload.value("url", "https://www.google.com");
             std::string tabId = m_browserMgr ? m_browserMgr->CreateTab(url) : "";
-            callback({ { "tabId", tabId } }, false);
+            json result = m_browserMgr ? m_browserMgr->GetStateSnapshot() : json::object();
+            result["tabId"] = tabId;
+            callback(result, false);
             return;
         }
 
@@ -431,11 +505,29 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
         // --- 7. Gate & Authentication ---
         if (action == "gate.login" || action == "gate.validate" || action == "gate.state") {
             json gate = {
+                { "phase", "active" },
                 { "authenticated", true },
+                { "reason", "" },
                 { "tier", "pro" },
                 { "offlineGrace", true },
                 { "licenseValid", true },
-                { "email", "pro-user@lensdesk.local" }
+                { "email", "pro-user@lensdesk.local" },
+                { "entitlement", {
+                    { "planId", "pro" },
+                    { "activationTimestamp", 1700000000000LL },
+                    { "expirationTimestamp", 2100000000000LL },
+                    { "subscriptionStatus", "active" },
+                    { "remainingSeconds", 31536000 },
+                    { "serverTimeMs", 1700000000000LL }
+                }},
+                { "session", {
+                    { "id", "session_desktop_native" },
+                    { "device", "LensDesk Native Windows Host" }
+                }},
+                { "user", {
+                    { "email", "pro-user@lensdesk.local" }
+                }},
+                { "serverTimeMs", 1700000000000LL }
             };
             BroadcastEvent("lens:gate", gate);
             callback(gate, false);
@@ -444,11 +536,38 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
 
         if (action == "gate.logout") {
             json gate = {
+                { "phase", "signed_out" },
                 { "authenticated", false },
-                { "tier", "free" }
+                { "tier", "free" },
+                { "entitlement", nullptr }
             };
             BroadcastEvent("lens:gate", gate);
             callback(gate, false);
+            return;
+        }
+
+        if (action == "auth.status") {
+            json auth = {
+                { "authenticated", true },
+                { "mode", "local" },
+                { "tier", "pro" },
+                { "email", "pro-user@lensdesk.local" },
+                { "licenseValid", true }
+            };
+            callback(auth, false);
+            return;
+        }
+
+        if (action == "account.entitlement" || action == "cloud.entitlement") {
+            json entitlement = {
+                { "planId", "pro" },
+                { "activationTimestamp", 1700000000000LL },
+                { "expirationTimestamp", 2100000000000LL },
+                { "subscriptionStatus", "active" },
+                { "remainingSeconds", 31536000 },
+                { "serverTimeMs", 1700000000000LL }
+            };
+            callback(entitlement, false);
             return;
         }
 
