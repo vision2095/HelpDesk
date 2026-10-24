@@ -40,14 +40,14 @@ try {
   await page.goto("http://127.0.0.1:4321");
   await page
     .getByRole("heading", {
-      name: "A clearer workspace.",
+      name: /Think clearly/i,
     })
     .waitFor();
   await page.screenshot({
     path: "resources/hosted-home-preview.png",
     fullPage: true,
   });
-  await page.getByRole("button", { name: "Launch Web Workspace" }).click();
+  await page.getByRole("button", { name: /Sign in|Create an account|Open workspace/i }).first().click();
   await page
     .getByRole("button", { name: "New here? Create an account" })
     .click();
