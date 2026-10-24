@@ -77,7 +77,13 @@ if (Test-Path $installDir) {
 
 try {
     Write-Host "      Running silent installation to: $installDir..."
-    $installProc = Start-Process -FilePath $setupPath.Path -ArgumentList "/S", "/D=$installDir" -PassThru -Wait
+    $installProc = Start-Process -FilePath $setupPath.Path -ArgumentList "/S", "/D=$installDir" -PassThru
+    $installExited = $installProc.WaitForExit(30000)
+    if (-not $installExited) {
+        $installProc.Kill()
+        Write-Error "Installer timed out after 30s."
+        exit 1
+    }
     if ($installProc.ExitCode -ne 0) {
         Write-Error "Installer exited with non-zero code: $($installProc.ExitCode)"
         exit 1
@@ -100,7 +106,12 @@ try {
     Write-Host "        ✓ Installed Web Assets ($((Get-Item $distHtml).Length) bytes)"
 
     Write-Host "      Testing uninstaller execution..."
-    $uninstProc = Start-Process -FilePath $uninstaller -ArgumentList "/S", "_?=$installDir" -PassThru -Wait
+    $uninstProc = Start-Process -FilePath $uninstaller -ArgumentList "/S", "_?=$installDir" -PassThru
+    $uninstExited = $uninstProc.WaitForExit(20000)
+    if (-not $uninstExited) {
+        Write-Warning "Uninstaller process did not finish within 20s; stopping process."
+        $uninstProc.Kill()
+    }
     Start-Sleep -Seconds 2
     if (Test-Path $installedExe) {
         Write-Error "Uninstaller failed to remove RuntimeHost.exe."

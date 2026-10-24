@@ -43,8 +43,10 @@ Function .onInit
     ReadRegStr $0 HKCU "SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" "pv"
   ${EndIf}
   ${If} $0 == ""
-    MessageBox MB_ICONQUESTION|MB_YESNO|MB_DEFBUTTON1 "LensDesk 2.0 requires the Microsoft Edge WebView2 Runtime to render its interface.$\n$\nWould you like to open Microsoft's download page for the WebView2 Runtime bootstrapper now?" IDNO +2
-    ExecShell "open" "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
+    ${IfNot} ${Silent}
+      MessageBox MB_ICONQUESTION|MB_YESNO|MB_DEFBUTTON1 "LensDesk 2.0 requires the Microsoft Edge WebView2 Runtime to render its interface.$\n$\nWould you like to open Microsoft's download page for the WebView2 Runtime bootstrapper now?" IDNO +2
+      ExecShell "open" "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
+    ${EndIf}
   ${EndIf}
 FunctionEnd
 
@@ -88,12 +90,9 @@ SectionEnd
 
 Function un.onUninstSuccess
   HideWindow
-  MessageBox MB_ICONINFORMATION|MB_OK "$(^Name) was successfully removed from your computer."
 FunctionEnd
 
 Function un.onInit
-  MessageBox MB_ICONQUESTION|MB_YESNO|MB_DEFBUTTON2 "Are you sure you want to completely remove $(^Name) and all of its components?" IDYES +2
-  Abort
 FunctionEnd
 
 Section Uninstall
