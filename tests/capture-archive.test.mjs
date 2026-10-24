@@ -23,10 +23,12 @@ test("capture archives are opt-in, uniquely named, private, counted, and retaine
   const status = await archive.status();
   assert.equal(status.files, 2);
   assert.equal(status.bytes, 16);
-  assert.equal(
-    (await fs.stat(path.join(directory, results[0].filename))).mode & 0o777,
-    0o600,
-  );
+  if (process.platform !== "win32") {
+    assert.equal(
+      (await fs.stat(path.join(directory, results[0].filename))).mode & 0o777,
+      0o600,
+    );
+  }
   preferences.captureArchive = { enabled: false, directory };
   await archive.save(image);
   assert.equal((await archive.status()).files, 2);
