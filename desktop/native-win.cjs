@@ -1,0 +1,305 @@
+'use strict';
+
+let ready = false, loadFailed = false, K = null, U = null, KL = null;
+const F = {};
+
+// Try to use native C++ Node-API addon first
+let nativeAddon = null;
+try {
+  nativeAddon = require('../native/index.cjs');
+} catch {}
+
+const GWL_EXSTYLE = -20;
+const WS_EX_TOOLWINDOW = 0x00000080n;
+const WS_EX_NOACTIVATE = 0x08000000n;
+const WS_EX_TOPMOST    = 0x00000008n;
+const HWND_TOPMOST     = -1n;
+const HWND_NOTOPMOST   = -2n;
+const SWP_NOSIZE       = 0x0001;
+const SWP_NOMOVE       = 0x0002;
+const SWP_NOZORDER     = 0x0004;
+const SWP_NOACTIVATE   = 0x0010;
+const SWP_FRAMECHANGED = 0x0020;
+const SWP_SHOWWINDOW   = 0x0040;
+const SWP_NOOWNERZORDER = 0x0200;
+const UOI_NAME = 2;
+const DESKTOP_SWITCHDESKTOP = 0x0100;
+const SW_SHOW = 5;
+const SW_SHOWNOACTIVATE = 4;
+const SW_SHOWNA = 8;
+const WDA_NONE         = 0;
+const WDA_EXCLUDEFROMCAPTURE = 17;
+
+function load() {
+  if (process.platform !== 'win32') return false;
+  if (ready) return true;
+  if (loadFailed) return false;
+  try {
+    K = require('koffi');
+    U = K.load('user32.dll');
+    KL = K.load('kernel32.dll');
+
+    F.SetWindowPos = U.func('__stdcall', 'SetWindowPos', 'bool',
+      ['intptr_t', 'intptr_t', 'int', 'int', 'int', 'int', 'uint']);
+    F.GetWindowLongPtrW = U.func('__stdcall', 'GetWindowLongPtrW', 'intptr_t', ['intptr_t', 'int']);
+    F.SetWindowLongPtrW = U.func('__stdcall', 'SetWindowLongPtrW', 'intptr_t', ['intptr_t', 'int', 'intptr_t']);
+    F.SetWindowDisplayAffinity = U.func('__stdcall', 'SetWindowDisplayAffinity', 'bool', ['intptr_t', 'uint']);
+    F.GetWindowDisplayAffinity = U.func('__stdcall', 'GetWindowDisplayAffinity', 'bool', ['intptr_t', K.out('uint *')]);
+    F.GetForegroundWindow = U.func('__stdcall', 'GetForegroundWindow', 'intptr_t', []);
+    F.SetForegroundWindow = U.func('__stdcall', 'SetForegroundWindow', 'bool', ['intptr_t']);
+    F.BringWindowToTop = U.func('__stdcall', 'BringWindowToTop', 'bool', ['intptr_t']);
+    F.SetActiveWindow = U.func('__stdcall', 'SetActiveWindow', 'intptr_t', ['intptr_t']);
+    F.SetFocus = U.func('__stdcall', 'SetFocus', 'intptr_t', ['intptr_t']);
+    F.GetWindowThreadProcessId = U.func('__stdcall', 'GetWindowThreadProcessId', 'uint', ['intptr_t', K.out('uint *')]);
+    F.IsWindowVisible = U.func('__stdcall', 'IsWindowVisible', 'bool', ['intptr_t']);
+    F.GetLastError = KL.func('__stdcall', 'GetLastError', 'uint', []);
+    F.GetCurrentThreadId = KL.func('__stdcall', 'GetCurrentThreadId', 'uint', []);
+    F.AttachThreadInput = U.func('__stdcall', 'AttachThreadInput', 'bool', ['uint', 'uint', 'bool']);
+    F.GetThreadDesktop = U.func('__stdcall', 'GetThreadDesktop', 'intptr_t', ['uint']);
+    F.OpenInputDesktop = U.func('__stdcall', 'OpenInputDesktop', 'intptr_t', ['uint', 'bool', 'uint']);
+    F.GetUserObjectInformationW = U.func('__stdcall', 'GetUserObjectInformationW', 'bool',
+      ['intptr_t', 'int', 'void *', 'uint', 'uint *']);
+    F.ShowWindow = U.func('__stdcall', 'ShowWindow', 'bool', ['intptr_t', 'int']);
+
+    ready = true;
+    return true;
+  } catch (e) {
+    loadFailed = true;
+    console.warn('[native-win] koffi load fail:', e.message);
+    return false;
+  }
+}
+
+function hwndOf(win) {
+  if (!win || typeof win.getNativeWindowHandle !== 'function') return 0n;
+  const buf = win.getNativeWindowHandle();
+  return buf.length === 8 ? buf.readBigInt64LE(0) : BigInt(buf.readInt32LE(0));
+}
+
+function isFocused(win) {
+  if (!win || win.isDestroyed()) return false;
+  try {
+    if (typeof win.isFocused === 'function' && win.isFocused()) return true;
+    if (nativeAddon?.available) {
+      const diag = nativeAddon.getFocusDiagnostics(hwndOf(win).toString());
+      if (diag.isTargetForeground || diag.isTargetActive || diag.isTargetFocused) return true;
+    }
+    if (load()) {
+      const fg = F.GetForegroundWindow();
+      const h = hwndOf(win);
+      return fg === h;
+    }
+  } catch {}
+  return false;
+}
+
+function activate(win) {
+  if (!win || win.isDestroyed()) return false;
+  try {
+    const h = hwndOf(win);
+    if (nativeAddon?.available) {
+      nativeAddon.activateWindow(h.toString());
+    }
+    if (load()) {
+      const curThread = F.GetCurrentThreadId();
+      const outPid = [0];
+      const fgThread = F.GetWindowThreadProcessId(F.GetForegroundWindow(), outPid);
+      if (fgThread && fgThread !== curThread) {
+        try { F.AttachThreadInput(curThread, fgThread, true); } catch {}
+      }
+
+      F.SetWindowPos(h, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+      F.BringWindowToTop(h);
+      F.SetForegroundWindow(h);
+      F.SetActiveWindow(h);
+      F.SetFocus(h);
+
+      if (fgThread && fgThread !== curThread) {
+        try { F.AttachThreadInput(curThread, fgThread, false); } catch {}
+      }
+    }
+    if (typeof win.focus === 'function') win.focus();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function assertStyles(win) {
+  if (!win || win.isDestroyed()) return null;
+  const h = hwndOf(win);
+
+  if (nativeAddon?.available) {
+    const res = nativeAddon.setWindowStyles(
+      h.toString(),
+      Number(WS_EX_NOACTIVATE),
+      Number(WS_EX_TOOLWINDOW | WS_EX_TOPMOST)
+    );
+    if (res) {
+      return {
+        toolwindow: res.hasToolWindow,
+        noactivate: res.hasNoActivate,
+        topmost: res.hasTopmost,
+      };
+    }
+  }
+
+  if (!load()) return null;
+  try {
+    const ex = BigInt(F.GetWindowLongPtrW(h, GWL_EXSTYLE));
+    // Single-window LensDesk needs activation for sign-in and text entry.
+    // Keep the tool-window and topmost flags, but NEVER force NOACTIVATE.
+    const want = (ex | WS_EX_TOOLWINDOW | WS_EX_TOPMOST) & ~WS_EX_NOACTIVATE;
+    if (want !== ex) {
+      F.SetWindowLongPtrW(h, GWL_EXSTYLE, want);
+      F.SetWindowPos(h, 0n, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE);
+    }
+    const now = BigInt(F.GetWindowLongPtrW(h, GWL_EXSTYLE));
+    return {
+      toolwindow: (now & WS_EX_TOOLWINDOW) !== 0n,
+      noactivate: (now & WS_EX_NOACTIVATE) !== 0n,
+      topmost:    (now & WS_EX_TOPMOST)    !== 0n,
+    };
+  } catch { return null; }
+}
+
+function forceTopmost(win, opts = {}) {
+  if (!win || win.isDestroyed()) return false;
+  const h = hwndOf(win);
+  const focused = isFocused(win);
+
+  if (nativeAddon?.available && !opts.show) {
+    return nativeAddon.setAlwaysOnTop(h.toString(), true);
+  }
+
+  if (!load()) return false;
+  try {
+    let flags = SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER;
+    if (!focused) flags |= SWP_NOACTIVATE;
+    if (opts.show !== false && !F.IsWindowVisible(h)) flags |= SWP_SHOWWINDOW;
+    return !!F.SetWindowPos(h, HWND_TOPMOST, 0, 0, 0, 0, flags);
+  } catch { return false; }
+}
+
+function ensureTopmost(win, show = true) {
+  if (!win || win.isDestroyed()) return false;
+  const h = hwndOf(win);
+  const focused = isFocused(win);
+
+  if (!load()) return false;
+  try {
+    const isVisible = F.IsWindowVisible(h);
+    let flags = SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER;
+    if (!focused) flags |= SWP_NOACTIVATE;
+    if (show && !isVisible) flags |= SWP_SHOWWINDOW;
+
+    const ok = !!F.SetWindowPos(h, HWND_TOPMOST, 0, 0, 0, 0, flags);
+    // Crucial: Only call ShowWindow if window is NOT yet visible.
+    // Calling ShowWindow(SW_SHOWNA) on an already visible active window steals focus!
+    if (show && !isVisible) {
+      F.ShowWindow(h, focused ? SW_SHOW : SW_SHOWNA);
+    }
+    return ok;
+  } catch { return false; }
+}
+
+function ShowWindow(win, cmd) {
+  if (!load() || !win || win.isDestroyed()) return false;
+  try { return !!F.ShowWindow(hwndOf(win), cmd); } catch { return false; }
+}
+
+function foregroundWindow() {
+  if (nativeAddon?.available) {
+    const info = nativeAddon.getForegroundInfo();
+    return BigInt(info.hwnd || 0);
+  }
+  if (!load()) return null;
+  try { return F.GetForegroundWindow(); } catch { return null; }
+}
+
+function foregroundPid(handle) {
+  if (!load() || handle == null) return 0;
+  try {
+    const out = [0];
+    F.GetWindowThreadProcessId(handle, out);
+    return out[0];
+  } catch { return 0; }
+}
+
+function reShow(win) {
+  if (!load() || !win || win.isDestroyed()) return false;
+  try {
+    // If window is currently focused, do NOT call SW_SHOWNOACTIVATE as it will lose focus!
+    if (isFocused(win)) return true;
+    return !!F.ShowWindow(hwndOf(win), SW_SHOWNOACTIVATE);
+  } catch { return false; }
+}
+
+function desktopName(handle) {
+  if (!handle) return null;
+  try {
+    const buf = Buffer.alloc(512);
+    const out = [0];
+    if (!F.GetUserObjectInformationW(handle, UOI_NAME, buf, buf.length, out)) return null;
+    return buf.subarray(0, Math.max(0, out[0] - 2)).toString('utf16le');
+  } catch { return null; }
+}
+
+function desktopProbe() {
+  if (!load()) return null;
+  try {
+    const thread = desktopName(F.GetThreadDesktop(F.GetCurrentThreadId()));
+    const input = desktopName(F.OpenInputDesktop(0, false, DESKTOP_SWITCHDESKTOP));
+    return { thread, input, same: !!thread && thread === input };
+  } catch { return null; }
+}
+
+function excludeFromCapture(win, on) {
+  if (!win || win.isDestroyed()) return { ok: false, err: -1 };
+  const h = hwndOf(win);
+
+  if (nativeAddon?.available) {
+    const ok = nativeAddon.setCaptureAffinity(h.toString(), Boolean(on));
+    return { ok: Boolean(ok), err: ok ? 0 : -1 };
+  }
+
+  if (!load()) return { ok: false, err: -1 };
+  try {
+    const ok = F.SetWindowDisplayAffinity(h, on ? WDA_EXCLUDEFROMCAPTURE : WDA_NONE);
+    return { ok: !!ok, err: ok ? 0 : F.GetLastError() };
+  } catch { return { ok: false, err: -1 }; }
+}
+
+function captureAffinity(win) {
+  if (!win || win.isDestroyed()) return null;
+  const h = hwndOf(win);
+
+  if (nativeAddon?.available) {
+    const res = nativeAddon.getCaptureAffinity(h.toString());
+    if (res && res.ok) return { ok: true, affinity: res.affinity };
+  }
+
+  if (!load()) return null;
+  try {
+    const out = [0];
+    const ok = F.GetWindowDisplayAffinity(h, out);
+    return { ok: !!ok, affinity: out[0] };
+  } catch { return null; }
+}
+
+module.exports = {
+  load,
+  hwndOf,
+  assertStyles,
+  forceTopmost,
+  ensureTopmost,
+  ShowWindow,
+  foregroundWindow,
+  foregroundPid,
+  reShow,
+  desktopProbe,
+  excludeFromCapture,
+  captureAffinity,
+  activate,
+  isFocused,
+};

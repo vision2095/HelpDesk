@@ -1,0 +1,11 @@
+# Mac capture recovery — 20 October 2026
+
+The user reported that Capture made LensDesk disappear and reopening did not recover it. Capture hides the window and temporarily sets opacity to zero. Previously a stalled desktopCapturer.getSources promise prevented the finally block from ever restoring it; the Dock activation and second-instance handlers also showed the still-transparent window without restoring capture opacity.
+
+Capture source enumeration now has an eight-second deadline. Timeout and errors restore the original opacity and visibility. Explicit reopening through Dock activation, the tray, shortcuts or a second instance also restores a pending capture window immediately. A pending native Electron request cannot be canceled through its public API; the deadline restores LensDesk and reports the failure instead of guaranteeing that the OS capture succeeds.
+
+The overlay now identifies a missing selected-provider key and links to AI connection settings. This user's Gemini key was absent; no credential was added or changed.
+
+Validation: 148 Node tests passed; production build passed. The actual Mac Electron reference workflow passed with synthetic screenshot sources, including a deliberately stalled request, Dock activation restoring visibility and nonzero opacity, timeout rejection and subsequent visibility. Fresh Apple Silicon packaged app passed production startup/IPC/settings checks with an isolated temporary profile. These tests do not establish native Windows execution or successful real OS screenshot capture.
+
+The previous installed /Applications/LensDesk.app had an invalid code signature. Replaced it with the newly built locally ad-hoc signed package from release/mac-repair-2026-10-20/mac-arm64/LensDesk.app. codesign --verify --deep --strict passed before and after installation; installed main.cjs, capture.cjs, request-policy.cjs and dist/index.html match active source. Ad-hoc signing is not Apple notarization. Prior app bundle preserved at /Applications/.LensDesk-before-repair-20261020. User data directory was preserved. Native UI reopened with the same 13 sessions and responded to workspace/overlay controls; clicking real Capture left the window visible but no new screenshot was observed, so real OS capture success remains unverified. Existing distributed DMGs/Windows ZIP were not replaced by this local Mac repair.

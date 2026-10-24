@@ -1,0 +1,8 @@
+
+> lensdesk@1.3.6 test:settings
+> node tests/settings-modal-browser.mjs
+
+5:34:42 PM [vite] (client) Re-optimizing dependencies because lockfile has changed
+5:34:43 PM [vite] (client) ✨ new dependencies optimized: react/jsx-dev-runtime
+5:34:43 PM [vite] (client) ✨ optimized dependencies changed. reloading
+Settings/auth modal renderer integration passed: persistence, real contract names, reset, validation, save failures, model selection, login/MFA rejection/success, unavailable OAuth. Uses isolated IPC/cloud test doubles; no live provider or OS hook proof.

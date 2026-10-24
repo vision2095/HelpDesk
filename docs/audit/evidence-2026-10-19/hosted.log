@@ -1,0 +1,5 @@
+
+> lensdesk@1.3.6 test:hosted-browser
+> node scripts/cloud-browser-check.mjs
+
+Hosted browser checks passed: homepage, signup, email verification, account page, sign-out, sign-in, session persistence across authentication, responsive layout, no renderer errors.

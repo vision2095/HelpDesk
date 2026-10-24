@@ -1,0 +1,6 @@
+
+> lensdesk@1.3.6 test:windows-archive
+> node scripts/windows-archive-check.mjs
+
+Verified 31 packaged runtime/frontend files match the current source.
+Windows ZIP passed CRC, single-file distribution (LensDesk.exe), PE x64, metadata (FileDescription=LensDesk, ProductName=LensDesk), and bundled runtime/ASAR version 1.3.6. Windows code was not executed.

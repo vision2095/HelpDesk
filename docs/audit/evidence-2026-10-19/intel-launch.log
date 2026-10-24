@@ -1,0 +1,6 @@
+
+> lensdesk@1.3.6 test:packaged
+> node scripts/packaged-check.mjs
+
+Packaged renderer URL: file:///Users/vivek/new%20repo/lensdesk-reviewed-1.3.6/release/mac/LensDesk.app/Contents/Resources/app.asar/dist/index.html
+Packaged macOS app passed: launched production app; rendered account/appearance/archive/expanded shortcut controls; loaded local-detection module; kept the temporary workspace and preload sandbox isolated.

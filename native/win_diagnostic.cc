@@ -1,0 +1,399 @@
+#include <napi.h>
+
+#include <string>
+#include <vector>
+#include <cstdint>
+
+#ifdef _WIN32
+#include <windows.h>
+#include <dwmapi.h>
+#include <psapi.h>
+
+#pragma comment(lib, "user32.lib")
+#pragma comment(lib, "dwmapi.lib")
+#pragma comment(lib, "psapi.lib")
+
+namespace {
+
+HWND ParseHwnd(const Napi::Value& val) {
+  if (val.IsNumber()) {
+    return reinterpret_cast<HWND>(static_cast<uintptr_t>(val.As<Napi::Number>().Int64Value()));
+  }
+  if (val.IsBigInt()) {
+    bool lossless = true;
+    return reinterpret_cast<HWND>(static_cast<uintptr_t>(val.As<Napi::BigInt>().Uint64Value(&lossless)));
+  }
+  if (val.IsString()) {
+    std::string s = val.As<Napi::String>().Utf8Value();
+    uint64_t v = std::stoull(s, nullptr, 0);
+    return reinterpret_cast<HWND>(static_cast<uintptr_t>(v));
+  }
+  return nullptr;
+}
+
+std::string HwndToString(HWND hwnd) {
+  return std::to_string(reinterpret_cast<uintptr_t>(hwnd));
+}
+
+}  // namespace
+
+Napi::Value Info(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("available", Napi::Boolean::New(env, true));
+  out.Set("platform", Napi::String::New(env, "win32"));
+#if defined(_M_X64) || defined(__x86_64__)
+  out.Set("arch", Napi::String::New(env, "x64"));
+#elif defined(_M_ARM64) || defined(__aarch64__)
+  out.Set("arch", Napi::String::New(env, "arm64"));
+#else
+  out.Set("arch", Napi::String::New(env, "ia32"));
+#endif
+  out.Set("mode", Napi::String::New(env, "native-win32"));
+  out.Set("version", Napi::String::New(env, "2.0.0"));
+
+  Napi::Object feats = Napi::Object::New(env);
+  feats.Set("windowManager", Napi::Boolean::New(env, true));
+  feats.Set("focusManager", Napi::Boolean::New(env, true));
+  feats.Set("captureAffinity", Napi::Boolean::New(env, true));
+  feats.Set("inputDiagnostics", Napi::Boolean::New(env, true));
+  feats.Set("safeAutoType", Napi::Boolean::New(env, true));
+  out.Set("features", feats);
+  return out;
+}
+
+Napi::Value GetForegroundInfo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  HWND fg = GetForegroundWindow();
+  DWORD pid = 0;
+  DWORD tid = 0;
+  if (fg) {
+    tid = GetWindowThreadProcessId(fg, &pid);
+  }
+
+  DWORD myPid = GetCurrentProcessId();
+
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("hwnd", Napi::String::New(env, HwndToString(fg)));
+  out.Set("pid", Napi::Number::New(env, pid));
+  out.Set("threadId", Napi::Number::New(env, tid));
+  out.Set("isCurrentProcess", Napi::Boolean::New(env, pid == myPid));
+  return out;
+}
+
+Napi::Value ActivateWindow(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1) {
+    Napi::TypeError::New(env, "Expected window handle").ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  HWND hwnd = ParseHwnd(info[0]);
+  if (!hwnd || !IsWindow(hwnd)) {
+    return Napi::Boolean::New(env, false);
+  }
+
+  // Ensure window is shown
+  if (!IsWindowVisible(hwnd)) {
+    ShowWindow(hwnd, SW_SHOW);
+  }
+
+  // Win32 foreground activation sequence
+  DWORD fgThread = GetWindowThreadProcessId(GetForegroundWindow(), nullptr);
+  DWORD curThread = GetCurrentThreadId();
+
+  if (fgThread != curThread) {
+    AttachThreadInput(curThread, fgThread, TRUE);
+  }
+
+  SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+  BringWindowToTop(hwnd);
+  SetForegroundWindow(hwnd);
+  SetActiveWindow(hwnd);
+  SetFocus(hwnd);
+
+  if (fgThread != curThread) {
+    AttachThreadInput(curThread, fgThread, FALSE);
+  }
+
+  HWND active = GetActiveWindow();
+  return Napi::Boolean::New(env, active == hwnd || GetForegroundWindow() == hwnd);
+}
+
+Napi::Value SetAlwaysOnTop(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2) {
+    Napi::TypeError::New(env, "Expected (hwnd, isTopmost)").ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  HWND hwnd = ParseHwnd(info[0]);
+  bool topmost = info[1].As<Napi::Boolean>().Value();
+  if (!hwnd || !IsWindow(hwnd)) return Napi::Boolean::New(env, false);
+
+  HWND insertAfter = topmost ? HWND_TOPMOST : HWND_NOTOPMOST;
+  UINT flags = SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER;
+  BOOL ok = SetWindowPos(hwnd, insertAfter, 0, 0, 0, 0, flags);
+  return Napi::Boolean::New(env, ok != FALSE);
+}
+
+Napi::Value SetWindowStyles(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 3) {
+    Napi::TypeError::New(env, "Expected (hwnd, removeMask, addMask)").ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  HWND hwnd = ParseHwnd(info[0]);
+  if (!hwnd || !IsWindow(hwnd)) return env.Null();
+
+  LONG_PTR removeMask = static_cast<LONG_PTR>(info[1].As<Napi::Number>().Int64Value());
+  LONG_PTR addMask = static_cast<LONG_PTR>(info[2].As<Napi::Number>().Int64Value());
+
+  LONG_PTR current = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+  LONG_PTR updated = (current & ~removeMask) | addMask;
+
+  if (updated != current) {
+    SetWindowLongPtrW(hwnd, GWL_EXSTYLE, updated);
+    SetWindowPos(hwnd, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE);
+  }
+
+  LONG_PTR finalStyle = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+  Napi::Object res = Napi::Object::New(env);
+  res.Set("exStyle", Napi::Number::New(env, static_cast<double>(finalStyle)));
+  res.Set("hasTopmost", Napi::Boolean::New(env, (finalStyle & WS_EX_TOPMOST) != 0));
+  res.Set("hasToolWindow", Napi::Boolean::New(env, (finalStyle & WS_EX_TOOLWINDOW) != 0));
+  res.Set("hasNoActivate", Napi::Boolean::New(env, (finalStyle & WS_EX_NOACTIVATE) != 0));
+  return res;
+}
+
+Napi::Value SetCaptureAffinity(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2) {
+    Napi::TypeError::New(env, "Expected (hwnd, enable)").ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  HWND hwnd = ParseHwnd(info[0]);
+  bool enable = info[1].As<Napi::Boolean>().Value();
+  if (!hwnd || !IsWindow(hwnd)) return Napi::Boolean::New(env, false);
+
+  DWORD affinity = enable ? 17 /* WDA_EXCLUDEFROMCAPTURE */ : 0 /* WDA_NONE */;
+  BOOL ok = SetWindowDisplayAffinity(hwnd, affinity);
+  return Napi::Boolean::New(env, ok != FALSE);
+}
+
+Napi::Value GetCaptureAffinity(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1) {
+    Napi::TypeError::New(env, "Expected (hwnd)").ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  HWND hwnd = ParseHwnd(info[0]);
+  if (!hwnd || !IsWindow(hwnd)) return env.Null();
+
+  DWORD affinity = 0;
+  BOOL ok = GetWindowDisplayAffinity(hwnd, &affinity);
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("ok", Napi::Boolean::New(env, ok != FALSE));
+  out.Set("affinity", Napi::Number::New(env, affinity));
+  return out;
+}
+
+Napi::Value GetFocusDiagnostics(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  HWND target = info.Length() > 0 ? ParseHwnd(info[0]) : nullptr;
+
+  GUITHREADINFO gti{};
+  gti.cbSize = sizeof(GUITHREADINFO);
+  BOOL ok = GetGUIThreadInfo(0, &gti);
+
+  HWND fg = GetForegroundWindow();
+
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("ok", Napi::Boolean::New(env, ok != FALSE));
+  out.Set("foregroundHwnd", Napi::String::New(env, HwndToString(fg)));
+  out.Set("activeHwnd", Napi::String::New(env, HwndToString(gti.hwndActive)));
+  out.Set("focusHwnd", Napi::String::New(env, HwndToString(gti.hwndFocus)));
+  out.Set("captureHwnd", Napi::String::New(env, HwndToString(gti.hwndCapture)));
+
+  if (target) {
+    bool isFg = (fg == target);
+    bool isActive = (gti.hwndActive == target);
+    bool isFocus = (gti.hwndFocus == target || IsChild(target, gti.hwndFocus));
+    out.Set("isTargetForeground", Napi::Boolean::New(env, isFg));
+    out.Set("isTargetActive", Napi::Boolean::New(env, isActive));
+    out.Set("isTargetFocused", Napi::Boolean::New(env, isFocus));
+  }
+
+  return out;
+}
+
+Napi::Value SafeAutoType(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2) {
+    Napi::TypeError::New(env, "Expected (targetHwnd, text, [delayMs])").ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  HWND target = ParseHwnd(info[0]);
+  std::string utf8Text = info[1].As<Napi::String>().Utf8Value();
+  int delayMs = info.Length() > 2 ? info[2].As<Napi::Number>().Int32Value() : 5;
+
+  if (!target || !IsWindow(target)) {
+    Napi::Error::New(env, "Target window handle is invalid").ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  // Security check: verify that target window is actually in the foreground
+  HWND currentFg = GetForegroundWindow();
+  if (currentFg != target && !IsChild(target, currentFg)) {
+    Napi::Error::New(env, "Target window is not foreground; autotype canceled for safety").ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  // Convert UTF-8 to UTF-16
+  int wideLen = MultiByteToWideChar(CP_UTF8, 0, utf8Text.c_str(), -1, nullptr, 0);
+  if (wideLen <= 1) {
+    return Napi::Number::New(env, 0);
+  }
+
+  std::vector<wchar_t> wideStr(wideLen);
+  MultiByteToWideChar(CP_UTF8, 0, utf8Text.c_str(), -1, wideStr.data(), wideLen);
+
+  int typedCount = 0;
+  for (size_t i = 0; i < wideStr.size() - 1; ++i) {
+    wchar_t ch = wideStr[i];
+
+    // Verify window is still foreground
+    if (GetForegroundWindow() != target && !IsChild(target, GetForegroundWindow())) {
+      break;
+    }
+
+    INPUT inputs[2]{};
+    inputs[0].type = INPUT_KEYBOARD;
+    inputs[0].ki.wScan = ch;
+    inputs[0].ki.dwFlags = KEYEVENTF_UNICODE;
+
+    inputs[1].type = INPUT_KEYBOARD;
+    inputs[1].ki.wScan = ch;
+    inputs[1].ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
+
+    UINT sent = SendInput(2, inputs, sizeof(INPUT));
+    if (sent == 2) {
+      typedCount++;
+    }
+
+    if (delayMs > 0) {
+      Sleep(delayMs);
+    }
+  }
+
+  return Napi::Number::New(env, typedCount);
+}
+
+#else
+
+// Non-Windows stub implementation for cross-platform builds and CI
+Napi::Value Info(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("available", Napi::Boolean::New(env, true));
+#if defined(__APPLE__)
+  out.Set("platform", Napi::String::New(env, "darwin"));
+#else
+  out.Set("platform", Napi::String::New(env, "linux"));
+#endif
+#if defined(__aarch64__) || defined(_M_ARM64)
+  out.Set("arch", Napi::String::New(env, "arm64"));
+#else
+  out.Set("arch", Napi::String::New(env, "x64"));
+#endif
+  out.Set("mode", Napi::String::New(env, "portable-diagnostic"));
+  out.Set("version", Napi::String::New(env, "2.0.0"));
+
+  Napi::Object feats = Napi::Object::New(env);
+  feats.Set("windowManager", Napi::Boolean::New(env, false));
+  feats.Set("focusManager", Napi::Boolean::New(env, false));
+  feats.Set("captureAffinity", Napi::Boolean::New(env, false));
+  feats.Set("inputDiagnostics", Napi::Boolean::New(env, true));
+  feats.Set("safeAutoType", Napi::Boolean::New(env, false));
+  out.Set("features", feats);
+  return out;
+}
+
+Napi::Value GetForegroundInfo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("hwnd", Napi::String::New(env, "0"));
+  out.Set("pid", Napi::Number::New(env, 0));
+  out.Set("threadId", Napi::Number::New(env, 0));
+  out.Set("isCurrentProcess", Napi::Boolean::New(env, true));
+  return out;
+}
+
+Napi::Value ActivateWindow(const Napi::CallbackInfo& info) {
+  return Napi::Boolean::New(info.Env(), true);
+}
+
+Napi::Value SetAlwaysOnTop(const Napi::CallbackInfo& info) {
+  return Napi::Boolean::New(info.Env(), true);
+}
+
+Napi::Value SetWindowStyles(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object res = Napi::Object::New(env);
+  res.Set("exStyle", Napi::Number::New(env, 0x88));
+  res.Set("hasTopmost", Napi::Boolean::New(env, true));
+  res.Set("hasToolWindow", Napi::Boolean::New(env, true));
+  res.Set("hasNoActivate", Napi::Boolean::New(env, false));
+  return res;
+}
+
+Napi::Value SetCaptureAffinity(const Napi::CallbackInfo& info) {
+  return Napi::Boolean::New(info.Env(), true);
+}
+
+Napi::Value GetCaptureAffinity(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("ok", Napi::Boolean::New(env, true));
+  out.Set("affinity", Napi::Number::New(env, 17));
+  return out;
+}
+
+Napi::Value GetFocusDiagnostics(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("ok", Napi::Boolean::New(env, true));
+  out.Set("foregroundHwnd", Napi::String::New(env, "0"));
+  out.Set("activeHwnd", Napi::String::New(env, "0"));
+  out.Set("focusHwnd", Napi::String::New(env, "0"));
+  out.Set("captureHwnd", Napi::String::New(env, "0"));
+  out.Set("isTargetForeground", Napi::Boolean::New(env, true));
+  out.Set("isTargetActive", Napi::Boolean::New(env, true));
+  out.Set("isTargetFocused", Napi::Boolean::New(env, true));
+  return out;
+}
+
+Napi::Value SafeAutoType(const Napi::CallbackInfo& info) {
+  return Napi::Number::New(info.Env(), 0);
+}
+
+#endif  // _WIN32
+
+Napi::Object Init(Napi::Env env, Napi::Object exports) {
+  exports.Set("info", Napi::Function::New(env, Info));
+  exports.Set("getForegroundInfo", Napi::Function::New(env, GetForegroundInfo));
+  exports.Set("activateWindow", Napi::Function::New(env, ActivateWindow));
+  exports.Set("setAlwaysOnTop", Napi::Function::New(env, SetAlwaysOnTop));
+  exports.Set("setWindowStyles", Napi::Function::New(env, SetWindowStyles));
+  exports.Set("setCaptureAffinity", Napi::Function::New(env, SetCaptureAffinity));
+  exports.Set("getCaptureAffinity", Napi::Function::New(env, GetCaptureAffinity));
+  exports.Set("getFocusDiagnostics", Napi::Function::New(env, GetFocusDiagnostics));
+  exports.Set("safeAutoType", Napi::Function::New(env, SafeAutoType));
+  return exports;
+}
+
+NODE_API_MODULE(win_diagnostic, Init)

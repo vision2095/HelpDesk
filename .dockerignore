@@ -1,0 +1,8 @@
+node_modules
+release
+.data
+.git
+.env
+.env.*
+resources/*preview*
+resources/export-example.pdf

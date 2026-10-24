@@ -1,0 +1,155 @@
+{
+  "name": "lensdesk",
+  "version": "1.3.6",
+  "productName": "LensDesk",
+  "private": true,
+  "description": "RuntimeHost",
+  "author": "RuntimeHost",
+  "type": "module",
+  "main": "desktop/main.cjs",
+  "scripts": {
+    "dev": "concurrently -k \"node server/dev.mjs\" \"vite --host 127.0.0.1\"",
+    "build:native": "node-gyp rebuild",
+    "ensure:win-native": "node scripts/ensure-win-native.mjs",
+    "desktop": "concurrently -k \"npm:dev\" \"wait-on http://127.0.0.1:5173 && electron . --dev\"",
+    "start": "electron .",
+    "build": "tsc -b && vite build",
+    "test": "node --test tests/*.test.mjs tests/unit/*.test.mjs",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:mac:universal": "npm run build && electron-builder --mac dmg --universal --publish never",
+    "dist:win": "node scripts/ensure-win-native.mjs && npm run build && electron-builder --win portable --x64 --publish never && node scripts/package-windows-zip.mjs",
+    "dist:win:msi": "node scripts/build-windows-msi.mjs",
+    "dist:win:installer": "npm run build && electron-builder --win nsis --x64 --publish never",
+    "build:releases": "node scripts/build-production-releases.mjs",
+    "package:crossplatform": "node scripts/package-crossplatform-zip.mjs",
+    "dist:dir": "npm run build && electron-builder --dir",
+    "test:browser": "node scripts/browser-check.mjs",
+    "test:desktop": "node scripts/desktop-check.mjs",
+    "cloud": "node --env-file-if-exists=.env server/cloud/app.mjs",
+    "test:cloud": "node --test tests/cloud.test.mjs",
+    "load:subscriptions": "node scripts/load-subscriptions.mjs",
+    "format": "prettier --write src server desktop scripts tests *.json *.ts *.md *.yaml",
+    "test:packaged": "node scripts/packaged-check.mjs",
+    "test:hosted-browser": "node scripts/cloud-browser-check.mjs",
+    "test:stream-browser": "node scripts/stream-browser-check.mjs",
+    "test:bundles": "node scripts/bundle-check.mjs",
+    "test:windows-archive": "node scripts/windows-archive-check.mjs",
+    "test:win-exe": "node scripts/win-exe-audit.mjs",
+    "test:overlay-windows": "powershell -ExecutionPolicy Bypass -File tests/win/verify.ps1",
+    "test:windows-msi": "node scripts/windows-msi-check.mjs",
+    "test:browser-desktop": "node scripts/browser-desktop-check.mjs",
+    "test:reference": "node scripts/reference-workflow-check.mjs",
+    "test:settings": "node tests/settings-modal-browser.mjs",
+    "dist:mac:arm64": "npm run build && electron-builder --mac dmg --arm64 --publish never",
+    "dist:mac:x64": "npm run build && electron-builder --mac dmg --x64 --publish never"
+  },
+  "dependencies": {
+    "koffi": "^3.3.3",
+    "node-addon-api": "^8.3.0",
+    "lucide-react": "^0.468.0",
+    "nodemailer": "^10.1.2",
+    "otpauth": "^9.5.2",
+    "pdf-parse": "^1.1.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "stripe": "^23.0.0",
+    "uiohook-napi": "^1.5.5",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.4.1",
+    "concurrently": "^9.1.2",
+    "electron": "^44.9.0",
+    "electron-builder": "26.15.3",
+    "prettier": "^3.9.10",
+    "resedit": "^1.7.2",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5",
+    "wait-on": "^8.0.3"
+  },
+  "optionalDependencies": {
+    "@koromix/koffi-win32-x64": "^3.3.3"
+  },
+  "build": {
+    "appId": "com.runtimehost.app",
+    "productName": "LensDesk",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "desktop/**/*",
+      "native/**/*",
+      "binding.gyp",
+      "package.json",
+      "!node_modules/stripe/**/*",
+      "!node_modules/nodemailer/**/*",
+      "server/**/*.mjs",
+      "resources/icon.png"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "**/*.node"
+    ],
+    "npmRebuild": false,
+    "afterPack": "./scripts/fix-win-versioninfo.cjs",
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg"
+      ],
+      "extendInfo": {
+        "LSUIElement": false,
+        "NSHighResolutionCapable": true,
+        "NSScreenCaptureUsageDescription": "LensDesk captures a screen you select to attach to an AI question.",
+        "NSDesktopCaptureUsageDescription": "LensDesk captures a screen you select to attach to an AI question.",
+        "NSMicrophoneUsageDescription": "LensDesk uses your microphone when you start transcription."
+      },
+      "icon": "resources/icon.png"
+    },
+    "win": {
+      "target": [
+        "msi",
+        "zip",
+        "portable"
+      ],
+      "artifactName": "RuntimeHost-${version}-${arch}.${ext}",
+      "executableName": "RuntimeHost",
+      "requestedExecutionLevel": "asInvoker",
+      "icon": "resources/icon.png",
+      "signAndEditExecutable": false,
+      "legalTrademarks": "RuntimeHost"
+    },
+    "msi": {
+      "artifactName": "RuntimeHost-${version}-${arch}.${ext}",
+      "oneClick": false,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "RuntimeHost",
+      "runAfterFinish": true
+    },
+    "portable": {
+      "artifactName": "RuntimeHost.${ext}",
+      "requestExecutionLevel": "user"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "RuntimeHost"
+    }
+  },
+  "engines": {
+    "node": ">=24.15.0"
+  },
+  "overrides": {
+    "global-agent": "^4.1.3"
+  }
+}

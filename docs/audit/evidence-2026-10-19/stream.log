@@ -1,0 +1,5 @@
+
+> lensdesk@1.3.6 test:stream-browser
+> node scripts/stream-browser-check.mjs
+
+Streaming browser E2E passed: debounced autosave, visible incremental text, stop aborts upstream, canceled drafts remain, retry saves exactly two messages with usage, persistence after reload, authenticator enrollment, MFA sign-in, recording while chatting, real WebM duration metering, encrypted failed-clip recovery after reload without retranscription, account-scoped recovery, clip download and discard. Provider responses were controlled fixtures.

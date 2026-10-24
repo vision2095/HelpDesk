@@ -1,0 +1,5 @@
+
+> lensdesk@1.3.6 test:reference
+> node scripts/reference-workflow-check.mjs
+
+Reference workflow passed: actual Electron IPC, Capture without AI, 200×100 crop from 400×200 fixture, cancellation, all/specific display routing, unavailable display error, disabled/enabled gesture handling and saved preferences after reload. Screenshot sources are synthetic owned images; no real OS capture or external AI proof.

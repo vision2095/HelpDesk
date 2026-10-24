@@ -1,0 +1,39 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    stop_grace_period: 2m
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PUBLIC_URL: https://${DOMAIN:?Set DOMAIN in .env}
+      HOST: 0.0.0.0
+      TRUST_PROXY: "1"
+      CLOUD_DATA_DIR: /data
+      DOWNLOAD_DIRECTORY: /releases
+    volumes:
+      - workspace:/data
+      - ./release:/releases:ro
+    expose:
+      - "4319"
+    security_opt:
+      - no-new-privileges:true
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - certificates:/data
+      - caddy-config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+volumes:
+  workspace:
+  certificates:
+  caddy-config:
