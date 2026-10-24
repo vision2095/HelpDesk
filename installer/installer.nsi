@@ -72,14 +72,14 @@ SectionEnd
 Section -AdditionalIcons
   WriteIniStr "$INSTDIR\${PRODUCT_NAME}.url" "InternetShortcut" "URL" "${PRODUCT_WEB_SITE}"
   CreateShortcut "$SMPROGRAMS\LensDesk\Website.lnk" "$INSTDIR\${PRODUCT_NAME}.url"
-  CreateShortcut "$SMPROGRAMS\LensDesk\Uninstall.lnk" "$INSTDIR\uninst.exe"
+  CreateShortcut "$SMPROGRAMS\LensDesk\Uninstall.lnk" "$INSTDIR\Uninstall.exe"
 SectionEnd
 
 Section -Post
-  WriteUninstaller "$INSTDIR\uninst.exe"
+  WriteUninstaller "$INSTDIR\Uninstall.exe"
   WriteRegStr HKCU "${PRODUCT_DIR_REGKEY}" "" "$INSTDIR\RuntimeHost.exe"
   WriteRegStr ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "DisplayName" "$(^Name)"
-  WriteRegStr ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "UninstallString" "$INSTDIR\uninst.exe"
+  WriteRegStr ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "UninstallString" "$INSTDIR\Uninstall.exe"
   WriteRegStr ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "DisplayIcon" "$INSTDIR\app.ico"
   WriteRegStr ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "DisplayVersion" "${PRODUCT_VERSION}"
   WriteRegStr ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "URLInfoAbout" "${PRODUCT_WEB_SITE}"
@@ -98,6 +98,7 @@ FunctionEnd
 
 Section Uninstall
   Delete "$INSTDIR\${PRODUCT_NAME}.url"
+  Delete "$INSTDIR\Uninstall.exe"
   Delete "$INSTDIR\uninst.exe"
   Delete "$INSTDIR\RuntimeHost.exe"
   Delete "$INSTDIR\WebView2Loader.dll"

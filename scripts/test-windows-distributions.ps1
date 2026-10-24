@@ -86,6 +86,9 @@ try {
 
     $installedExe = Join-Path $installDir "RuntimeHost.exe"
     $uninstaller = Join-Path $installDir "Uninstall.exe"
+    if (-not (Test-Path $uninstaller)) {
+        $uninstaller = Join-Path $installDir "uninst.exe"
+    }
     $distHtml = Join-Path $installDir "dist\index.html"
 
     if (-not (Test-Path $installedExe)) { Write-Error "Installed RuntimeHost.exe missing."; exit 1 }
