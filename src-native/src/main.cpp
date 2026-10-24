@@ -13,10 +13,52 @@
 
 using namespace LensDesk;
 
+static std::ofstream s_logFile;
+
+static void LogInfo(const std::string& msg) {
+    std::string line = "[" + GetIsoTimestamp() + "] [INFO] " + msg;
+    std::cout << line << std::endl;
+    if (s_logFile.is_open()) {
+        s_logFile << line << std::endl;
+        s_logFile.flush();
+    }
+}
+
+static void LogError(const std::string& msg) {
+    std::string line = "[" + GetIsoTimestamp() + "] [ERROR] " + msg;
+    std::cerr << line << std::endl;
+    if (s_logFile.is_open()) {
+        s_logFile << line << std::endl;
+        s_logFile.flush();
+    }
+}
+
+static void ShowErrorDialog(HWND hwnd, const wchar_t* text, const wchar_t* title) {
+    char buf[512]{};
+    WideCharToMultiByte(CP_UTF8, 0, text, -1, buf, sizeof(buf), nullptr, nullptr);
+    LogError(std::string("Reported Error: ") + buf);
+
+    if (!IsHeadlessOrCI()) {
+        MessageBoxW(hwnd, text, title, MB_ICONERROR);
+    }
+}
+
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow) {
+    // 0. Attach console and configure logging
+    if (AttachConsole(ATTACH_PARENT_PROCESS)) {
+        FILE* fp = nullptr;
+        freopen_s(&fp, "CONOUT$", "w", stdout);
+        freopen_s(&fp, "CONOUT$", "w", stderr);
+    }
+
+    std::filesystem::path logPath = GetExecutableDirectory() / L"runtime_host.log";
+    s_logFile.open(logPath, std::ios::out | std::ios::trunc);
+    LogInfo("LensDesk 2.0 Native Windows Host starting...");
+
     // 1. Single Instance Guard
     HANDLE hMutex = CreateMutexW(nullptr, TRUE, SINGLE_INSTANCE_MUTEX);
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
+        LogInfo("Existing instance detected via named mutex. Bringing to foreground.");
         HWND existingHwnd = FindWindowW(WINDOW_CLASS_NAME, nullptr);
         if (existingHwnd) {
             ShowWindow(existingHwnd, SW_SHOW);
@@ -29,9 +71,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     // 2. Initialize COM
     HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     if (FAILED(hr)) {
+        LogError("Failed to initialize COM apartment threaded.");
         CloseHandle(hMutex);
         return -1;
     }
+    LogInfo("COM initialized.");
 
     // 3. Instantiate Subsystems
     WindowManager winMgr;
@@ -49,10 +93,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     // 4. Initialize Core Data Services
     storageMgr.Initialize();
     captureSvc.Initialize();
+    LogInfo("Storage and Capture services initialized.");
 
     // 5. Initialize Window Manager
     if (!winMgr.Initialize(hInstance, nCmdShow)) {
-        MessageBoxW(nullptr, L"Failed to initialize LensDesk 2.0 native window.", L"Error", MB_ICONERROR);
+        ShowErrorDialog(nullptr, L"Failed to initialize LensDesk 2.0 native window.", L"Error");
         CoUninitialize();
         CloseHandle(hMutex);
         return -1;
@@ -60,28 +105,34 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
 
     HWND hwnd = winMgr.GetHwnd();
     WindowBounds bounds = winMgr.GetBounds();
+    LogInfo("WindowManager initialized. HWND = " + std::to_string(reinterpret_cast<uintptr_t>(hwnd)) +
+            ", Bounds = " + std::to_string(bounds.width) + "x" + std::to_string(bounds.height));
 
     // 6. Initialize Direct3D 11 Renderer
     if (!d3dRenderer.Initialize(hwnd, bounds.width, bounds.height)) {
-        MessageBoxW(nullptr, L"Failed to initialize Direct3D 11 renderer.", L"Error", MB_ICONERROR);
+        ShowErrorDialog(nullptr, L"Failed to initialize Direct3D 11 renderer.", L"Error");
         CoUninitialize();
         CloseHandle(hMutex);
         return -1;
     }
+    LogInfo("Direct3D 11 Renderer initialized.");
 
     // 7. Initialize DirectComposition Engine
     if (!dcompEngine.Initialize(hwnd, d3dRenderer.GetDevice(), d3dRenderer.GetSwapChain())) {
-        MessageBoxW(nullptr, L"Failed to initialize DirectComposition engine.", L"Error", MB_ICONERROR);
+        ShowErrorDialog(nullptr, L"Failed to initialize DirectComposition engine.", L"Error");
         CoUninitialize();
         CloseHandle(hMutex);
         return -1;
     }
+    LogInfo("DirectComposition engine initialized.");
 
     // 8. Initialize Dear ImGui Overlay
     imguiOverlay.Initialize(hwnd, d3dRenderer.GetDevice(), d3dRenderer.GetContext());
+    LogInfo("Dear ImGui Overlay initialized.");
 
     // 9. Initialize Global Input Manager
     inputMgr.Initialize(hwnd);
+    LogInfo("Global Input Manager initialized.");
 
     // 10. Locate Dist Folder for Built React 19 Frontend
     std::filesystem::path exeDir = GetExecutableDirectory();
@@ -96,13 +147,18 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
         distPath = exeDir.parent_path().parent_path().parent_path() / L"dist";
     }
     if (!std::filesystem::exists(distPath)) {
-        MessageBoxW(
-            hwnd,
-            L"LensDesk 2.0 Web Assets ('dist' directory) could not be located.\n\n"
-            L"Please verify that the application was installed correctly.",
-            L"LensDesk - Missing Assets",
-            MB_ICONWARNING | MB_OK
-        );
+        LogError("Web assets ('dist' directory) could not be located.");
+        if (!IsHeadlessOrCI()) {
+            MessageBoxW(
+                hwnd,
+                L"LensDesk 2.0 Web Assets ('dist' directory) could not be located.\n\n"
+                L"Please verify that the application was installed correctly.",
+                L"LensDesk - Missing Assets",
+                MB_ICONWARNING | MB_OK
+            );
+        }
+    } else {
+        LogInfo("Web assets located at: " + distPath.string());
     }
 
     // 11. Wire Services & Dispatcher
@@ -116,9 +172,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
         &imguiOverlay,
         &focusMgr
     );
+    LogInfo("ServiceDispatcher initialized.");
 
     // 12. Initialize Focus Manager
     focusMgr.Initialize(hwnd, &webHost, &browserMgr, &imguiOverlay);
+    LogInfo("FocusManager initialized.");
 
     // 13. Initialize WebView2 Host (hosts React 19 app) & Embedded Browser
     webHost.Initialize(
@@ -127,9 +185,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
         distPath,
         &dispatcher,
         [hwnd, &dcompEngine, &browserMgr](ICoreWebView2Environment* env) {
+            LogInfo("WebView2 environment ready. Initializing browser manager tabs.");
             browserMgr.Initialize(hwnd, env, dcompEngine.GetBrowserVisual());
         }
     );
+    LogInfo("WebView2 Host initialization started.");
 
     // 14. Connect Window Message Router
     winMgr.SetMessageCallback(

@@ -87,6 +87,50 @@ public class Win32 {
     public const uint WM_CHAR = 0x0102;
     public const uint SMTO_ABORTIFHUNG = 0x0002;
 }
+
+public class WindowFinder {
+    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern int GetClassNameW(IntPtr hWnd, System.Text.StringBuilder lpClassName, int nMaxCount);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern int GetWindowTextW(IntPtr hWnd, System.Text.StringBuilder lpString, int nMaxCount);
+
+    public class WinInfo {
+        public IntPtr Hwnd;
+        public string ClassName;
+        public string Title;
+    }
+
+    public static System.Collections.Generic.List<WinInfo> GetProcessWindows(uint targetPid) {
+        var list = new System.Collections.Generic.List<WinInfo>();
+        EnumWindows((hWnd, lParam) => {
+            uint pid;
+            GetWindowThreadProcessId(hWnd, out pid);
+            if (pid == targetPid) {
+                var sbClass = new System.Text.StringBuilder(256);
+                GetClassNameW(hWnd, sbClass, 256);
+                var sbTitle = new System.Text.StringBuilder(256);
+                GetWindowTextW(hWnd, sbTitle, 256);
+                list.Add(new WinInfo {
+                    Hwnd = hWnd,
+                    ClassName = sbClass.ToString(),
+                    Title = sbTitle.ToString()
+                });
+            }
+            return true;
+        }, IntPtr.Zero);
+        return list;
+    }
+}
 '@
 
 # 3. Launch RuntimeHost.exe
@@ -119,24 +163,46 @@ try {
         Write-Host "      Memory Footprint verified within lightweight native baseline (< 100 MB)."
     }
 
-    # 5. Locate Win32 Window by Class
+    # 5. Locate Win32 Window by Class or Process
     Write-Host "[4/7] Querying Win32 Window Manager..."
-    $hwnd = [Win32]::FindWindowW("LensDesk_Overlay_Host_Class", $null)
-    if ($hwnd -eq [IntPtr]::Zero) {
-        # Retry for up to 3 more seconds
-        for ($i = 0; $i -lt 6; $i++) {
-            Start-Sleep -Milliseconds 500
+    
+    # Dump runtime host log if available
+    $logFile = Join-Path $workDir "runtime_host.log"
+    if (Test-Path $logFile) {
+        Write-Host "--- [runtime_host.log start] ---"
+        Get-Content $logFile | ForEach-Object { Write-Host "  $_" }
+        Write-Host "--- [runtime_host.log end] ---"
+    }
+
+    $windows = [WindowFinder]::GetProcessWindows([uint32]$targetPid)
+    Write-Host "      Total Windows Owned by Process $targetPid: $($windows.Count)"
+    foreach ($w in $windows) {
+        Write-Host "        -> HWND: 0x$($w.Hwnd.ToString('X')), Class: '$($w.ClassName)', Title: '$($w.Title)'"
+    }
+
+    $overlayWin = $windows | Where-Object { $_.ClassName -eq "LensDesk_Overlay_Host_Class" } | Select-Object -First 1
+    if ($overlayWin) {
+        $hwnd = $overlayWin.Hwnd
+    } else {
+        # Retry with FindWindowW
+        $hwnd = [Win32]::FindWindowW("LensDesk_Overlay_Host_Class", "LensDesk")
+        if ($hwnd -eq [IntPtr]::Zero) {
             $hwnd = [Win32]::FindWindowW("LensDesk_Overlay_Host_Class", $null)
-            if ($hwnd -ne [IntPtr]::Zero) { break }
         }
     }
 
+    if ($hwnd -eq [IntPtr]::Zero -and $windows.Count -gt 0) {
+        # If another window exists (e.g. dialog), use that for diagnostic visibility
+        $hwnd = $windows[0].Hwnd
+        Write-Host "      Using process window HWND: 0x$($hwnd.ToString('X'))"
+    }
+
     if ($hwnd -eq [IntPtr]::Zero) {
-        Write-Error "Main window with class 'LensDesk_Overlay_Host_Class' was NOT found."
+        Write-Error "No window found for process $targetPid."
         exit 1
     }
 
-    Write-Host "      HWND Found: 0x$($hwnd.ToString("X"))"
+    Write-Host "      Selected HWND: 0x$($hwnd.ToString('X'))"
 
     # Verify Visibility
     $isVisible = [Win32]::IsWindowVisible($hwnd)
@@ -220,6 +286,12 @@ try {
 } finally {
     # 9. Clean Graceful Shutdown
     Write-Host "[7/7] Testing Graceful Shutdown..."
+    $logFile = Join-Path $workDir "runtime_host.log"
+    if (Test-Path $logFile) {
+        Write-Host "--- [runtime_host.log final dump] ---"
+        Get-Content $logFile | ForEach-Object { Write-Host "  $_" }
+        Write-Host "-------------------------------------"
+    }
     if ($hwnd -ne [IntPtr]::Zero -and [Win32]::IsWindow($hwnd)) {
         [Win32]::PostMessageW($hwnd, [Win32]::WM_CLOSE, [UIntPtr]::Zero, [IntPtr]::Zero) | Out-Null
     }

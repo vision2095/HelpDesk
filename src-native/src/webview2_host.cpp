@@ -39,11 +39,13 @@ bool WebView2Host::Initialize(
         Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
             [this, hwnd, hudVisual, onReady](HRESULT hr, ICoreWebView2Environment* env) -> HRESULT {
                 if (FAILED(hr) || !env) {
-                    std::wstring msg = L"LensDesk 2.0 requires the Microsoft Edge WebView2 Runtime to display its user interface.\n\n"
-                                       L"Would you like to download and install the WebView2 Runtime from Microsoft now?";
-                    int choice = MessageBoxW(hwnd, msg.c_str(), L"LensDesk 2.0 - Prerequisite Required", MB_ICONQUESTION | MB_YESNO | MB_DEFBUTTON1);
-                    if (choice == IDYES) {
-                        ShellExecuteW(nullptr, L"open", L"https://go.microsoft.com/fwlink/p/?LinkId=2124703", nullptr, nullptr, SW_SHOWNORMAL);
+                    if (!IsHeadlessOrCI()) {
+                        std::wstring msg = L"LensDesk 2.0 requires the Microsoft Edge WebView2 Runtime to display its user interface.\n\n"
+                                           L"Would you like to download and install the WebView2 Runtime from Microsoft now?";
+                        int choice = MessageBoxW(hwnd, msg.c_str(), L"LensDesk 2.0 - Prerequisite Required", MB_ICONQUESTION | MB_YESNO | MB_DEFBUTTON1);
+                        if (choice == IDYES) {
+                            ShellExecuteW(nullptr, L"open", L"https://go.microsoft.com/fwlink/p/?LinkId=2124703", nullptr, nullptr, SW_SHOWNORMAL);
+                        }
                     }
                     return hr;
                 }

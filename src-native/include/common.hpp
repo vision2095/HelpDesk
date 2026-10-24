@@ -28,6 +28,7 @@
 #include <chrono>
 #include <filesystem>
 #include <iostream>
+#include <fstream>
 #include <sstream>
 #include <atomic>
 #include <mutex>
@@ -123,6 +124,15 @@ inline std::string GetIsoTimestamp() {
     char buf[64];
     std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &tmBuf);
     return std::string(buf);
+}
+
+inline bool IsHeadlessOrCI() {
+#if defined(_WIN32)
+    wchar_t buf[32];
+    if (GetEnvironmentVariableW(L"CI", buf, 32) > 0) return true;
+    if (GetEnvironmentVariableW(L"GITHUB_ACTIONS", buf, 32) > 0) return true;
+#endif
+    return false;
 }
 
 } // namespace LensDesk

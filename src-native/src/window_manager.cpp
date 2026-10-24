@@ -24,8 +24,8 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
     wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
     wc.hbrBackground = nullptr; // DirectX / DirectComposition draws everything
     wc.lpszClassName = WINDOW_CLASS_NAME;
-    wc.hIcon = LoadIconW(hInstance, IDI_APPLICATION);
-    wc.hIconSm = LoadIconW(hInstance, IDI_APPLICATION);
+    wc.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
+    wc.hIconSm = LoadIconW(nullptr, IDI_APPLICATION);
 
     if (!RegisterClassExW(&wc)) {
         DWORD err = GetLastError();
@@ -192,7 +192,7 @@ void WindowManager::SetupTrayIcon() {
     m_trayData.uID = 1001;
     m_trayData.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
     m_trayData.uCallbackMessage = WM_LENSDESK_TRAY;
-    m_trayData.hIcon = LoadIconW(m_hInstance, IDI_APPLICATION);
+    m_trayData.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
     wcscpy_s(m_trayData.szTip, L"LensDesk 2.0 (Active)");
 
     Shell_NotifyIconW(NIM_ADD, &m_trayData);
