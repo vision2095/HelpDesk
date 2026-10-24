@@ -442,7 +442,7 @@ function App() {
       try {
         const next = await refresh();
         setSettingsDraft(next.settings);
-        if (next.sessions && next.sessions.length > 0) {
+        if (desktop && next.sessions && next.sessions.length > 0) {
           setActiveId((old) => old || next.sessions[0].id);
         }
         if (!desktop) {
