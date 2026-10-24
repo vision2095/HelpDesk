@@ -91,14 +91,15 @@ public class Win32 {
 
 # 3. Launch RuntimeHost.exe
 Write-Host "[2/7] Launching RuntimeHost.exe..."
-$proc = Start-Process -FilePath $Exe.Path -PassThru
+$workDir = Split-Path $Exe.Path -Parent
+$proc = Start-Process -FilePath $Exe.Path -WorkingDirectory $workDir -PassThru
 if (-not $proc -or $proc.HasExited) {
     Write-Error "Failed to launch RuntimeHost.exe (exited immediately with code $($proc.ExitCode))."
     exit 1
 }
 
-$pid = $proc.Id
-Write-Host "      Spawned Process ID: $pid"
+$targetPid = $proc.Id
+Write-Host "      Spawned Process ID: $targetPid"
 
 # Give the Win32 window, Direct3D 11 swapchain, and WebView2 controller time to initialize
 Start-Sleep -Seconds 3
@@ -106,7 +107,7 @@ Start-Sleep -Seconds 3
 try {
     # 4. Check Process Status & Memory
     if ($proc.HasExited) {
-        Write-Error "Process $pid exited prematurely with code $($proc.ExitCode)."
+        Write-Error "Process $targetPid exited prematurely with code $($proc.ExitCode)."
         exit 1
     }
     $proc.Refresh()
@@ -226,7 +227,7 @@ try {
     $stopped = $proc.WaitForExit(5000)
     if (-not $stopped) {
         Write-Warning "Process did not exit within 5 seconds of WM_CLOSE. Forcing termination..."
-        Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+        Stop-Process -Id $targetPid -Force -ErrorAction SilentlyContinue
     } else {
         Write-Host "      Process exited gracefully with code: $($proc.ExitCode)"
     }
