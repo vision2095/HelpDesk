@@ -11,7 +11,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin/Release")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/bin/Debug")
 
 if(MSVC)
-    add_compile_options(/W4 /WX- /permissive- /Zc:preprocessor /utf-8 /EHsc)
+    add_compile_options(/W3 /WX- /wd4100 /permissive- /Zc:preprocessor /utf-8 /EHsc)
     add_compile_definitions(UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 endif()
 
@@ -44,6 +44,7 @@ set(SOURCES
     third_party/imgui/imgui_impl_win32.cpp
     third_party/imgui/imgui_impl_dx11.cpp
     resources/app.rc
+    resources/app.manifest
 )
 
 # Executable target
