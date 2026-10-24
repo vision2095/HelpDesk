@@ -442,6 +442,9 @@ function App() {
       try {
         const next = await refresh();
         setSettingsDraft(next.settings);
+        if (next.sessions && next.sessions.length > 0) {
+          setActiveId((old) => old || next.sessions[0].id);
+        }
         if (!desktop) {
           const params = new URLSearchParams(location.search);
           if (params.has("app") || params.has("workspace")) {

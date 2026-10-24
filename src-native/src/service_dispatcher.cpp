@@ -210,7 +210,7 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
         // --- 3. Profiles ---
         if (action == "profile.save") {
             bool ok = m_storageMgr->SaveProfile(payload);
-            callback({ { "success", ok } }, !ok);
+            callback(payload, !ok);
             return;
         }
 
@@ -224,7 +224,7 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
         // --- 4. Sessions & History ---
         if (action == "session.save") {
             bool ok = m_storageMgr->SaveSession(payload);
-            callback({ { "success", ok } }, !ok);
+            callback(payload, !ok);
             return;
         }
 
@@ -251,7 +251,8 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
             std::string id = payload.value("id", "");
             json patch = payload.value("patch", json::object());
             bool ok = m_storageMgr->PatchSession(id, patch);
-            callback({ { "success", ok } }, !ok);
+            json updated = m_storageMgr->GetSession(id);
+            callback(updated.empty() ? payload : updated, !ok);
             return;
         }
 
