@@ -138,4 +138,9 @@ test('LensDesk 2.0 Native Windows Host Architecture', async (t) => {
     const nsi = fs.readFileSync(path.join(ROOT, 'installer/installer.nsi'), 'utf8');
     assert.match(nsi, /F3017226-FE2A-4295-8BDF-00C3A9A7E4C5/, 'Missing WebView2 detection in installer.nsi');
   });
+
+  await t.test('11. Interactive CDP Test and Packaging Verification Scripts Exist', () => {
+    assert.ok(fs.existsSync(path.join(ROOT, 'scripts/test-interactive-windows.mjs')), 'Missing test-interactive-windows.mjs');
+    assert.ok(fs.existsSync(path.join(ROOT, 'scripts/test-windows-distributions.ps1')), 'Missing test-windows-distributions.ps1');
+  });
 });

@@ -28,9 +28,24 @@ bool WebView2Host::Initialize(
     std::filesystem::create_directories(userDataDir);
 
     auto options = Make<CoreWebView2EnvironmentOptions>();
-    options->put_AdditionalBrowserArguments(
-        L"--enable-features=msWebView2BrowserHitTransparent --disable-background-timer-throttling --disable-features=msSmartScreenProtection"
-    );
+    std::wstring browserArgs = L"--enable-features=msWebView2BrowserHitTransparent --disable-background-timer-throttling --disable-features=msSmartScreenProtection";
+
+    // Remote debugging port support for automated interactive E2E testing
+    wchar_t portBuf[32]{};
+    if (GetEnvironmentVariableW(L"WEBVIEW2_REMOTE_DEBUGGING_PORT", portBuf, 32) > 0) {
+        browserArgs += L" --remote-debugging-port=";
+        browserArgs += portBuf;
+    } else if (wcsstr(GetCommandLineW(), L"--remote-debugging-port=") != nullptr) {
+        const wchar_t* p = wcsstr(GetCommandLineW(), L"--remote-debugging-port=");
+        const wchar_t* end = wcschr(p, L' ');
+        browserArgs += L" ";
+        if (end) {
+            browserArgs.append(p, end - p);
+        } else {
+            browserArgs += p;
+        }
+    }
+    options->put_AdditionalBrowserArguments(browserArgs.c_str());
 
     HRESULT hr = CreateCoreWebView2EnvironmentWithOptions(
         nullptr,

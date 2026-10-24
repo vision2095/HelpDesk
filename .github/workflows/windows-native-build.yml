@@ -59,6 +59,10 @@ jobs:
         run: |
           pwsh scripts/test-windows-runtime.ps1 -BinaryPath build-native/bin/Release/RuntimeHost.exe
 
+      - name: Execute Real Interactive Windows GUI & WebView2 CDP Verification Test
+        run: |
+          node scripts/test-interactive-windows.mjs
+
       - name: Package Standalone Portable Zip
         shell: pwsh
         run: |
@@ -86,6 +90,11 @@ jobs:
           Write-Host "Using makensis path: $makensis"
           & $makensis installer/installer.nsi
 
+      - name: Execute Independent Package & Installer Verification Test
+        shell: pwsh
+        run: |
+          pwsh scripts/test-windows-distributions.ps1
+
       - name: Upload Native Windows Release Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -95,4 +104,5 @@ jobs:
             src-native/third_party/webview2/lib/x64/WebView2Loader.dll
             release/LensDesk-2.0.0-Windows-x64.zip
             release/LensDesk-2.0.0-Setup.exe
+            release/interactive-evidence
           if-no-files-found: error
