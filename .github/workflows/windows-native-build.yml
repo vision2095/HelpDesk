@@ -65,8 +65,17 @@ jobs:
           Compress-Archive -Path "$Staging/*" -DestinationPath "release/LensDesk-2.0.0-Windows-x64.zip" -Force
 
       - name: Compile NSIS Windows Installer
+        shell: pwsh
         run: |
-          makensis installer/installer.nsi
+          $makensis = "C:\Program Files (x86)\NSIS\makensis.exe"
+          if (-not (Test-Path $makensis)) {
+            $makensis = (Get-Command makensis.exe -ErrorAction SilentlyContinue)?.Source
+          }
+          if (-not $makensis) {
+            $makensis = (Get-ChildItem -Path "C:\Program Files*\NSIS\makensis.exe" -ErrorAction SilentlyContinue | Select-Object -First 1)?.FullName
+          }
+          Write-Host "Using makensis path: $makensis"
+          & $makensis installer/installer.nsi
 
       - name: Upload Native Windows Release Artifacts
         uses: actions/upload-artifact@v4
