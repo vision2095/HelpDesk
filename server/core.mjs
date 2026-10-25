@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { readPdf } from "./documents.mjs";
-import { buildContext, generateAnswer, discoverModels, isVisionModel } from "./ai.mjs";
+import { buildContext, generateAnswer, discoverModels, isVisionModel, normalizeModel } from "./ai.mjs";
 import { searchWeb } from "./search.mjs";
 import { recognizeImage } from "./media.mjs";
 import { z } from "zod";
@@ -279,12 +279,14 @@ export function createService({
           payload.version,
         );
       case "settings.save": {
+        const p = payload?.provider || "openai";
         const normalized = {
           ...payload,
-          model:
+          model: normalizeModel(
+            p,
             (typeof payload?.model === "string" && payload.model.trim()) ||
-            providers[payload?.provider]?.model ||
-            "gemini-3.8-flash",
+              providers[p]?.model,
+          ),
         };
         const settings = settingsSchema.parse(normalized);
         store.save(
@@ -327,7 +329,7 @@ export function createService({
             const nextSettings = {
               ...cur,
               provider: p,
-              model: providers[p]?.model || cur.model || "gemini-3.8-flash",
+              model: normalizeModel(p, providers[p]?.model || cur.model),
             };
             store.save("settings", "settings", nextSettings, cur.version);
           } catch {}
@@ -449,7 +451,7 @@ export function createService({
             key = keys[alt];
             try {
               const cur = store.get("settings", "settings") || {};
-              store.save("settings", "settings", { ...cur, provider: p, model: providers[p]?.model || "gemini-3.8-flash" }, cur.version);
+              store.save("settings", "settings", { ...cur, provider: p, model: normalizeModel(p, providers[p]?.model) }, cur.version);
             } catch {}
           } else {
             throw new Error(
@@ -457,21 +459,19 @@ export function createService({
             );
           }
         }
-        let activeModel =
+        let activeModel = normalizeModel(
+          p,
           (state.settings.model && state.settings.model.trim()) ||
-          providers[p]?.model ||
-          "gemini-3.8-flash";
-        if (p === "gemini" && (activeModel === "gemini-2.5-flash" || activeModel === "gemini-2.0-flash" || !activeModel)) {
-          activeModel = "gemini-3.8-flash";
-        }
+          providers[p]?.model,
+        );
         if (images.length > 0 && !isVisionModel(p, activeModel)) {
-          if (p === "gemini") activeModel = "gemini-3.8-flash";
-          else if (p === "openai") activeModel = "gpt-4.1-mini";
-          else if (p === "anthropic") activeModel = "claude-sonnet-4-5";
+          if (p === "gemini") activeModel = "gemini-1.5-flash";
+          else if (p === "openai") activeModel = "gpt-4o-mini";
+          else if (p === "anthropic") activeModel = "claude-3-5-haiku-20241022";
           else if (keys["gemini"]) {
             p = "gemini";
             key = keys["gemini"];
-            activeModel = "gemini-3.8-flash";
+            activeModel = "gemini-1.5-flash";
           } else {
             throw new Error(
               `Selected model "${activeModel}" (${p}) does not support images or screenshots. Please choose a vision-capable provider in Settings.`,
@@ -635,10 +635,9 @@ export function createService({
         if (p === "gemini") {
           const geminiKey = keys.gemini || defaults.gemini;
           const candidateModels = [
-            "gemini-2.5-flash",
-            "gemini-2.0-flash",
             "gemini-1.5-flash",
-            "gemini-3.8-flash",
+            "gemini-2.0-flash",
+            "gemini-2.5-flash",
           ];
           let lastErr;
           for (const m of candidateModels) {

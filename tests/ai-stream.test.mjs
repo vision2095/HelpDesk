@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { generateAnswer, buildContext } from "../server/ai.mjs";
+import { generateAnswer, buildContext, normalizeModel } from "../server/ai.mjs";
 import { createService } from "../server/core.mjs";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
@@ -260,4 +260,57 @@ test("canceling a partial answer commits no phantom messages and releases chat l
     text: "Hello",
   });
   assert.equal(retry.messages.length, 2);
+});
+
+test("model normalization maps legacy mockup IDs to fast production models and preserves custom ones", () => {
+  assert.equal(normalizeModel("openai", "gpt-4.1-mini"), "gpt-4o-mini");
+  assert.equal(normalizeModel("openai", ""), "gpt-4o-mini");
+  assert.equal(normalizeModel("openai", "default"), "gpt-4o-mini");
+  assert.equal(normalizeModel("openai", "gpt-4o"), "gpt-4o");
+
+  assert.equal(normalizeModel("gemini", "gemini-3.8-flash"), "gemini-1.5-flash");
+  assert.equal(normalizeModel("gemini", "gemini-2.5-flash"), "gemini-1.5-flash");
+  assert.equal(normalizeModel("gemini", ""), "gemini-1.5-flash");
+  assert.equal(normalizeModel("gemini", "gemini-2.0-flash"), "gemini-2.0-flash");
+
+  assert.equal(normalizeModel("anthropic", "claude-sonnet-4-5"), "claude-3-5-haiku-20241022");
+  assert.equal(normalizeModel("anthropic", ""), "claude-3-5-haiku-20241022");
+
+  assert.equal(normalizeModel("groq", "default"), "llama-3.3-70b-versatile");
+  assert.equal(normalizeModel("deepseek", "default"), "deepseek-chat");
+  assert.equal(normalizeModel("local", "llama3.2"), "llama3.2");
+});
+
+test("generateAnswer transmits normalized high-speed models in upstream request payload", async () => {
+  const bodies = [];
+  const fakeStream = () =>
+    streamed([
+      frame({ choices: [{ delta: { content: "Fast token" }, finish_reason: "stop" }] }),
+      frame("[DONE]"),
+    ]);
+
+  await generateAnswer({
+    provider: "openai",
+    model: "gpt-4.1-mini",
+    key: "sk-test",
+    context,
+    fetchImpl: async (_url, options) => {
+      bodies.push(JSON.parse(options.body));
+      return fakeStream();
+    },
+  });
+
+  await generateAnswer({
+    provider: "gemini",
+    model: "gemini-3.8-flash",
+    key: "AIzaTest",
+    context,
+    fetchImpl: async (_url, options) => {
+      bodies.push(JSON.parse(options.body));
+      return fakeStream();
+    },
+  });
+
+  assert.equal(bodies[0].model, "gpt-4o-mini");
+  assert.equal(bodies[1].model, "gemini-1.5-flash");
 });

@@ -10,6 +10,7 @@ export async function respondWithStream(res, execute) {
     "Cache-Control": "no-cache, no-transform",
     "X-Accel-Buffering": "no",
   });
+  res.flushHeaders?.();
   const emit = (event) => {
     controller.signal.throwIfAborted();
     // Disconnect a stalled consumer rather than buffer unbounded provider output.
@@ -18,6 +19,7 @@ export async function respondWithStream(res, execute) {
       controller.signal.throwIfAborted();
     }
     res.write(`data: ${JSON.stringify(event)}\n\n`);
+    res.flush?.();
   };
   const heartbeat = setInterval(() => {
     if (!res.destroyed) res.write(": keepalive\n\n");

@@ -28,6 +28,23 @@ function endpoint(provider, localBaseUrl) {
     );
   return url.href.replace(/\/+$/, "");
 }
+export function normalizeModel(provider, model) {
+  const m = String(model || "").trim();
+  if (!m || m === "default") {
+    return providers[provider]?.model || "gpt-4o-mini";
+  }
+  if (provider === "openai" && m === "gpt-4.1-mini") {
+    return "gpt-4o-mini";
+  }
+  if (provider === "gemini" && (m === "gemini-3.8-flash" || m === "gemini-2.5-flash")) {
+    return "gemini-1.5-flash";
+  }
+  if (provider === "anthropic" && m === "claude-sonnet-4-5") {
+    return "claude-3-5-haiku-20241022";
+  }
+  return m;
+}
+
 export function isVisionModel(provider, model) {
   if (!model) return false;
   const m = String(model).toLowerCase();
@@ -183,8 +200,7 @@ async function* sse(response) {
   const decoder = new TextDecoder();
   let buffer = "";
   for await (const chunk of response.body) {
-    buffer += decoder.decode(chunk, { stream: true });
-    buffer = buffer.replace(/\r\n/g, "\n");
+    buffer += decoder.decode(chunk, { stream: true }).replace(/\r/g, "");
     if (buffer.length > 2 * 1024 * 1024)
       throw new Error("Provider stream exceeded its safe event limit.");
     let end;
@@ -209,7 +225,6 @@ async function* sse(response) {
         throw error;
       }
     }
-    buffer = buffer.replace(/\r\n/g, "\n");
   }
 }
 export async function generateAnswer({
@@ -224,18 +239,19 @@ export async function generateAnswer({
   maxOutputTokens = 4096,
   localBaseUrl,
 }) {
+  const effectiveModel = normalizeModel(provider, model);
   const anthropic = provider === "anthropic";
   const messages = nativeMessages(context.messages, provider);
   const body = anthropic
     ? {
-        model,
+        model: effectiveModel,
         max_tokens: maxOutputTokens,
         system: context.system,
         messages,
         stream,
       }
     : {
-        model,
+        model: effectiveModel,
         messages: [{ role: "system", content: context.system }, ...messages],
         ...(provider === "openai"
           ? {

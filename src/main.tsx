@@ -110,7 +110,7 @@ const blankState: State = {
   },
   settings: {
     provider: "openai",
-    model: "gpt-4.1-mini",
+    model: "gpt-4o-mini",
     localBaseUrl: "http://127.0.0.1:11434/v1",
     language: "English",
     systemPrompt:
@@ -128,27 +128,27 @@ const providerMeta: Record<
 > = {
   openai: {
     label: "OpenAI",
-    model: "gpt-4.1-mini",
+    model: "gpt-4o-mini",
     url: "https://platform.openai.com/api-keys",
-    note: "Text, vision, and Whisper transcription",
+    note: "Ultra-fast text, vision, and Whisper transcription (< 1s)",
   },
   groq: {
-    label: "Groq",
+    label: "Groq (Ultra-Fast)",
     model: "llama-3.3-70b-versatile",
     url: "https://console.groq.com/keys",
-    note: "Fast text responses and Whisper transcription. Choose a vision model for screenshots.",
+    note: "Ultra-fast responses (500+ tok/sec) and Whisper transcription. Choose a vision model for screenshots.",
   },
   gemini: {
     label: "Google Gemini",
-    model: "gemini-3.8-flash",
+    model: "gemini-1.5-flash",
     url: "https://aistudio.google.com/apikey",
-    note: "Text and vision through the compatible API",
+    note: "High-speed text and vision through Google AI Studio",
   },
   anthropic: {
     label: "Anthropic",
-    model: "claude-sonnet-4-5",
+    model: "claude-3-5-haiku-20241022",
     url: "https://console.anthropic.com/settings/keys",
-    note: "Claude text and vision",
+    note: "Ultra-fast Claude 3.5 Haiku text and vision",
   },
   deepseek: {
     label: "DeepSeek",
@@ -534,7 +534,7 @@ function App() {
       const activeModel =
         state.settings.model ||
         providerMeta[targetProvider]?.model ||
-        "gpt-4.1-mini";
+        "gpt-4o-mini";
       const result: any = await api("model.test", {
         provider: targetProvider,
         model: activeModel,
@@ -2217,7 +2217,7 @@ function App() {
     onRemoveImage: (idx: number) =>
       setImages((old) => old.filter((_, i) => i !== idx)),
     provider: settingsDraft?.provider || "openai",
-    model: settingsDraft?.model || "gpt-4.1-mini",
+    model: settingsDraft?.model || "gpt-4o-mini",
     providerReady: state.settings.provider === "local" || Boolean(state.keys[state.settings.provider]),
     onConnectProvider: () => {
       setFloatingView("assistant");
@@ -2425,43 +2425,7 @@ function App() {
             </button>
           ))}
         </nav>
-        <button
-          className="new-session"
-          aria-label="New session"
-          disabled={sessionDisabled}
-          onClick={() => setModal("new")}
-        >
-          <Plus size={17} />
-          New session<span>{mod} ⇧ N</span>
-        </button>
-        <div className="recent-heading">RECENT SESSIONS</div>
-        <div className="recent-list">
-          {state.sessions.slice(0, 5).map((s) => (
-            <button
-              className={`recent-session ${current?.id === s.id ? "selected" : ""}`}
-              key={s.id}
-              onClick={() => selectSession(s)}
-            >
-              <MessageSquare size={14} />
-              <span>{s.title}</span>
-            </button>
-          ))}
-          {!state.sessions.length && (
-            <p className="recent-empty">Your conversations will live here.</p>
-          )}
-        </div>
         <div className="sidebar-bottom">
-          <div className="local-card">
-            <ShieldCheck size={18} />
-            <div>
-              <strong>Your space. Your data.</strong>
-              <p>
-                {cloudStorage
-                  ? "Saved to your cloud account."
-                  : "Sessions stay on this device."}
-              </p>
-            </div>
-          </div>
           <button
             className={`nav-item ${page === "downloads" ? "active" : ""}`}
             onClick={() => navigate("downloads")}
@@ -2758,12 +2722,12 @@ function App() {
                                     : "Listening to shared audio"
                                   : transcribing
                                     ? "Transcribing your recording…"
-                                    : "Good ideas start with listening."}
+                                    : "Audio & Transcription"}
                               </h3>
                               <p>
                                 {recording
-                                  ? "Your transcript updates in 15-second segments. You can ask questions while recording."
-                                  : "Record microphone or computer audio, or import a recording. Your transcript becomes context for every answer."}
+                                  ? "Live transcript updates continuously. You can ask questions while recording."
+                                  : "Record audio or import files. Your transcript is automatically used as context."}
                               </p>
                               {!current && (
                                 <button
@@ -2920,13 +2884,7 @@ function App() {
                             Pending audio ({visiblePendingAudio.length})
                           </strong>
                           <p>
-                            The queue holds 8 clips or 40 MB, plus one final
-                            capture for recovery. Clips are encrypted in this
-                            device’s browser storage. Recovered clips older than
-                            7 days are removed when the app opens. Retry,
-                            download, or discard failed clips below. Closing
-                            during recording can lose the current unfinished
-                            segment.
+                            Clips are stored encrypted offline. You can retry, download, or discard clips below.
                           </p>
                           {visiblePendingAudio.map((clip) => (
                             <div key={clip.id}>
@@ -3113,15 +3071,9 @@ function App() {
                           <div className="welcome-mark">
                             <Aperture size={31} />
                           </div>
-                          <h2>
-                            A clearer way
-                            <br />
-                            to move forward.
-                          </h2>
+                          <h2>What would you like to explore?</h2>
                           <p>
-                            Bring a question, a screenshot, or a conversation.
-                            <br />
-                            We’ll work through it together.
+                            Ask a question, analyze a problem, or capture your screen to get started.
                           </p>
                           <div className="starter-list">
                             {starters.map((s) => (

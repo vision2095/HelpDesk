@@ -1,17 +1,17 @@
 import { z } from "zod";
 export const providers = {
-  openai: { url: "https://api.openai.com/v1", model: "gpt-4.1-mini" },
+  openai: { url: "https://api.openai.com/v1", model: "gpt-4o-mini" },
   groq: {
     url: "https://api.groq.com/openai/v1",
     model: "llama-3.3-70b-versatile",
   },
   gemini: {
     url: "https://generativelanguage.googleapis.com/v1beta/openai",
-    model: "gemini-3.8-flash",
+    model: "gemini-1.5-flash",
   },
   anthropic: {
     url: "https://api.anthropic.com/v1",
-    model: "claude-sonnet-4-5",
+    model: "claude-3-5-haiku-20241022",
   },
   deepseek: { url: "https://api.deepseek.com/v1", model: "deepseek-chat" },
   // Local is dispatched only by a desktop user's local service.
