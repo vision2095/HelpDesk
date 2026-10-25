@@ -7,7 +7,9 @@ import assert from "node:assert/strict";
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lensdesk-packaged-"));
 const executable = path.resolve(
   process.env.LENSDESK_EXECUTABLE ||
-    "release/mac-arm64/RuntimeHost.app/Contents/MacOS/RuntimeHost",
+    (fs.existsSync("release/mac-arm64/LensDesk.app")
+      ? "release/mac-arm64/LensDesk.app/Contents/MacOS/LensDesk"
+      : "release/mac-arm64/RuntimeHost.app/Contents/MacOS/RuntimeHost"),
 );
 const portServer = await import("node:net").then(({ createServer }) =>
   createServer(),
@@ -54,7 +56,7 @@ try {
   assert.ok(page, "packaged app opened its local renderer");
   page.setDefaultTimeout(15000);
   console.log("Packaged renderer URL:", page.url());
-  await page.getByRole("heading", { name: "Your thinking space." }).waitFor();
+  await page.getByRole("heading", { name: /LensDesk Assistant|What would you like to explore\?|Your thinking space/i }).waitFor();
   assert.equal(
     await page
       .evaluate(() => window.lens.invoke("desktop.preferences"))

@@ -91,9 +91,10 @@ try {
   assert.equal(page.url(), `${BASE_URL}/admin`, "Direct navigation to /admin failed");
 
   // Fill Admin Token
+  const adminTokenValue = process.env.ADMIN_TOKEN || "lensdesk-admin-master-key-2026";
   const tokenInput = page.getByLabel("Admin token");
   await tokenInput.waitFor({ state: "visible", timeout: 5000 });
-  await tokenInput.fill("lensdesk-admin-token");
+  await tokenInput.fill(adminTokenValue);
   await page.getByRole("button", { name: "Unlock console", exact: true }).click();
   await page.waitForTimeout(1000);
 
@@ -162,6 +163,9 @@ try {
   // PHASE 4: Subscriptions & Desktop Sessions Management
   // ==================================================================
   console.log("\n[4/7] Testing Subscriptions & Device Sessions on Account Page...");
+  await page.goto(`${BASE_URL}/account`);
+  await page.waitForTimeout(500);
+
   // Check subscription plans display
   const prepaidHeading = page.getByRole("heading", { name: "Prepaid plans", exact: true });
   await prepaidHeading.waitFor({ state: "visible", timeout: 5000 });

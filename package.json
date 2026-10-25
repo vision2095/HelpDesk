@@ -45,12 +45,14 @@
     "dist:mac:x64": "npm run build && electron-builder --mac dmg --x64 --publish never"
   },
   "dependencies": {
+    "@types/pg": "^8.23.1",
     "koffi": "^3.3.3",
     "lucide-react": "^0.468.0",
     "node-addon-api": "^8.3.0",
     "nodemailer": "10.2.1",
     "otpauth": "^9.5.2",
     "pdf-parse": "^1.1.1",
+    "pg": "^8.23.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-markdown": "^10.1.0",
