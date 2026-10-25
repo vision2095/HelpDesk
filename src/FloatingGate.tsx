@@ -69,14 +69,20 @@ export function FloatingGate({
   };
   const current =
     copy[phase] ||
-    (phase === "active"
+    (phase === "active" && !gate?.entitlement
       ? {
           eyebrow: "PLAN REQUIRED",
           title: "Choose your access.",
           description:
             "This account has no remaining desktop time. Add a plan on the website to continue.",
         }
-      : copy.checking);
+      : phase === "active"
+        ? {
+            eyebrow: "DESKTOP ACCESS",
+            title: "Welcome back.",
+            description: "Your desktop access is active and ready.",
+          }
+        : copy.checking);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

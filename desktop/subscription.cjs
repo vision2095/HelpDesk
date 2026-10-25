@@ -87,6 +87,7 @@ function createSubscriptionGate({
       takeover: state.takeover,
       serverUrl: cloud.tokens().serverUrl,
       serverTimeMs: state.serverTimeMs,
+      licenseValid: authorizedNow(),
     };
   }
 
