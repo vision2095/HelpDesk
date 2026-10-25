@@ -40,7 +40,7 @@ function loadRazorpay(): Promise<any> {
         razorpayPromise = null;
         reject(
           new Error(
-            "Could not load the payment service. Check your connection and try again.",
+            "Could not load Razorpay payment service. Your browser or ad-blocker (such as Brave Shields or uBlock) is blocking checkout.razorpay.com. Please pause your ad-blocker or check your internet connection.",
           ),
         );
       };
@@ -173,8 +173,23 @@ export function Access({
         onNotice("Opening the LensDesk website to complete your purchase.");
         return;
       }
-      const Razorpay = await loadRazorpay();
+      if (data?.paymentConfigured === false) {
+        try {
+          const res = await cloud("purchase.devActivate", { planId: plan.id });
+          await refresh();
+          onChanged?.();
+          emitAccountChanged();
+          onNotice(res.message || `Activated ${plan.label} plan!`);
+          return;
+        } catch (err: any) {
+          throw new Error(
+            err?.message ||
+              "Payment gateway is not connected. An admin can grant subscription time from the /admin portal.",
+          );
+        }
+      }
       const checkout = await cloud("purchase.checkout", { planId: plan.id });
+      const Razorpay = await loadRazorpay();
       const checkoutOptions = {
         key: checkout.keyId,
         order_id: checkout.orderId,
@@ -430,6 +445,25 @@ export function Access({
           Prices include applicable taxes. Plans never auto-renew — when time
           runs out you decide again.
         </p>
+        {data.paymentConfigured === false && (
+          <div
+            style={{
+              margin: "12px 0 16px",
+              padding: "10px 14px",
+              borderRadius: 8,
+              background: "rgba(216, 245, 107, 0.08)",
+              border: "1px solid rgba(216, 245, 107, 0.25)",
+              color: "var(--site-ink, #f3f5ed)",
+              fontSize: 13,
+              lineHeight: 1.5,
+            }}
+          >
+            <strong style={{ color: "var(--site-accent, #d8f56b)" }}>
+              Payment Gateway in Setup/Test Mode:
+            </strong>{" "}
+            Razorpay API keys are not yet configured in <code>.env</code>. You can click any plan below to activate it instantly in test mode, or have an Admin grant access from the Admin Portal.
+          </div>
+        )}
         <div className="access-plan-grid">
           {(data.plans || []).map((plan: any) => {
             const isCurrent = active && entitlement.planId === plan.id;
@@ -459,7 +493,11 @@ export function Access({
                   ) : (
                     <CreditCard size={15} />
                   )}
-                  {isCurrent ? "Add more time" : "Buy plan"}
+                  {data.paymentConfigured === false
+                    ? "Activate plan (Test Mode)"
+                    : isCurrent
+                      ? "Add more time"
+                      : "Buy plan"}
                 </button>
               </div>
             );

@@ -13304,30 +13304,183 @@ kbd {
   gap: 10px;
 }
 
-/* Dynamic Workbench Layouts */
+/* ==========================================================================
+   Web Shell Assistant Studio / Workshop Layout
+   ========================================================================== */
+
+.web-shell .workspace-page {
+  padding: 0 !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  height: calc(100vh - 56px) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  background: #0d110d !important;
+}
+
+.web-shell .workspace-header-bar {
+  background: #0d110d !important;
+  border-bottom: 1px solid rgba(239, 245, 232, 0.1) !important;
+  border-radius: 0 !important;
+  padding: 10px 24px !important;
+  min-height: 54px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  flex-shrink: 0 !important;
+  gap: 16px !important;
+}
+
+.web-shell .workspace-header-left {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  min-width: 0 !important;
+}
+
+.web-shell .workspace-header-title {
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  color: #f3f5ed !important;
+  white-space: nowrap !important;
+  margin: 0 !important;
+}
+
+.web-shell .workspace-title-input {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: #f3f5ed !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  padding: 4px 8px !important;
+  border-radius: 6px !important;
+  max-width: 260px !important;
+}
+
+.web-shell .workspace-title-input:hover,
+.web-shell .workspace-title-input:focus {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(239, 245, 232, 0.15) !important;
+  outline: none !important;
+}
+
+.web-shell .mode-chips {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  flex-wrap: wrap !important;
+}
+
+.web-shell .workspace-header-right {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  flex-shrink: 0 !important;
+}
+
+.web-shell .workshop-model-bar {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.web-shell .workshop-provider-select {
+  background: #141a13 !important;
+  border: 1px solid rgba(239, 245, 232, 0.14) !important;
+  color: #f3f5ed !important;
+  font-size: 12px !important;
+  padding: 6px 10px !important;
+  border-radius: 7px !important;
+  outline: none !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+
+.web-shell .workshop-provider-select:hover {
+  border-color: rgba(216, 245, 107, 0.4) !important;
+  background: #182016 !important;
+}
+
+.web-shell .workshop-provider-select:focus {
+  border-color: #d8f56b !important;
+  box-shadow: 0 0 0 1px rgba(216, 245, 107, 0.25) !important;
+}
+
+.web-shell .workshop-test-btn {
+  background: rgba(216, 245, 107, 0.1) !important;
+  border: 1px solid rgba(216, 245, 107, 0.3) !important;
+  color: #d8f56b !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  padding: 6px 11px !important;
+  border-radius: 7px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+
+.web-shell .workshop-test-btn:hover:not(:disabled) {
+  background: rgba(216, 245, 107, 0.22) !important;
+  color: #ffffff !important;
+}
+
+.web-shell .workshop-add-key-pill {
+  background: rgba(245, 166, 35, 0.15) !important;
+  border: 1px solid rgba(245, 166, 35, 0.4) !important;
+  color: #f5a623 !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  padding: 5px 10px !important;
+  border-radius: 7px !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+
+.web-shell .workshop-add-key-pill:hover {
+  background: rgba(245, 166, 35, 0.25) !important;
+  color: #fff !important;
+}
+
+/* Full-height Workbench */
 .web-shell .workbench {
-  background: #151b13 !important;
-  border: 1px solid rgba(239, 245, 232, 0.12) !important;
-  border-radius: 0 0 10px 10px;
-  overflow: hidden;
+  flex: 1 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  display: flex !important;
+  flex-direction: row !important;
+  overflow: hidden !important;
+  background: #0d110d !important;
 }
 
-.web-shell .workbench.full-chat {
-  grid-template-columns: minmax(0, 1fr) !important;
-}
-
-.web-shell .workbench.with-context {
-  grid-template-columns: minmax(280px, 32%) minmax(0, 1fr) !important;
+.web-shell .workbench.full-chat .context-panel {
+  display: none !important;
 }
 
 .web-shell .context-panel {
+  width: 340px !important;
+  min-width: 320px !important;
+  max-width: 380px !important;
+  flex-shrink: 0 !important;
   background: #111611 !important;
-  border-right: 1px solid rgba(239, 245, 232, 0.12) !important;
+  border-right: 1px solid rgba(239, 245, 232, 0.1) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow-y: auto !important;
 }
 
 .web-shell .context-panel .panel-header {
   background: #0d110d !important;
-  border-bottom: 1px solid rgba(239, 245, 232, 0.12) !important;
+  border-bottom: 1px solid rgba(239, 245, 232, 0.1) !important;
+  padding: 10px 14px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  flex-shrink: 0 !important;
 }
 
 .web-shell .context-content textarea {
@@ -13337,67 +13490,188 @@ kbd {
 }
 
 .web-shell .answer-panel {
-  background: #151b13 !important;
-}
-
-.web-shell .answer-panel .panel-header {
-  background: #111611 !important;
-  border-bottom: 1px solid rgba(239, 245, 232, 0.12) !important;
+  flex: 1 !important;
+  min-width: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  background: #0d110d !important;
+  position: relative !important;
 }
 
 .web-shell .conversation {
-  background: #151b13 !important;
+  flex: 1 !important;
+  overflow-y: auto !important;
+  padding: 24px 32px !important;
+  background: #0d110d !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
 }
 
-.web-shell .composer {
-  background: #111611 !important;
-  border-top: 1px solid rgba(239, 245, 232, 0.12) !important;
-}
-
-.web-shell .composer textarea {
-  background: #0e130e !important;
-  color: #f3f5ed !important;
-  border: 1px solid rgba(239, 245, 232, 0.14) !important;
-}
-
-.web-shell .composer textarea:focus {
-  border-color: #d8f56b !important;
-  box-shadow: 0 0 0 2px rgba(216, 245, 107, 0.15) !important;
+.web-shell .conversation > * {
+  width: 100% !important;
+  max-width: 860px !important;
 }
 
 .web-shell .assistant-welcome {
   color: #f3f5ed !important;
+  padding: 44px 16px 20px !important;
+  text-align: center !important;
+  max-width: 860px !important;
+  margin: 0 auto !important;
 }
 
 .web-shell .assistant-welcome h2 {
   color: #f3f5ed !important;
   font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif !important;
-  font-size: 28px !important;
+  font-size: 32px !important;
+  letter-spacing: -0.02em !important;
+  margin-bottom: 10px !important;
 }
 
 .web-shell .assistant-welcome p {
   color: #9aa698 !important;
-}
-
-.web-shell .starter-list button {
-  background: rgba(255, 255, 255, 0.03) !important;
-  border: 1px solid rgba(239, 245, 232, 0.12) !important;
-  color: #f3f5ed !important;
-  border-radius: 8px !important;
-  transition: all 0.15s ease !important;
-}
-
-.web-shell .starter-list button:hover {
-  background: rgba(216, 245, 107, 0.08) !important;
-  border-color: #d8f56b !important;
-  color: #d8f56b !important;
-  transform: translateY(-1px);
+  font-size: 14px !important;
+  line-height: 1.6 !important;
+  max-width: 560px !important;
+  margin: 0 auto !important;
 }
 
 .web-shell .welcome-mark {
   background: rgba(216, 245, 107, 0.12) !important;
   border: 1px solid rgba(216, 245, 107, 0.3) !important;
   color: #d8f56b !important;
+  margin: 0 auto 18px !important;
+  width: 52px !important;
+  height: 52px !important;
+  border-radius: 14px !important;
+  display: grid !important;
+  place-items: center !important;
+}
+
+.web-shell .starter-list {
+  max-width: 840px !important;
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+  width: 100% !important;
+  margin: 32px auto 0 !important;
+}
+
+.web-shell .starter-list button {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid rgba(239, 245, 232, 0.1) !important;
+  color: #f3f5ed !important;
+  border-radius: 12px !important;
+  padding: 18px 16px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 10px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  line-height: 1.4 !important;
+  text-align: left !important;
+  transition: all 0.16s ease !important;
+  cursor: pointer !important;
+  min-height: 90px !important;
+}
+
+.web-shell .starter-list button > span {
+  color: #d8f56b !important;
+  background: rgba(216, 245, 107, 0.1) !important;
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 8px !important;
+  display: grid !important;
+  place-items: center !important;
+}
+
+.web-shell .starter-list button > svg:last-child {
+  display: none !important;
+}
+
+.web-shell .starter-list button:hover {
+  background: rgba(216, 245, 107, 0.08) !important;
+  border-color: rgba(216, 245, 107, 0.45) !important;
+  color: #d8f56b !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* Modern Composer */
+.web-shell .composer-area {
+  padding: 0 24px 14px !important;
+  background: transparent !important;
+  width: 100% !important;
+  max-width: 908px !important;
+  margin: 0 auto !important;
+  flex-shrink: 0 !important;
+}
+
+.web-shell .composer {
+  background: #141a13 !important;
+  border: 1px solid rgba(239, 245, 232, 0.14) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35) !important;
+  padding: 12px 16px 10px !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+.web-shell .composer:focus-within {
+  border-color: rgba(216, 245, 107, 0.5) !important;
+  box-shadow: 0 0 0 1px rgba(216, 245, 107, 0.25), 0 8px 28px rgba(0, 0, 0, 0.45) !important;
+}
+
+.web-shell .composer textarea {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #f3f5ed !important;
+  font-size: 14.5px !important;
+  line-height: 1.5 !important;
+  resize: none !important;
+  min-height: 52px !important;
+  padding: 4px 0 !important;
+}
+
+.web-shell .composer textarea:focus {
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.web-shell .composer-bottom {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding-top: 8px !important;
+  border-top: 1px solid rgba(239, 245, 232, 0.08) !important;
+  margin-top: 4px !important;
+}
+
+.web-shell .composer-footer {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 6px 4px 0 !important;
+  font-size: 11px !important;
+  color: #6b776a !important;
+}
+
+.web-shell .workspace-footer {
+  height: 30px !important;
+  min-height: 30px !important;
+  padding: 0 24px !important;
+  font-size: 11px !important;
+  background: #090c09 !important;
+  border-top: 1px solid rgba(239, 245, 232, 0.08) !important;
+  color: #6b776a !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  flex-shrink: 0 !important;
 }
 
 .web-shell .bubble.user,

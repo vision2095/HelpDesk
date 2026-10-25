@@ -315,7 +315,7 @@ function App() {
     [page, setPage] = useState(() =>
       getPageFromPath(window.location.pathname, Boolean(window.lens)),
     ),
-    [showContext, setShowContext] = useState(true),
+    [showContext, setShowContext] = useState(false),
     [activeId, setActiveId] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
     [question, setQuestion] = useState(""),
@@ -639,7 +639,7 @@ function App() {
             params.has("billing")
           ) {
             setPage("account");
-          } else if (["admin", "downloads", "account"].includes(initial)) {
+          } else if (initial && initial !== "home") {
             setPage(initial);
           } else {
             setPage("home");
@@ -2616,6 +2616,64 @@ function App() {
                     </div>
                   </div>
                   <div className="workspace-header-right">
+                    <div className="workshop-model-bar">
+                      <select
+                        aria-label="Active AI Provider"
+                        className="workshop-provider-select"
+                        value={state.settings.provider}
+                        onChange={(e) =>
+                          run(() =>
+                            handleWorkshopProviderChange(
+                              e.target.value as Provider,
+                            ),
+                          )
+                        }
+                      >
+                        {Object.entries(providerMeta)
+                          .filter(([id]) => id !== "local" || desktop)
+                          .map(([id, meta]) => {
+                            const isReady =
+                              id === "local" ||
+                              Boolean(state.keys[id as Provider]);
+                            return (
+                              <option key={id} value={id}>
+                                {meta.label} {isReady ? "✓ Ready" : "· Key needed"}
+                              </option>
+                            );
+                          })}
+                      </select>
+                      {state.settings.provider !== "local" &&
+                      !state.keys[state.settings.provider] ? (
+                        <button
+                          type="button"
+                          className="workshop-add-key-pill"
+                          onClick={() =>
+                            setQuickKeyModal(state.settings.provider)
+                          }
+                          title="Add API Key for this provider"
+                        >
+                          + Add Key
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="workshop-test-btn"
+                          disabled={modelTesting}
+                          onClick={() => void testCurrentModel()}
+                          title="Test API connection with this provider"
+                        >
+                          {modelTesting ? (
+                            <>
+                              <Loader2 size={12} className="spin" /> Testing…
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles size={12} /> Test
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
                     {current && (
                       <span className="timer" style={{ fontSize: "12px", color: "var(--site-dark-muted, #9aa698)" }}>
                         <Clock size={13} style={{ marginRight: 4, verticalAlign: "middle" }} />
@@ -2627,14 +2685,23 @@ function App() {
                     )}
                     <button
                       type="button"
-                      className={`button secondary ${showContext ? "active" : ""}`}
+                      className={`button secondary context-toggle-btn ${showContext ? "active" : ""}`}
                       style={{ padding: "6px 12px", fontSize: "12px" }}
                       onClick={() => setShowContext(!showContext)}
-                      title={showContext ? "Hide Context & Notes" : "Show Context & Notes"}
+                      title={showContext ? "Hide Context & Notes" : "Show Audio & Notes Context"}
                     >
-                      <FileText size={14} />
-                      {showContext ? "Hide Notes" : "Notes & Context"}
+                      <AudioLines size={14} />
+                      {showContext ? "Hide Context" : "Audio & Notes"}
                     </button>
+                    {current && (
+                      <IconButton
+                        label="Export Markdown"
+                        disabled={sessionDisabled}
+                        onClick={() => run(() => exportCurrent("md"))}
+                      >
+                        <Download size={15} />
+                      </IconButton>
+                    )}
                     <button
                       type="button"
                       className="button primary"
@@ -2667,21 +2734,33 @@ function App() {
                         <div className="panel-tabs">
                           <button
                             className={tab === "transcript" ? "active" : ""}
-                          onClick={() => setTab("transcript")}
-                        >
-                          <AudioLines size={16} />
-                          Transcript
-                        </button>
-                        <button
-                          className={tab === "notes" ? "active" : ""}
-                          onClick={() => setTab("notes")}
-                        >
-                          <FileText size={15} />
-                          Notes
-                        </button>
+                            onClick={() => setTab("transcript")}
+                          >
+                            <AudioLines size={16} />
+                            Transcript
+                          </button>
+                          <button
+                            className={tab === "notes" ? "active" : ""}
+                            onClick={() => setTab("notes")}
+                          >
+                            <FileText size={15} />
+                            Notes
+                          </button>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span className="tiny-label">CONTEXT</span>
+                          <button
+                            type="button"
+                            className="icon-button"
+                            aria-label="Close context"
+                            onClick={() => setShowContext(false)}
+                            title="Close context panel"
+                            style={{ width: 24, height: 24, padding: 0 }}
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
                       </div>
-                      <span className="tiny-label">CONTEXT</span>
-                    </div>
                     <div className="context-content">
                       {tab === "transcript" ? (
                         <>
@@ -2982,81 +3061,6 @@ function App() {
                   </section>
                   )}
                   <section className="answer-panel">
-                    <div className="panel-header">
-                      <div className="panel-title">
-                        <span className="mini-mark">
-                          <Aperture size={17} />
-                        </span>
-                        Assistant<span className="ai-badge">AI</span>
-                      </div>
-                      <div className="answer-actions">
-                        <div className="workshop-model-bar">
-                          <select
-                            aria-label="Active AI Provider"
-                            className="workshop-provider-select"
-                            value={state.settings.provider}
-                            onChange={(e) =>
-                              run(() =>
-                                handleWorkshopProviderChange(
-                                  e.target.value as Provider,
-                                ),
-                              )
-                            }
-                          >
-                            {Object.entries(providerMeta)
-                              .filter(([id]) => id !== "local" || desktop)
-                              .map(([id, meta]) => {
-                                const isReady =
-                                  id === "local" ||
-                                  Boolean(state.keys[id as Provider]);
-                                return (
-                                  <option key={id} value={id}>
-                                    {meta.label} {isReady ? "✓ Ready" : "· Key needed"}
-                                  </option>
-                                );
-                              })}
-                          </select>
-                          {state.settings.provider !== "local" &&
-                          !state.keys[state.settings.provider] ? (
-                            <button
-                              type="button"
-                              className="workshop-add-key-pill"
-                              onClick={() =>
-                                setQuickKeyModal(state.settings.provider)
-                              }
-                              title="Add API Key for this provider"
-                            >
-                              + Add Key
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              className="workshop-test-btn"
-                              disabled={modelTesting}
-                              onClick={() => void testCurrentModel()}
-                              title="Test API connection with this provider"
-                            >
-                              {modelTesting ? (
-                                <>
-                                  <Loader2 size={12} className="spin" /> Testing…
-                                </>
-                              ) : (
-                                <>
-                                  <Sparkles size={12} /> Test
-                                </>
-                              )}
-                            </button>
-                          )}
-                        </div>
-                        <IconButton
-                          label="Export Markdown"
-                          disabled={!current || sessionDisabled}
-                          onClick={() => run(() => exportCurrent("md"))}
-                        >
-                          <Download size={16} />
-                        </IconButton>
-                      </div>
-                    </div>
                     <div className="print-context">
                       <h1>{current?.title}</h1>
                       <h2>Notes</h2>
