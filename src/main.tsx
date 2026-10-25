@@ -140,9 +140,9 @@ const providerMeta: Record<
   },
   gemini: {
     label: "Google Gemini",
-    model: "gemini-1.5-flash",
+    model: "gemini-3.5-flash-lite",
     url: "https://aistudio.google.com/apikey",
-    note: "High-speed text and vision through Google AI Studio",
+    note: "Ultra-fast Google Gemini Flash (< 1s response)",
   },
   anthropic: {
     label: "Anthropic",

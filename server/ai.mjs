@@ -36,8 +36,17 @@ export function normalizeModel(provider, model) {
   if (provider === "openai" && m === "gpt-4.1-mini") {
     return "gpt-4o-mini";
   }
-  if (provider === "gemini" && (m === "gemini-3.8-flash" || m === "gemini-2.5-flash")) {
-    return "gemini-1.5-flash";
+  if (provider === "gemini") {
+    if (
+      m === "gemini-1.5-flash" ||
+      m === "gemini-2.0-flash" ||
+      m === "gemini-2.5-flash" ||
+      m === "gemini-2.5-flash-lite" ||
+      m === "gemini-3.8-flash"
+    ) {
+      return "gemini-3.5-flash-lite";
+    }
+    return m;
   }
   if (provider === "anthropic" && m === "claude-sonnet-4-5") {
     return "claude-3-5-haiku-20241022";
@@ -299,6 +308,13 @@ export async function generateAnswer({
       continue;
     }
     if (response.ok) break;
+    if (provider === "gemini" && [404, 503].includes(response.status) && body.model !== "gemini-3.5-flash-lite" && attempt < 2) {
+      await response.body?.cancel();
+      body.model = "gemini-3.5-flash-lite";
+      onEvent?.({ type: "retry", attempt: attempt + 1, message: "Switching to gemini-3.5-flash-lite" });
+      await delay(100, undefined, { signal });
+      continue;
+    }
     if ([429, 500, 502, 503, 504].includes(response.status) && attempt < 2) {
       await response.body?.cancel();
       const retry = Number(response.headers.get("retry-after"));
@@ -312,10 +328,9 @@ export async function generateAnswer({
     }
     let detail = "";
     try {
-      detail = String((await response.json()).error?.message || "").slice(
-        0,
-        350,
-      );
+      const data = await response.json();
+      const err = Array.isArray(data) ? data[0]?.error : data?.error;
+      detail = String(err?.message || data?.message || "").slice(0, 350);
     } catch {}
     throw new Error(
       `Provider returned ${response.status}${detail ? ": " + detail : ""}`,

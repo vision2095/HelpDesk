@@ -465,13 +465,13 @@ export function createService({
           providers[p]?.model,
         );
         if (images.length > 0 && !isVisionModel(p, activeModel)) {
-          if (p === "gemini") activeModel = "gemini-1.5-flash";
+          if (p === "gemini") activeModel = "gemini-3.5-flash-lite";
           else if (p === "openai") activeModel = "gpt-4o-mini";
           else if (p === "anthropic") activeModel = "claude-3-5-haiku-20241022";
           else if (keys["gemini"]) {
             p = "gemini";
             key = keys["gemini"];
-            activeModel = "gemini-1.5-flash";
+            activeModel = "gemini-3.5-flash-lite";
           } else {
             throw new Error(
               `Selected model "${activeModel}" (${p}) does not support images or screenshots. Please choose a vision-capable provider in Settings.`,
@@ -635,9 +635,9 @@ export function createService({
         if (p === "gemini") {
           const geminiKey = keys.gemini || defaults.gemini;
           const candidateModels = [
-            "gemini-1.5-flash",
-            "gemini-2.0-flash",
-            "gemini-2.5-flash",
+            "gemini-3.5-flash-lite",
+            "gemini-flash-lite-latest",
+            "gemini-3.8-flash",
           ];
           let lastErr;
           for (const m of candidateModels) {
