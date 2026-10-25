@@ -1166,6 +1166,9 @@ export function Home({ navigate }: HomeProps) {
               <button type="button" onClick={() => navigate("account")}>
                 Sign in
               </button>
+              <button type="button" onClick={() => navigate("admin")}>
+                Admin Console
+              </button>
             </div>
           </div>
 
