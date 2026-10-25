@@ -83,7 +83,7 @@ try {
       .count(),
     0,
   );
-  await page.getByRole("button", { name: "Assistant", exact: true }).click();
+  await page.getByRole("button", { name: "Assistant", exact: true }).first().click();
   await page
     .getByRole("button", { name: "New session", exact: true })
     .first()

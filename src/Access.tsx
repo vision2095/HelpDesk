@@ -6,6 +6,7 @@ import {
   CreditCard,
   ExternalLink,
   Loader2,
+  LogOut,
   Monitor,
   RefreshCw,
   RotateCcw,
@@ -120,6 +121,7 @@ export function Access({
   const [busyPlan, setBusyPlan] = useState("");
   const [reconciling, setReconciling] = useState(false);
   const [revoking, setRevoking] = useState("");
+  const [revokingAll, setRevokingAll] = useState(false);
   const [tick, setTick] = useState(0);
   const loadedAt = useRef(0);
   const mounted = useRef(true);
@@ -257,6 +259,31 @@ export function Access({
       onError(e);
     } finally {
       setRevoking("");
+    }
+  }
+
+  async function revokeAllDevices() {
+    if (
+      !window.confirm(
+        "Are you sure you want to log out from all desktop devices? All active desktop sessions will end immediately.",
+      )
+    ) {
+      return;
+    }
+    setRevokingAll(true);
+    try {
+      const res = await cloud("account.desktop.revokeAll", {});
+      await refresh();
+      onChanged?.();
+      onNotice(
+        res?.revokedCount
+          ? `Logged out ${res.revokedCount} desktop device${res.revokedCount === 1 ? "" : "s"}.`
+          : "All desktop devices were logged out.",
+      );
+    } catch (e) {
+      onError(e);
+    } finally {
+      setRevokingAll(false);
     }
   }
 
@@ -507,12 +534,34 @@ export function Access({
         <div className="form-heading">
           <h2>
             <Monitor size={18} />
-            Signed-in devices
+            Signed-in desktop devices
           </h2>
+          {data.desktops?.length > 0 && (
+            <button
+              className="button secondary danger-text"
+              type="button"
+              disabled={revokingAll}
+              onClick={() => void revokeAllDevices()}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                fontSize: "12px",
+                padding: "6px 12px",
+              }}
+            >
+              {revokingAll ? (
+                <Loader2 size={13} className="spin" />
+              ) : (
+                <LogOut size={13} />
+              )}
+              Log out from all devices
+            </button>
+          )}
         </div>
         <p className="field-help">
-          One device can use the desktop app at a time. Revoking a device
-          sign-in ends its session immediately.
+          Hourly and Daily plans allow 1 active desktop login at a time. Monthly plans allow up to 2 active logins simultaneously.
+          Revoking a device ends its desktop session immediately.
         </p>
         {data.desktops?.length ? (
           <ul className="access-devices">

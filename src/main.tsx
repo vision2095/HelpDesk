@@ -73,6 +73,7 @@ import { matchesShortcut } from "./shortcuts.mjs";
 import { Recovery } from "./Recovery";
 import { Account } from "./Account";
 import { Home } from "./Home";
+import { PageNav } from "./PageNav";
 import { Access } from "./Access";
 import { GateLock } from "./GateLock";
 import { Admin } from "./Admin";
@@ -257,6 +258,19 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
 
 function getPageFromPath(path: string, isDesktop: boolean): string {
   if (isDesktop) return "workspace";
+  if (typeof window !== "undefined" && window.location?.search) {
+    const params = new URLSearchParams(window.location.search);
+    if (
+      params.has("verify") ||
+      params.has("reset") ||
+      params.has("billing") ||
+      params.has("account")
+    ) {
+      return "account";
+    }
+    if (params.has("admin")) return "admin";
+    if (params.has("app") || params.has("workspace")) return "workspace";
+  }
   const clean = path.toLowerCase().replace(/\/+$/, "") || "/";
   if (clean === "" || clean === "/" || clean === "/home") return "home";
   if (clean === "/workshop" || clean === "/assistant" || clean === "/workspace") return "workspace";
@@ -292,40 +306,7 @@ function getPathForPage(p: string): string {
   }
 }
 
-function PageNav({
-  current,
-  onNavigate,
-  isDesktop,
-}: {
-  current: string;
-  onNavigate: (p: string) => void;
-  isDesktop: boolean;
-}) {
-  const items = [
-    { id: "workspace", label: "Assistant", icon: Aperture },
-    { id: "profiles", label: "Profiles", icon: UserRound },
-    { id: "sessions", label: "Session History", icon: History },
-    { id: "downloads", label: "Desktop Downloads", icon: Download },
-    { id: "settings", label: "Settings", icon: Settings2 },
-    { id: "account", label: "Account & Cloud", icon: ShieldCheck },
-    ...(!isDesktop ? [{ id: "admin", label: "Admin", icon: KeyRound }] : []),
-  ];
-  return (
-    <div className="quick-nav-bar" role="navigation" aria-label="Quick page navigation">
-      {items.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          className={`quick-nav-pill ${current === item.id ? "active" : ""}`}
-          onClick={() => onNavigate(item.id)}
-        >
-          <item.icon size={13} />
-          {item.label}
-        </button>
-      ))}
-    </div>
-  );
-}
+
 
 function App() {
   const [state, setState] = useState<State | null>(null),
@@ -334,7 +315,7 @@ function App() {
     [page, setPage] = useState(() =>
       getPageFromPath(window.location.pathname, Boolean(window.lens)),
     ),
-    [showContext, setShowContext] = useState(false),
+    [showContext, setShowContext] = useState(true),
     [activeId, setActiveId] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
     [question, setQuestion] = useState(""),
@@ -542,6 +523,7 @@ function App() {
   }
   useEffect(() => {
     run(async () => {
+      const initial = getPageFromPath(window.location.pathname, desktop);
       try {
         const next = await refresh();
         setSettingsDraft(next.settings);
@@ -562,7 +544,7 @@ function App() {
           ) {
             setPage("account");
           } else {
-            setPage("home");
+            setPage(initial);
           }
         }
       } catch (e) {
@@ -573,7 +555,21 @@ function App() {
         ) {
           setState(structuredClone(blankState));
           setSettingsDraft(blankState.settings);
-          setPage("home");
+          const params = new URLSearchParams(location.search);
+          if (params.has("admin")) {
+            setPage("admin");
+          } else if (
+            params.has("account") ||
+            params.has("verify") ||
+            params.has("reset") ||
+            params.has("billing")
+          ) {
+            setPage("account");
+          } else if (["admin", "downloads", "account"].includes(initial)) {
+            setPage(initial);
+          } else {
+            setPage("home");
+          }
         } else throw e;
       }
       if (
@@ -587,6 +583,14 @@ function App() {
       stopRecording();
     };
   }, []);
+  useEffect(() => {
+    if (desktop) return;
+    const targetUrl = getPathForPage(page);
+    if (window.location.pathname !== targetUrl) {
+      const search = window.location.search;
+      window.history.pushState({ page }, "", targetUrl + search);
+    }
+  }, [page, desktop]);
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(""), 3500);
@@ -2598,10 +2602,11 @@ function App() {
                       className="button primary"
                       style={{ padding: "6px 14px", fontSize: "12px" }}
                       disabled={sessionDisabled}
+                      aria-label="New session"
                       onClick={() => setModal("new")}
                     >
                       <Plus size={15} />
-                      New Chat
+                      New session
                     </button>
                     {desktop && (
                       <button
@@ -3398,9 +3403,10 @@ function App() {
                 }
               });
             }}
+            navigate={navigate}
           />
         )}
-        {page === "admin" && <Admin />}
+        {page === "admin" && <Admin navigate={navigate} />}
         {page === "sessions" && (
           <div className="content-page">
             <PageNav current="sessions" onNavigate={navigate} isDesktop={desktop} />

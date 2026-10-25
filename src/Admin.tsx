@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { PageNav } from "./PageNav";
 import {
   Ban,
   ChevronRight,
@@ -75,7 +76,7 @@ function Stat({ label, value, tone }: { label: string; value: React.ReactNode; t
   );
 }
 
-export function Admin() {
+export function Admin({ navigate }: { navigate?: (page: string) => void } = {}) {
   const [token, setToken] = useState("");
   const [overview, setOverview] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
@@ -228,6 +229,7 @@ export function Admin() {
   if (!authorized)
     return (
       <div className="content-page admin-page">
+        {navigate && <PageNav current="admin" onNavigate={navigate} />}
         <form className="form-card admin-token-card" onSubmit={firstSignIn}>
           <div className="form-heading">
             <h2>
@@ -271,6 +273,7 @@ export function Admin() {
 
   return (
     <div className="content-page admin-page">
+      {navigate && <PageNav current="admin" onNavigate={navigate} />}
       <div className="page-heading">
         <div>
           <div className="site-kicker">
