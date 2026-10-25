@@ -2000,8 +2000,7 @@ function App() {
   const desktopAuthorized =
     desktop &&
     gate?.phase === "active" &&
-    gate?.licenseValid === true &&
-    Boolean(gate.entitlement);
+    (gate?.licenseValid === true || Boolean(gate.entitlement));
   if (desktop && !desktopAuthorized) {
     return (
       <FloatingGate
@@ -4512,7 +4511,8 @@ function App() {
         )}
         {desktop &&
           gate &&
-          (gate.phase !== "active" || gate.licenseValid !== true) &&
+          (gate.phase !== "active" ||
+            (gate.licenseValid !== true && !gate.entitlement)) &&
           !["account", "downloads", "settings", "admin"].includes(page) && (
             <GateLock gate={gate} navigate={navigate} />
           )}
