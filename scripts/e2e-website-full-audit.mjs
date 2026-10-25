@@ -252,6 +252,11 @@ try {
   console.log("  ✓ Created and started session: Audited Cloud Session");
 
   // Test Notes & Context panel toggle
+  const contextToggle = page.locator(".context-toggle-btn").first();
+  if (!(await page.getByRole("button", { name: "Notes", exact: true }).isVisible())) {
+    await contextToggle.click();
+    await page.waitForTimeout(400);
+  }
   const notesTabBtn = page.getByRole("button", { name: "Notes", exact: true });
   await notesTabBtn.waitFor({ state: "visible", timeout: 3000 });
   await notesTabBtn.click();
