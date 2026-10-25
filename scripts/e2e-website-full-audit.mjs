@@ -301,5 +301,11 @@ try {
   await page.screenshot({ path: "resources/audit-failure.png" }).catch(() => {});
   process.exitCode = 1;
 } finally {
+  try {
+    const { DatabaseSync } = await import("node:sqlite");
+    const db = new DatabaseSync(path.join(DATA_DIR, "accounts.sqlite"));
+    db.prepare("DELETE FROM users WHERE email LIKE 'audit-%@example.com'").run();
+    db.close();
+  } catch {}
   await browser.close();
 }
