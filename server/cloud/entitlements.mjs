@@ -208,6 +208,78 @@ export function createEntitlements({ db, plans, clock, audit }) {
       });
       return result;
     },
+    // Grant custom number of days by admin, extending live coverage seamlessly
+    grantCustomDays({ userId, days, atMs = nowMs(), actor = "admin", note = "" }) {
+      const at = Math.floor(atMs);
+      const seconds = Math.max(1, Math.round(days * 86400));
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        const live = db
+          .prepare(
+            `SELECT MAX(expiration_timestamp) AS expires FROM entitlements
+             WHERE user_id=? AND subscription_status='active'
+               AND expiration_timestamp>?`,
+          )
+          .get(userId, at);
+        const base = Math.max(at, live?.expires || 0);
+        const id = randomUUID(),
+          created = stamp(),
+          expiration = base + seconds * 1000;
+        const planId =
+          days >= 30
+            ? "monthly"
+            : days >= 10
+              ? "ten-day"
+              : days >= 1
+                ? "daily"
+                : "hourly";
+        db.prepare(
+          `INSERT INTO entitlements(
+             id,user_id,plan_id,payment_id,
+             activation_timestamp,expiration_timestamp,
+             subscription_status,created_at,updated_at)
+           VALUES(?,?,?,?,?,?, 'active', ?, ?)`,
+        ).run(
+          id,
+          userId,
+          planId,
+          null,
+          base,
+          expiration,
+          created,
+          created,
+        );
+        audit?.(userId, "entitlement.activated.custom_grant", {
+          entitlementId: id,
+          days,
+          note,
+          activation: base,
+          expiration,
+        });
+        this.adminAudit(actor, "entitlement.grant_custom_days", userId, {
+          days,
+          note,
+          entitlementId: id,
+          expiration,
+        });
+        db.exec("COMMIT");
+        return {
+          id,
+          userId,
+          planId,
+          activationTimestamp: base,
+          expirationTimestamp: expiration,
+          subscriptionStatus: "active",
+          started: true,
+          expired: false,
+          remainingSeconds: Math.floor((expiration - at) / 1000),
+          days,
+        };
+      } catch (err) {
+        db.exec("ROLLBACK");
+        throw err;
+      }
+    },
     // Revoke access granted by a payment (verified refund or operator
     // correction). Tied rows are revoked and can never authorize again.
     revokeByPayment(paymentId, { actor = "system", reason = "", manageTx = true } = {}) {

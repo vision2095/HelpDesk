@@ -12769,3 +12769,336 @@ kbd {
   background: rgba(216, 245, 107, 0.2);
 }
 
+
+/* =========================================================================
+   Universal Website Obsidian Dark Luxury Theme System
+   Unifies all website views (Account, Security, Admin, Downloads, Profiles,
+   Sessions, Settings, Workspace) to mirror Home / Landing page aesthetic.
+   ========================================================================= */
+
+.web-shell {
+  --site-paper: #0d110d;
+  --site-ink: #f3f5ed;
+  --site-line: rgba(239, 245, 232, 0.12);
+  --site-accent: #d8f56b;
+  --site-accent-soft: #e6f5b3;
+  --site-accent-deep: #7e952a;
+  --site-dark: #0d110d;
+  --site-dark-soft: #151b13;
+  --site-dark-line: rgba(239, 245, 232, 0.13);
+  --site-dark-muted: #9aa698;
+  --page-bg: #0d110d;
+  --sidebar: #111611;
+  --panel: #151b13;
+  --surface-muted: #182016;
+  --ink: #f3f5ed;
+  --muted: #9aa698;
+  --text-secondary: #a8b4a6;
+  --line: rgba(239, 245, 232, 0.12);
+  --blue: #d8f56b;
+  --soft-blue: rgba(216, 245, 107, 0.12);
+  background: #0d110d;
+  color: #f3f5ed;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  min-height: 100vh;
+}
+
+.web-shell .sidebar {
+  background: #111611;
+  border-right: 1px solid rgba(239, 245, 232, 0.12);
+}
+
+.web-shell .brand {
+  color: #f3f5ed;
+}
+
+.web-shell .brand-mark {
+  background: #d8f56b;
+  color: #0d110d;
+  box-shadow: 0 0 16px rgba(216, 245, 107, 0.35);
+}
+
+.web-shell .brand-dot {
+  color: #d8f56b;
+}
+
+.web-shell .workspace-label,
+.web-shell .recent-heading {
+  color: #9aa698;
+}
+
+.web-shell .nav-item {
+  color: #a8b4a6;
+  transition: all 0.16s ease;
+}
+
+.web-shell .nav-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #f3f5ed;
+}
+
+.web-shell .nav-item.active {
+  background: rgba(216, 245, 107, 0.12);
+  color: #d8f56b;
+  font-weight: 600;
+  border-left: 3px solid #d8f56b;
+}
+
+.web-shell .topbar {
+  background: #111611;
+  border-bottom: 1px solid rgba(239, 245, 232, 0.12);
+}
+
+.web-shell .breadcrumb {
+  color: #a8b4a6;
+}
+
+.web-shell .breadcrumb strong {
+  color: #f3f5ed;
+}
+
+.web-shell .platform-badge {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(239, 245, 232, 0.12);
+  color: #9aa698;
+}
+
+.web-shell .form-card,
+.web-shell .auth-card,
+.web-shell .profile-card,
+.web-shell .account-danger,
+.web-shell .download-card,
+.web-shell .admin-token-card {
+  background: #151b13;
+  border: 1px solid rgba(239, 245, 232, 0.12);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.web-shell h1,
+.web-shell h2,
+.web-shell h3 {
+  color: #f3f5ed;
+}
+
+.web-shell h1 > span {
+  color: #d8f56b;
+}
+
+.web-shell p {
+  color: #9aa698;
+}
+
+.web-shell label {
+  color: #d2ded0;
+}
+
+.web-shell .field-help {
+  color: #9aa698;
+}
+
+.web-shell input,
+.web-shell select,
+.web-shell textarea {
+  background: #0e130e;
+  color: #f3f5ed;
+  border: 1px solid rgba(239, 245, 232, 0.16);
+  border-radius: 8px;
+}
+
+.web-shell input:focus,
+.web-shell select:focus,
+.web-shell textarea:focus {
+  outline: none;
+  border-color: #d8f56b;
+  box-shadow: 0 0 0 3px rgba(216, 245, 107, 0.18);
+}
+
+.web-shell input::placeholder,
+.web-shell textarea::placeholder {
+  color: #717d6f;
+}
+
+.web-shell .button.primary {
+  background: #d8f56b;
+  color: #0d110d;
+  font-weight: 600;
+  border: 1px solid rgba(216, 245, 107, 0.5);
+  box-shadow: 0 0 20px rgba(216, 245, 107, 0.25);
+  border-radius: 8px;
+}
+
+.web-shell .button.primary:hover:not(:disabled) {
+  background: #e4fa8c;
+  box-shadow: 0 0 28px rgba(216, 245, 107, 0.45);
+  transform: translateY(-1px);
+}
+
+.web-shell .button.secondary {
+  background: rgba(255, 255, 255, 0.05);
+  color: #f3f5ed;
+  border: 1px solid rgba(239, 245, 232, 0.15);
+  border-radius: 8px;
+}
+
+.web-shell .button.secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(216, 245, 107, 0.4);
+  color: #d8f56b;
+}
+
+.web-shell .text-button {
+  color: #d8f56b;
+}
+
+.web-shell .text-button:hover:not(:disabled) {
+  color: #e4fa8c;
+}
+
+.web-shell .danger-text,
+.web-shell .text-button.danger {
+  color: #f87171 !important;
+}
+
+.web-shell .danger-text:hover:not(:disabled),
+.web-shell .text-button.danger:hover:not(:disabled) {
+  color: #fca5a5 !important;
+}
+
+.web-shell .access-table th {
+  background: #111611;
+  color: #9aa698;
+  border-bottom: 1px solid rgba(239, 245, 232, 0.14);
+}
+
+.web-shell .access-table td {
+  border-bottom: 1px solid rgba(239, 245, 232, 0.08);
+  color: #f3f5ed;
+}
+
+.web-shell .access-table tr:hover td {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.web-shell .admin-stat {
+  background: #151b13;
+  border: 1px solid rgba(239, 245, 232, 0.12);
+  border-radius: 10px;
+}
+
+.web-shell .admin-stat-label {
+  color: #9aa698;
+}
+
+.web-shell .admin-stat-value {
+  color: #f3f5ed;
+}
+
+.web-shell .admin-stat.ok .admin-stat-value {
+  color: #d8f56b;
+}
+
+.web-shell .admin-stat.warn .admin-stat-value {
+  color: #f59e0b;
+}
+
+.web-shell .admin-banner {
+  background: #151b13;
+  border: 1px solid rgba(216, 245, 107, 0.3);
+  color: #d8f56b;
+}
+
+.web-shell .admin-banner.error {
+  border-color: rgba(248, 113, 113, 0.4);
+  color: #fca5a5;
+  background: rgba(248, 113, 113, 0.1);
+}
+
+.web-shell .admin-grant-row {
+  background: #111611;
+  border: 1px solid rgba(239, 245, 232, 0.12);
+}
+
+.web-shell .local-tag {
+  background: rgba(216, 245, 107, 0.1);
+  color: #d8f56b;
+  border: 1px solid rgba(216, 245, 107, 0.25);
+}
+
+.web-shell .site-kicker {
+  color: #d8f56b;
+}
+
+.web-shell .site-kicker span {
+  background: #d8f56b;
+  box-shadow: 0 0 10px rgba(216, 245, 107, 0.8);
+}
+
+.web-shell .payment-badge.paid,
+.web-shell .payment-badge.active {
+  background: rgba(216, 245, 107, 0.15);
+  color: #d8f56b;
+  border: 1px solid rgba(216, 245, 107, 0.35);
+}
+
+.web-shell .payment-badge.suspended,
+.web-shell .payment-badge.failed {
+  background: rgba(248, 113, 113, 0.15);
+  color: #fca5a5;
+  border: 1px solid rgba(248, 113, 113, 0.35);
+}
+
+.web-shell .account-row {
+  border-bottom: 1px solid rgba(239, 245, 232, 0.1);
+}
+
+.web-shell .avatar {
+  background: #d8f56b;
+  color: #0d110d;
+  font-weight: 700;
+  box-shadow: 0 0 16px rgba(216, 245, 107, 0.3);
+}
+
+.web-shell .connection-badge.connected {
+  background: rgba(216, 245, 107, 0.15);
+  color: #d8f56b;
+  border: 1px solid rgba(216, 245, 107, 0.35);
+}
+
+.web-shell .quick-nav-pill.active {
+  background: #d8f56b;
+  color: #0d110d;
+  box-shadow: 0 0 16px rgba(216, 245, 107, 0.3);
+}
+
+.web-shell .list-toolbar {
+  border-bottom: 1px solid rgba(239, 245, 232, 0.1);
+}
+
+.web-shell .search-box {
+  background: #111611;
+  border: 1px solid rgba(239, 245, 232, 0.14);
+}
+
+.web-shell .search-box input {
+  background: transparent;
+  color: #f3f5ed;
+  border: none;
+}
+
+.web-shell .search-box svg {
+  color: #9aa698;
+}
+
+.web-shell .session-item {
+  background: #151b13;
+  border: 1px solid rgba(239, 245, 232, 0.12);
+}
+
+.web-shell .session-item:hover {
+  border-color: rgba(216, 245, 107, 0.3);
+}
+
+.web-shell .session-item.selected {
+  border-color: #d8f56b;
+  box-shadow: 0 0 16px rgba(216, 245, 107, 0.15);
+}

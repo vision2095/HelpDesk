@@ -220,6 +220,56 @@ export function createCloudServer({
             .all(data.userId),
         };
       }
+      case "admin.user.grantByEmail": {
+        const data = z
+          .object({
+            email: z.string().email(),
+            days: z.number().int().min(1).max(3650),
+            note: z.string().max(300).optional(),
+          })
+          .parse(payload);
+        const userRow = accounts.db
+          .prepare(
+            "SELECT id,email,name,verified,account_state FROM users WHERE lower(email)=lower(?)",
+          )
+          .get(data.email.trim());
+        if (!userRow) {
+          throw new Error(`User with email "${data.email}" not found.`);
+        }
+        const granted = entitlements.grantCustomDays({
+          userId: userRow.id,
+          days: data.days,
+          actor,
+          note: data.note || "Admin custom grant",
+        });
+        return {
+          ok: true,
+          user: userRow,
+          entitlement: granted,
+          message: `Successfully granted ${data.days} days of desktop access to ${data.email}.`,
+        };
+      }
+      case "admin.user.delete": {
+        const data = z.object({ userId: z.string().uuid() }).parse(payload);
+        if (!withOwner(data.userId)) throw new Error("User not found.");
+        desktopSessions.revokeForUser(data.userId, "admin.deleted");
+        const entry = stores.get(data.userId);
+        entry?.service.close?.();
+        stores.delete(data.userId);
+        try {
+          fs.rmSync(path.join(directory, "workspaces", data.userId), {
+            recursive: true,
+            force: true,
+          });
+        } catch {}
+        accounts.db
+          .prepare("DELETE FROM users WHERE id=?")
+          .run(data.userId);
+        entitlements.adminAudit(actor, "admin.user.delete", data.userId, {
+          at: new Date().toISOString(),
+        });
+        return { ok: true, deleted: true, userId: data.userId };
+      }
       case "admin.entitlement.grant": {
         const data = z
           .object({
@@ -314,6 +364,11 @@ export function createCloudServer({
         return {
           revoked: desktopSessions.revokeForUser(data.userId, "admin.revoke"),
         };
+      }
+      case "admin.desktop.revokeSession": {
+        const data = z.object({ sessionId: z.string().uuid() }).parse(payload);
+        const result = desktopSessions.revoke(data.sessionId, "admin.session.revoke");
+        return { ok: true, revoked: result.ok };
       }
       case "admin.audit": {
         return {
@@ -1205,7 +1260,30 @@ export function createCloudServer({
         return;
       }
       if (action === "account.sessions") {
-        json(res, 200, { sessions: accounts.sessions(user.id, rawToken) });
+        json(res, 200, {
+          sessions: accounts.sessions(user.id, rawToken),
+          desktopSessions: desktopSessions.listForUser(user.id, 10),
+        });
+        return;
+      }
+      if (action === "account.desktop.revokeAll") {
+        const revoked = desktopSessions.revokeForUser(
+          user.id,
+          "user-logout-all-devices",
+        );
+        json(res, 200, { ok: true, revokedCount: revoked });
+        return;
+      }
+      if (action === "account.desktop.revoke") {
+        const id = z.string().uuid().parse(payload.id);
+        const sessionRow = accounts.db
+          .prepare("SELECT user_id FROM desktop_sessions WHERE id=?")
+          .get(id);
+        if (!sessionRow || sessionRow.user_id !== user.id) {
+          throw new Error("Desktop session not found.");
+        }
+        const result = desktopSessions.revoke(id, "user-logout-device");
+        json(res, 200, { ok: true, revoked: result.ok });
         return;
       }
       if (action === "account.audit") {

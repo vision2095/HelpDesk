@@ -121,26 +121,63 @@ export function createDesktopSessions({
     }
   }
 
+  function getMaxDevicesForUser(userId) {
+    try {
+      const activeEntitlement = db
+        .prepare(
+          `SELECT plan_id FROM entitlements 
+           WHERE user_id=? AND subscription_status='active' AND expiration_timestamp > ? 
+           ORDER BY expiration_timestamp DESC LIMIT 1`,
+        )
+        .get(userId, nowSec() * 1000);
+      if (!activeEntitlement) return 1;
+      const planId = String(activeEntitlement.plan_id || "").toLowerCase();
+      // Monthly (30 days) and 10-day plans allow up to 2 concurrent devices.
+      // Hourly (1 hour) and Daily (24 hours) allow exactly 1 device.
+      if (
+        planId === "monthly" ||
+        planId === "ten-day" ||
+        planId.includes("month") ||
+        planId.includes("multi")
+      ) {
+        return 2;
+      }
+      return 1;
+    } catch {
+      return 1;
+    }
+  }
+
   return {
-    // Atomically acquires the single active slot. With an existing live
-    // session and takeover=false the caller is told to confirm takeover
-    // explicitly. Device-supplied session ids are never trusted.
-    // Returns { takeoverRequired, existing } without tokens in that case.
+    getMaxDevicesForUser,
+    // Atomically acquires a live desktop slot adhering to plan limits (1 for hourly/daily, 2 for monthly).
+    // With existing sessions at capacity and takeover=false, the caller is told to confirm takeover.
+    // Device-supplied session ids are never trusted.
     acquire({ userId, deviceLabel = "Unknown device", os = "", appVersion = "", takeover = false }) {
       const now = nowSec();
+      const maxDevices = getMaxDevicesForUser(userId);
       db.exec("BEGIN IMMEDIATE");
       try {
-        const existing = db
+        const activeSessions = db
           .prepare(
-            "SELECT * FROM desktop_sessions WHERE user_id=? AND status='active'",
+            "SELECT * FROM desktop_sessions WHERE user_id=? AND status='active' ORDER BY last_seen ASC",
           )
-          .get(userId);
-        if (existing) {
+          .all(userId);
+        const isTakeover = activeSessions.length >= maxDevices && takeover;
+        if (activeSessions.length >= maxDevices) {
           if (!takeover) {
             db.exec("COMMIT");
-            return { takeoverRequired: true, existing: publicSession(existing) };
+            return {
+              takeoverRequired: true,
+              existing: publicSession(activeSessions[0]),
+              activeCount: activeSessions.length,
+              maxAllowed: maxDevices,
+            };
           }
-          endSession(existing, "desktop.session.takeover");
+          const toRevokeCount = activeSessions.length - maxDevices + 1;
+          for (let i = 0; i < toRevokeCount; i++) {
+            endSession(activeSessions[i], "desktop.session.takeover");
+          }
         }
         const sessionId = randomUUID();
         db.prepare(
@@ -161,7 +198,7 @@ export function createDesktopSessions({
         const tokens = issueTokens(sessionId);
         audit?.(userId, "desktop.session.created", {
           sessionId,
-          takeover: Boolean(existing),
+          takeover: isTakeover,
         });
         db.exec("COMMIT");
         return {

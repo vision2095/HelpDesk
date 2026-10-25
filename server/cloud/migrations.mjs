@@ -120,6 +120,15 @@ const MIGRATIONS = [
         ON payments(user_id, plan_id) WHERE status='created'`,
     ],
   },
+  {
+    id: "0003-multi-device-sessions",
+    statements: [
+      // Drop the single active session index to allow plan-based concurrent devices (1 for hourly/daily, 2 for monthly)
+      `DROP INDEX IF EXISTS desktop_session_single_active`,
+      `CREATE INDEX IF NOT EXISTS desktop_sessions_user_active
+        ON desktop_sessions(user_id, status, last_seen DESC)`,
+    ],
+  },
 ];
 
 export function applyMigrations(db) {
