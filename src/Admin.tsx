@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { PageNav } from "./PageNav";
 import {
+  Aperture,
+  ArrowLeft,
   Ban,
   ChevronRight,
   Download,
@@ -228,90 +229,167 @@ export function Admin({ navigate }: { navigate?: (page: string) => void } = {}) 
 
   if (!authorized)
     return (
-      <div className="content-page admin-page">
-        {navigate && <PageNav current="admin" onNavigate={navigate} />}
-        <form className="form-card admin-token-card" onSubmit={firstSignIn}>
-          <div className="form-heading">
-            <h2>
-              <Lock size={18} />
-              Operator console
-            </h2>
+      <div className="admin-portal-standalone">
+        <header className="admin-portal-header">
+          <div className="admin-portal-header-inner">
+            <div className="admin-portal-brand">
+              <a
+                href="/"
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigate?.("home");
+                }}
+              >
+                <span className="admin-brand-mark">
+                  <Aperture size={18} />
+                </span>
+                <span className="admin-brand-title">
+                  lensdesk<span className="brand-dot">.</span>
+                </span>
+              </a>
+              <span className="admin-portal-badge">RESTRICTED ACCESS</span>
+            </div>
+            <div className="admin-portal-actions">
+              <button
+                type="button"
+                className="admin-link-button"
+                onClick={() => navigate?.("home")}
+              >
+                <ArrowLeft size={14} />
+                Back to Website
+              </button>
+            </div>
           </div>
-          <label>
-            Admin token
-            <input
-              type="password"
-              autoFocus
-              required
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              placeholder="ADMIN_TOKEN"
-            />
-            <span className="field-help">
-              The token is verified securely against the server and kept in session storage.
-            </span>
-          </label>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", margin: "10px 0 16px", fontSize: "12px", color: "var(--site-dark-muted, #9aa698)" }}>
-            <input
-              type="checkbox"
-              id="admin-remember"
-              checked={rememberToken}
-              onChange={(e) => setRememberToken(e.target.checked)}
-            />
-            <label htmlFor="admin-remember" style={{ margin: 0, cursor: "pointer" }}>
-              Remember token during this browser session
+        </header>
+
+        <div className="admin-lock-screen">
+          <form className="form-card admin-token-card" onSubmit={firstSignIn}>
+            <div className="admin-lock-icon">
+              <ShieldCheck size={32} />
+            </div>
+            <div className="form-heading" style={{ textAlign: "center", display: "block" }}>
+              <h2 style={{ justifyContent: "center" }}>
+                <Lock size={18} />
+                Operator console
+              </h2>
+              <p style={{ marginTop: 6, fontSize: "13px", color: "var(--site-dark-muted, #9aa698)" }}>
+                Restricted administrative zone. Enter the ADMIN_TOKEN to monitor services, grant subscriptions, and manage user accounts.
+              </p>
+            </div>
+            <label style={{ marginTop: 14 }}>
+              Admin token
+              <input
+                type="password"
+                autoFocus
+                required
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                placeholder="ADMIN_TOKEN"
+              />
+              <span className="field-help">
+                The token is verified securely against the server and kept in session storage.
+              </span>
             </label>
-          </div>
-          <button className="button primary" disabled={busy}>
-            {busy ? <Loader2 size={15} className="spin" /> : <ShieldCheck size={15} />}
-            Unlock console
-          </button>
-          {error && <p className="admin-error">{error}</p>}
-        </form>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", margin: "10px 0 16px", fontSize: "12px", color: "var(--site-dark-muted, #9aa698)" }}>
+              <input
+                type="checkbox"
+                id="admin-remember"
+                checked={rememberToken}
+                onChange={(e) => setRememberToken(e.target.checked)}
+              />
+              <label htmlFor="admin-remember" style={{ margin: 0, cursor: "pointer" }}>
+                Remember token during this browser session
+              </label>
+            </div>
+            <button className="button primary full-width" disabled={busy}>
+              {busy ? <Loader2 size={15} className="spin" /> : <ShieldCheck size={15} />}
+              Unlock console
+            </button>
+            {error && <p className="admin-error">{error}</p>}
+          </form>
+        </div>
       </div>
     );
 
   return (
-    <div className="content-page admin-page">
-      {navigate && <PageNav current="admin" onNavigate={navigate} />}
-      <div className="page-heading">
-        <div>
-          <div className="site-kicker">
-            <span />
-            OPERATOR CONSOLE
+    <div className="admin-portal-standalone">
+      <header className="admin-portal-header">
+        <div className="admin-portal-header-inner">
+          <div className="admin-portal-brand">
+            <a
+              href="/"
+              onClick={(e) => {
+                e.preventDefault();
+                navigate?.("home");
+              }}
+            >
+              <span className="admin-brand-mark">
+                <Aperture size={18} />
+              </span>
+              <span className="admin-brand-title">
+                lensdesk<span className="brand-dot">.</span>
+              </span>
+            </a>
+            <span className="admin-portal-badge">OPERATOR CONSOLE</span>
           </div>
-          <h1>Service control<span>.</span></h1>
-          <p>Overview of accounts, desktop sessions, entitlements and payments.</p>
-        </div>
-        <div className="admin-header-actions">
-          {users.length > 0 && (
+          <div className="admin-portal-actions">
+            <button
+              type="button"
+              className="admin-link-button"
+              onClick={() => navigate?.("home")}
+            >
+              <ArrowLeft size={14} />
+              Website
+            </button>
+            {users.length > 0 && (
+              <button
+                className="button secondary"
+                type="button"
+                style={{ padding: "6px 12px", fontSize: "12px" }}
+                onClick={exportUsersCSV}
+              >
+                <Download size={13} />
+                Export CSV
+              </button>
+            )}
             <button
               className="button secondary"
               type="button"
-              onClick={exportUsersCSV}
+              style={{ padding: "6px 12px", fontSize: "12px" }}
+              disabled={busy}
+              onClick={() => void loadAll()}
             >
-              <Download size={14} />
-              Export CSV
+              <RefreshCw size={13} className={busy ? "spin" : ""} />
+              Refresh
             </button>
-          )}
-          <button
-            className="button secondary"
-            disabled={busy}
-            onClick={() => void loadAll()}
-          >
-            <RefreshCw size={14} />
-            Refresh
-          </button>
-          <button
-            className="button secondary danger-text"
-            type="button"
-            onClick={lockConsole}
-          >
-            <Lock size={14} />
-            Lock Console
-          </button>
+            <button
+              className="button secondary danger-text"
+              type="button"
+              style={{ padding: "6px 12px", fontSize: "12px" }}
+              onClick={lockConsole}
+            >
+              <Lock size={13} />
+              Lock Console
+            </button>
+          </div>
         </div>
-      </div>
+      </header>
+
+      <main className="admin-portal-content">
+        <div className="page-heading">
+          <div>
+            <div className="site-kicker">
+              <span />
+              OPERATOR CONSOLE
+            </div>
+            <h1>Service control<span>.</span></h1>
+            <p>Overview of accounts, desktop sessions, entitlements and payments.</p>
+          </div>
+          <div className="admin-system-status">
+            <span className="live-dot" />
+            <span>Server Online · Port 4319</span>
+          </div>
+        </div>
       {(error || notice) && (
         <div className={`admin-banner${error ? " error" : ""}`}>
           {error || notice}
@@ -927,6 +1005,7 @@ export function Admin({ navigate }: { navigate?: (page: string) => void } = {}) 
           </div>
         </section>
       )}
+      </main>
     </div>
   );
 }

@@ -27,7 +27,6 @@ export function PageNav({
     { id: "downloads", label: "Desktop Downloads", icon: Download },
     { id: "settings", label: "Settings", icon: Settings2 },
     { id: "account", label: "Account & Cloud", icon: ShieldCheck },
-    ...(!isDesktop ? [{ id: "admin", label: "Admin Console", icon: KeyRound }] : []),
   ];
   return (
     <div className="quick-nav-bar" role="navigation" aria-label="Quick page navigation">
