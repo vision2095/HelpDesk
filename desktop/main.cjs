@@ -615,9 +615,14 @@ async function createWindow() {
   else await mainWindow.loadFile(entry);
   const state = await service.dispatch("state");
   applyAlwaysOnTop(mainWindow, floating || state.settings.alwaysOnTop);
-  mainWindow.setOpacity(
-    Math.max(0, Math.min(1, Number(state.settings.opacity) ?? 1)),
+  const initialOpacity = Math.max(
+    0.2,
+    Math.min(1, Number(state?.settings?.opacity) ?? 1),
   );
+  mainWindow.setOpacity(initialOpacity);
+  if (typeof state?.settings?.opacity === "number" && state.settings.opacity < 0.2) {
+    void service.dispatch("settings.save", { opacity: 0.95 }).catch(() => {});
+  }
   applyCaptureProtection(
     mainWindow,
     state?.settings?.captureProtection !== undefined
@@ -962,12 +967,12 @@ app.whenReady().then(async () => {
     if (action === "desktop.appearance") {
       const s = await service.dispatch("state");
       const targetOpacity = Math.max(
-        0,
-        Math.min(1, Number(s.settings.opacity) ?? 1),
+        0.2,
+        Math.min(1, Number(s?.settings?.opacity) ?? 1),
       );
       mainWindow.setOpacity(targetOpacity);
-      applyCaptureProtection(mainWindow, s.settings.captureProtection);
-      applyAlwaysOnTop(mainWindow, floating || s.settings.alwaysOnTop);
+      applyCaptureProtection(mainWindow, s?.settings?.captureProtection);
+      applyAlwaysOnTop(mainWindow, floating || s?.settings?.alwaysOnTop);
       return { ok: true };
     }
     if (action === "desktop.restart") {
