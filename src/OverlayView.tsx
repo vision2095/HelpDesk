@@ -194,6 +194,7 @@ export function OverlayView({
   );
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const previousActiveView = useRef(activeView);
   const [contextTab, setContextTab] = useState<"transcript" | "notes">("transcript");
   const [contextExpanded, setContextExpanded] = useState(true);
 
@@ -210,6 +211,17 @@ export function OverlayView({
   useEffect(() => {
     typingRef.current = typing;
   }, [typing]);
+
+  useEffect(() => {
+    const previous = previousActiveView.current;
+    previousActiveView.current = activeView;
+    if (previous === "browser" && activeView === "assistant") {
+      const frame = requestAnimationFrame(() => {
+        textareaRef.current?.focus();
+      });
+      return () => cancelAnimationFrame(frame);
+    }
+  }, [activeView]);
 
   useEffect(() => {
     const off = window.lens?.onGlobalKey?.((event) => {

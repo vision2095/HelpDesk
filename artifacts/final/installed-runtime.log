@@ -1,0 +1,13 @@
+[2026-10-25T00:27:43Z] [INFO] LensDesk 2.0 Native Windows Host starting...
+[2026-10-25T00:27:43Z] [INFO] COM initialized.
+[2026-10-25T00:27:43Z] [INFO] Storage and Capture services initialized.
+[2026-10-25T00:27:43Z] [INFO] WindowManager initialized. HWND = 5442568, Bounds = 1040x740
+[2026-10-25T00:27:43Z] [INFO] Direct3D 11 Renderer initialized.
+[2026-10-25T00:27:43Z] [INFO] DirectComposition engine initialized.
+[2026-10-25T00:27:43Z] [INFO] Dear ImGui Overlay initialized.
+[2026-10-25T00:27:43Z] [INFO] Global Input Manager initialized.
+[2026-10-25T00:27:43Z] [INFO] Web assets located at: C:\Users\hp\AppData\Local\Temp\opencode\LensDeskInstallTest\dist
+[2026-10-25T00:27:43Z] [INFO] ServiceDispatcher initialized.
+[2026-10-25T00:27:43Z] [INFO] FocusManager initialized.
+[2026-10-25T00:27:43Z] [INFO] WebView2 Host initialization started.
+[2026-10-25T00:27:43Z] [INFO] WebView2 environment ready. Initializing browser manager tabs.

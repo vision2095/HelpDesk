@@ -119,7 +119,22 @@ bool WebView2Host::Initialize(
                             // 8. Setup focus and accelerator handling
                             SetupFocusAndAcceleratorHandling();
 
-                            // 9. Navigate to React 19 app
+                            // 9. Focus the HUD once its document is ready so
+                            // real Windows key messages reach the sign-in
+                            // form and the assistant composer immediately.
+                            m_webView->add_NavigationCompleted(
+                                Callback<ICoreWebView2NavigationCompletedEventHandler>(
+                                    [this](ICoreWebView2* sender, ICoreWebView2NavigationCompletedEventArgs* args) -> HRESULT {
+                                        if (!m_initialFocusDone && m_controller && GetForegroundWindow() == m_hwnd) {
+                                            m_initialFocusDone = true;
+                                            m_controller->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
+                                        }
+                                        return S_OK;
+                                    }
+                                ).Get(), nullptr
+                            );
+
+                            // 10. Navigate to React 19 app
                             m_webView->Navigate(L"https://lensdesk.local/index.html");
 
                             m_isReady = true;
@@ -185,6 +200,9 @@ void WebView2Host::SendMouseInput(UINT msg, WPARAM wParam, LPARAM lParam) {
     if (!m_compositionController) return;
 
     POINT pt{ GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+    if (msg == WM_MOUSEWHEEL || msg == WM_MOUSEHWHEEL) {
+        ScreenToClient(m_hwnd, &pt);
+    }
     COREWEBVIEW2_MOUSE_EVENT_KIND mouseKind = COREWEBVIEW2_MOUSE_EVENT_KIND_MOVE;
     COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS virtKeys = COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS_NONE;
     UINT32 mouseData = 0;

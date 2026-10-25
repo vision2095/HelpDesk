@@ -57,7 +57,6 @@ Section "MainSection" SEC01
   File "..\build-native\bin\Release\RuntimeHost.exe"
   File "..\src-native\third_party\webview2\lib\x64\WebView2Loader.dll"
   File "..\src-native\resources\app.ico"
-  File /nonfatal "..\LICENSE"
   File /nonfatal "..\README.md"
 
   ; Dist folder
@@ -102,8 +101,8 @@ Section Uninstall
   Delete "$INSTDIR\RuntimeHost.exe"
   Delete "$INSTDIR\WebView2Loader.dll"
   Delete "$INSTDIR\app.ico"
-  Delete "$INSTDIR\LICENSE"
   Delete "$INSTDIR\README.md"
+  Delete "$INSTDIR\runtime_host.log"
 
   RMDir /r "$INSTDIR\dist"
 

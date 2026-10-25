@@ -1,0 +1,60 @@
+LensDesk 2.0 final installer verification
+Date: 2026-10-25
+Installer: release\LensDesk-2.0.0-Setup.exe
+SHA-256: 8DC43F0CFAE1D25314BC622D0B7E8A903637177A70EA026348DBBBC923761AEB
+Size: 1,134,512 bytes
+Authenticode: NotSigned
+Test install directory: C:\Users\hp\AppData\Local\Temp\opencode\LensDeskInstallTest
+
+PASS 1 - silent install, launch, and uninstall
+- Command: Start-Process release\LensDesk-2.0.0-Setup.exe -ArgumentList "/S","/D=<test dir>" -Wait
+- Installer exit code: 0
+- Installed files verified:
+  * RuntimeHost.exe            1,128,448 bytes  SHA-256 7EC6992666AD6B3483E7F922DA104DC1A6FA40FFC544C68E63889DAF1DBB110D
+  * WebView2Loader.dll           194,912 bytes  SHA-256 D3FCE90BDEECB08596E377DEA6A316354DD8949E32FF09B89D51BE00C14E21B6
+  * app.ico, README.md, LensDesk.url, Uninstall.exe
+  * dist\index.html and 3 files under dist\assets
+- RuntimeHost.exe version metadata:
+  * FileDescription: LensDesk 2.0 Native Windows Host
+  * ProductName: LensDesk 2.0
+  * FileVersion: 2.0.0.0
+  * ProductVersion: 2.0.0.0
+  * OriginalFilename: RuntimeHost.exe
+- Registry HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\LensDesk:
+  * DisplayName: LensDesk 2.0.0
+  * DisplayVersion: 2.0.0
+  * Publisher: LensDesk Team
+  * UninstallString: <test dir>\Uninstall.exe
+- Registry HKCU\Software\Microsoft\Windows\CurrentVersion\App Paths\RuntimeHost.exe:
+  * (default): <test dir>\RuntimeHost.exe
+- Start Menu folder %APPDATA%\Microsoft\Windows\Start Menu\Programs\LensDesk:
+  * LensDesk.lnk -> <test dir>\RuntimeHost.exe
+  * Uninstall.lnk -> <test dir>\Uninstall.exe
+  * Website.lnk present
+- Desktop shortcut %USERPROFILE%\Desktop\LensDesk.lnk -> <test dir>\RuntimeHost.exe
+- Installed launch with no WEBVIEW2_REMOTE_DEBUGGING_PORT:
+  * Window appeared; installed-final-hud.png captured.
+  * TCP listeners on 9222: 0.
+- Silent uninstall: Uninstall.exe /S exit code 0
+- Post-uninstall checks:
+  * install directory removed: true
+  * HKCU Uninstall key removed: true
+  * HKCU App Paths key removed: true
+  * Start Menu LensDesk folder removed: true
+  * Desktop shortcut removed: true
+
+PASS 2 - clean first-run signed-out gate on the final installed build
+- Native test data removed before launch: cloud.json, preferences.json, sessions.json,
+  profiles.json, WebView2_Data.
+- Silent install exit code: 0.
+- Installed launch with no WEBVIEW2_REMOTE_DEBUGGING_PORT:
+  * Window appeared; TCP listeners on 9222: 0.
+  * Signed-out desktop gate rendered; screenshot gate-signed-out-final.png.
+  * runtime_host.log copied to artifacts\final\installed-runtime.log.
+- Silent uninstall exit code: 0; install directory, both HKCU keys, Start Menu folder,
+  and Desktop shortcut were all removed again.
+
+Notes:
+- The installer and RuntimeHost.exe are unsigned. No code-signing certificate was available.
+- The installer requests per-user HKCU registration and does not require elevation.
+- No credentials were entered during installer verification.

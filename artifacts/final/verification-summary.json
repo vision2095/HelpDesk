@@ -1,0 +1,150 @@
+{
+  "product": "LensDesk 2.0 Native Windows Host",
+  "verifiedAt": "2026-10-25",
+  "workspace": "C:\\Users\\hp\\Downloads\\LensDesk2.0-windows-native-final-rebuild\\LensDesk2.0-windows-native-final-rebuild",
+  "git": {
+    "repository": "https://github.com/VivekGitNinja/LensDesk2.0",
+    "branch": "windows-native-final-rebuild",
+    "remoteHeadBeforeDelivery": "c7089b2d7ac0f6855b8342edc44d7faf97d1242d",
+    "localWorktreeHadGitMetadata": false,
+    "deliveryMethod": "Overlay final source onto a clone of the remote branch and push a new commit"
+  },
+  "build": {
+    "compiler": "Microsoft (R) C/C++ Optimizing Compiler 19.51.36257 for x64",
+    "cmake": "4.3.1-msvc1",
+    "configuration": "Release x64, C++20, Win32 subsystem",
+    "log": "artifacts/final/build-windows-native.log",
+    "peAuditLog": "artifacts/final/native-binary-audit.log",
+    "peAudit": "x86_64 PE32+, 6 sections, user32/gdi32/d3d11/dcomp/winhttp imports, no Electron runtime imports"
+  },
+  "artifacts": {
+    "runtimeHost": {
+      "path": "build-native/bin/Release/RuntimeHost.exe",
+      "sizeBytes": 1128448,
+      "sha256": "7EC6992666AD6B3483E7F922DA104DC1A6FA40FFC544C68E63889DAF1DBB110D",
+      "signed": false
+    },
+    "portableZip": {
+      "path": "release/LensDesk-2.0.0-Windows-x64.zip",
+      "sizeBytes": 1019936,
+      "sha256": "10FE6B1613EFEE8804288F19AAB4785C84243963DE5E32D0571AB94EB03C7C73"
+    },
+    "installer": {
+      "path": "release/LensDesk-2.0.0-Setup.exe",
+      "sizeBytes": 1134512,
+      "sha256": "8DC43F0CFAE1D25314BC622D0B7E8A903637177A70EA026348DBBBC923761AEB",
+      "signed": false
+    },
+    "webView2Loader": {
+      "path": "build-native/bin/Release/WebView2Loader.dll",
+      "sizeBytes": 194912,
+      "sha256": "D3FCE90BDEECB08596E377DEA6A316354DD8949E32FF09B89D51BE00C14E21B6"
+    }
+  },
+  "tests": {
+    "npmTest": {
+      "command": "npm test",
+      "passed": 222,
+      "failed": 0,
+      "log": "artifacts/final/npm-test.log"
+    },
+    "windowsArchiveCheck": {
+      "command": "npm run test:windows-archive",
+      "result": "pass",
+      "detail": "Native ZIP passed CRC, x64 PE/version metadata, bundled WebView2 loader, and 4 fresh frontend files.",
+      "log": "artifacts/final/native-archive-check.log"
+    },
+    "referenceWorkflow": {
+      "command": "npm run test:reference",
+      "result": "not applicable to native host",
+      "detail": "The Electron/Playwright reference check timed out waiting for .hintlens-overlay-shell, a surface the native host does not expose.",
+      "log": "artifacts/final/reference-check.log"
+    },
+    "peAudit": {
+      "command": "node scripts/verify-native-binary.mjs build-native\\bin\\Release\\RuntimeHost.exe",
+      "result": "pass",
+      "log": "artifacts/final/native-binary-audit.log"
+    }
+  },
+  "manualVerification": {
+    "realOsKeyboard": {
+      "harness": "artifacts/final/keyboard/sendinput.ps1",
+      "results": [
+        {
+          "app": "Notepad",
+          "value": "The quick brown fox jumps over the lazy dog 0123456789",
+          "evidence": "artifacts/final/keyboard/notepad-e2e.txt"
+        },
+        {
+          "app": "Windows Terminal",
+          "value": "LensDesk real OS typing - Windows Terminal ",
+          "evidence": "artifacts/final/keyboard/terminal-e2e.txt"
+        },
+        {
+          "app": "VS Code",
+          "value": "LensDesk real OS typing - VS Code 2026-10-25",
+          "evidence": "artifacts/final/keyboard/vscode-e2e.txt"
+        },
+        {
+          "app": "Google Chrome",
+          "value": "Chrome real OS typing 2026-10-25",
+          "evidence": "artifacts/final/keyboard/chrome-e2e.txt, artifacts/final/keyboard/chrome-os-typing.png"
+        },
+        {
+          "app": "Microsoft Edge",
+          "value": "Edge real OS typing 2026-10-25",
+          "evidence": "artifacts/final/keyboard/edge-e2e.txt, artifacts/final/keyboard/edge-os-typing.png"
+        }
+      ],
+      "notInstalled": ["Mozilla Firefox", "Brave"]
+    },
+    "assistant": {
+      "inputMethod": "real OS SendInput",
+      "prompt": "Final fixed binary typing 2026-10-25",
+      "response": "Mock provider answer for: Final fixed binary typing 2026-10-25",
+      "evidence": "artifacts/final/assistant-os-typing.png"
+    },
+    "embeddedBrowser": {
+      "inputMethod": "real OS SendInput",
+      "url": "http://127.0.0.1:4320/e2e-test.html",
+      "pageInputValue": "Fixed layout OS typing 2026-10-25",
+      "evidence": "artifacts/final/browser-os-typing.png"
+    },
+    "authGate": {
+      "signedOut": "artifacts/final/gate-signed-out-final.png",
+      "signedInHud": "artifacts/final/installed-final-hud.png"
+    },
+    "installer": {
+      "evidence": "artifacts/final/installer-verification.txt",
+      "installerBuildLog": "artifacts/final/installer-build.log",
+      "installedRuntimeLog": "artifacts/final/installed-runtime.log"
+    },
+    "performance": {
+      "launchToWindowMs": 1146,
+      "workingSetMb": 61.0,
+      "privateMb": 47.7,
+      "threads": 14,
+      "cdp9222Listeners": 0,
+      "evidence": "artifacts/final/performance-final.txt"
+    }
+  },
+  "security": {
+    "hardcodedActivePhase": false,
+    "authorization": "CloudClient::AuthorizedNow requires active phase, entitlement, and verification within 120 seconds; heartbeat runs every 45 seconds.",
+    "uiGate": "gate view licenseValid is enforced for guarded operations; signed-out gate was verified on the final installed build.",
+    "productionCdp": "WebView2 remote debugging is disabled unless WEBVIEW2_REMOTE_DEBUGGING_PORT is explicitly set.",
+    "keyStorage": "Windows DPAPI-protected API key save/read was verified.",
+    "captureProtection": "Default is enabled; persisted captureProtection is applied at startup. Screenshot verification used an explicit opt-out preference.",
+    "installer": "Per-user HKCU install and uninstall, no elevation requested."
+  },
+  "limitations": [
+    "The hosted subscription backend was exercised only against a local cloud fixture, not a deployed production service.",
+    "Live hosted provider chat was not tested because no real provider API key was available; the OpenAI-compatible mock verified the request/response and streaming path.",
+    "Firefox and Brave were not installed, so real OS typing was not tested in those browsers.",
+    "The embedded browser uses one shared WebView2 controller with per-tab history; it is not a true multi-WebView implementation.",
+    "npm run test:reference is an Electron/Playwright workflow check and does not validate the native host.",
+    "The installer and RuntimeHost.exe are unsigned.",
+    "GitHub Actions status must be checked after the delivery push; no gh CLI was installed."
+  ],
+  "verdict": "Functional native Windows rebuild with verified OS input, embedded browser, assistant bridge, subscription gate, packaging, and installer lifecycle. Not fully production-final for public distribution until the hosted backend, a real provider E2E run, code signing, and CI/release delivery are verified."
+}
