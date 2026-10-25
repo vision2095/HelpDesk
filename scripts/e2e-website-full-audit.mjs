@@ -91,7 +91,7 @@ try {
   assert.equal(page.url(), `${BASE_URL}/admin`, "Direct navigation to /admin failed");
 
   // Fill Admin Token
-  const tokenInput = page.getByPlaceholder("ADMIN_TOKEN");
+  const tokenInput = page.getByLabel("Admin token");
   await tokenInput.waitFor({ state: "visible", timeout: 5000 });
   await tokenInput.fill("lensdesk-admin-token");
   await page.getByRole("button", { name: "Unlock console", exact: true }).click();
