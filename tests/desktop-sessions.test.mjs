@@ -140,3 +140,65 @@ test("list and summary expose only safe device fields", (t) => {
     );
   assert.equal(entry.appVersion, "1.3.6");
 });
+
+test("monthly subscriber can have two concurrent desktop devices, third requires takeover", (t) => {
+  const f = fixture(t);
+  const now = f.now();
+  // Insert plan into plans table to satisfy foreign key
+  f.db.prepare(`
+    INSERT OR IGNORE INTO plans(id, label, price_minor, currency, duration_seconds, duration_label, tax_note)
+    VALUES('monthly', 'Monthly Access', 3900, 'USD', 2592000, '30 Days', 'taxes included')
+  `).run();
+  // Insert active monthly entitlement
+  f.db.prepare(`
+    INSERT INTO entitlements(
+      id, user_id, plan_id, payment_id,
+      activation_timestamp, expiration_timestamp, subscription_status,
+      created_at, updated_at
+    ) VALUES('ent-1', 'user-a', 'monthly', NULL, ?, ?, 'active', ?, ?)
+  `).run(now - 1000, now + 30 * 86400 * 1000, new Date().toISOString(), new Date().toISOString());
+
+  // Device 1 connects
+  const dev1 = f.sessions.acquire({ userId: "user-a", deviceLabel: "Office Windows PC", os: "win32" });
+  assert.ok(dev1.accessToken);
+  assert.equal(f.sessions.countActive("user-a"), 1);
+
+  // Advance clock slightly for different last_seen
+  f.setClock(now + 1000);
+
+  // Device 2 connects - both allowed concurrently!
+  const dev2 = f.sessions.acquire({ userId: "user-a", deviceLabel: "Home MacBook Pro", os: "darwin" });
+  assert.ok(dev2.accessToken);
+  assert.equal(f.sessions.countActive("user-a"), 2);
+
+  // Advance clock slightly
+  f.setClock(now + 2000);
+
+  // Device 3 connects - limit reached (2), requires takeover!
+  const dev3 = f.sessions.acquire({ userId: "user-a", deviceLabel: "Travel Laptop", os: "win32" });
+  assert.equal(dev3.takeoverRequired, true);
+  assert.equal(dev3.maxAllowed, 2);
+  assert.equal(dev3.activeCount, 2);
+
+  // Device 3 confirms takeover
+  const dev3Confirmed = f.sessions.acquire({
+    userId: "user-a",
+    deviceLabel: "Travel Laptop",
+    os: "win32",
+    takeover: true,
+  });
+  assert.ok(dev3Confirmed.accessToken);
+  assert.equal(f.sessions.countActive("user-a"), 2);
+
+  // Oldest device (Office Windows PC) was revoked, newer device (Home MacBook Pro) remains active
+  assert.equal(f.sessions.verifyAccess(dev1.accessToken), null);
+  assert.ok(f.sessions.verifyAccess(dev2.accessToken));
+  assert.ok(f.sessions.verifyAccess(dev3Confirmed.accessToken));
+
+  // Revoke all devices (like user clicking "Logout from all devices" on website)
+  const revoked = f.sessions.revokeForUser("user-a", "user-logout-all-devices");
+  assert.equal(revoked, 2);
+  assert.equal(f.sessions.countActive("user-a"), 0);
+  assert.equal(f.sessions.verifyAccess(dev2.accessToken), null);
+  assert.equal(f.sessions.verifyAccess(dev3Confirmed.accessToken), null);
+});

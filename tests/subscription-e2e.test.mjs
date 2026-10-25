@@ -531,6 +531,36 @@ test("Suspensions and admin tools work end to end", async (t) => {
     detail.body.audit.some((row) => row.event === "account.suspended"),
     "suspension is audited",
   );
+
+  // Admin grants 15 days of custom access by email
+  const grantByEmail = await adminCall("admin.user.grantByEmail", {
+    email: "person@example.com",
+    days: 15,
+    note: "Admin promotional grant",
+  });
+  assert.equal(grantByEmail.status, 200);
+  assert.equal(grantByEmail.body.ok, true);
+  assert.equal(grantByEmail.body.entitlement.days, 15);
+
+  // User logs out from all desktop devices from website
+  const revokeAll = await f.call("account.desktop.revokeAll", {}, account.websiteToken, "web");
+  assert.equal(revokeAll.status, 200);
+  assert.equal(revokeAll.body.ok, true);
+  assert.ok(revokeAll.body.revokedCount >= 1);
+
+  // Desktop heartbeat now returns 401
+  const heartbeatAfterRevoke = await f.call("desktop.heartbeat", {}, again.body.accessToken);
+  assert.equal(heartbeatAfterRevoke.status, 401);
+
+  // Admin deletes user account permanently
+  const deleteUser = await adminCall("admin.user.delete", { userId: account.userId });
+  assert.equal(deleteUser.status, 200);
+  assert.equal(deleteUser.body.ok, true);
+  assert.equal(deleteUser.body.deleted, true);
+
+  // User is gone from database
+  const queryDeleted = await adminCall("admin.user", { userId: account.userId });
+  assert.equal(queryDeleted.status, 400);
 });
 
 test("the purchase webhook endpoint activates, deduplicates, and rejects forgery over HTTP", async (t) => {

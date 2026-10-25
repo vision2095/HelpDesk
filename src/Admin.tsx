@@ -3,12 +3,16 @@ import {
   Ban,
   ChevronRight,
   Download,
+  Laptop,
   Loader2,
   Lock,
+  Monitor,
   RefreshCw,
   RotateCcw,
   Search,
   ShieldCheck,
+  Sparkles,
+  Trash2,
   Undo2,
 } from "lucide-react";
 
@@ -86,6 +90,25 @@ export function Admin() {
   const [grantNote, setGrantNote] = useState("");
   const [extendChoice, setExtendChoice] = useState("86400");
   const [rememberToken, setRememberToken] = useState(true);
+  const [grantEmail, setGrantEmail] = useState("");
+  const [grantDays, setGrantDays] = useState(30);
+  const [customGrantNote, setCustomGrantNote] = useState("");
+
+  async function handleGrantByEmail(e: React.FormEvent) {
+    e.preventDefault();
+    if (!grantEmail.trim()) return;
+    await act(
+      () =>
+        adminCall(token, "admin.user.grantByEmail", {
+          email: grantEmail.trim(),
+          days: Number(grantDays),
+          note: customGrantNote.trim() || undefined,
+        }),
+      `Successfully granted ${grantDays} days of subscription to ${grantEmail.trim()}.`,
+    );
+    setGrantEmail("");
+    setCustomGrantNote("");
+  }
 
   useEffect(() => {
     const saved = sessionStorage.getItem("lensdesk_admin_token");
@@ -364,6 +387,85 @@ export function Admin() {
           </tbody>
         </table>
       )}
+
+      {/* Direct Custom Subscription Grant by Email */}
+      <section className="form-card admin-grant-card" style={{ marginBottom: 24 }}>
+        <div className="form-heading">
+          <h2>
+            <Sparkles size={17} style={{ color: "var(--site-accent, #d8f56b)" }} />
+            Grant Custom Subscription by User Email
+          </h2>
+          <span className="local-tag">Instant Admin Activation</span>
+        </div>
+        <p style={{ marginBottom: 16 }}>
+          Enter any user’s registered email address and assign any custom duration. If the account currently has active access, the days are automatically added to the remaining time without interrupting their license.
+        </p>
+        <form onSubmit={handleGrantByEmail} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
+            <label>
+              User Email Address
+              <input
+                type="email"
+                required
+                placeholder="user@example.com"
+                value={grantEmail}
+                onChange={(e) => setGrantEmail(e.target.value)}
+              />
+            </label>
+            <label>
+              Subscription Days
+              <input
+                type="number"
+                required
+                min={1}
+                max={3650}
+                value={grantDays}
+                onChange={(e) => setGrantDays(Math.max(1, parseInt(e.target.value) || 1))}
+              />
+            </label>
+            <label>
+              Operator Note (Optional)
+              <input
+                type="text"
+                placeholder="e.g. Special grant / support resolution"
+                value={customGrantNote}
+                maxLength={300}
+                onChange={(e) => setCustomGrantNote(e.target.value)}
+              />
+            </label>
+          </div>
+
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <span style={{ fontSize: 12, color: "var(--site-dark-muted, #9aa698)" }}>Duration Presets:</span>
+            {[
+              { label: "1 Day", days: 1 },
+              { label: "7 Days", days: 7 },
+              { label: "10 Days", days: 10 },
+              { label: "30 Days (Monthly)", days: 30 },
+              { label: "90 Days (Quarterly)", days: 90 },
+              { label: "365 Days (1 Year)", days: 365 },
+            ].map((p) => (
+              <button
+                key={p.days}
+                type="button"
+                className={`quick-nav-pill ${grantDays === p.days ? "active" : ""}`}
+                style={{ padding: "4px 10px", fontSize: 12 }}
+                onClick={() => setGrantDays(p.days)}
+              >
+                +{p.label}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
+            <button className="button primary" disabled={busy || !grantEmail.trim()}>
+              <Sparkles size={14} />
+              Grant {grantDays} Day{grantDays === 1 ? "" : "s"} of Desktop Access
+            </button>
+          </div>
+        </form>
+      </section>
+
       <section className="form-card">
         <div className="form-heading">
           <h2>
@@ -489,7 +591,109 @@ export function Admin() {
                 <Ban size={13} />
                 Revoke desktop sessions
               </button>
+              <button
+                className="text-button danger"
+                disabled={busy}
+                onClick={() => {
+                  if (
+                    !window.confirm(
+                      `Permanently delete account "${selected.email}"? This action cannot be undone. All user data, active sessions, and subscriptions will be deleted.`,
+                    )
+                  )
+                    return;
+                  void act(
+                    async () => {
+                      await adminCall(token, "admin.user.delete", { userId: selected.id });
+                      setSelected(null);
+                      setDetail(null);
+                    },
+                    `User account "${selected.email}" has been deleted.`,
+                  );
+                }}
+              >
+                <Trash2 size={13} />
+                Delete Account
+              </button>
             </div>
+          </div>
+
+          {/* Active Desktop Sessions for User */}
+          <div style={{ margin: "20px 0" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <h3 style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14 }}>
+                <Laptop size={16} />
+                Desktop Device Sessions ({detail.desktopSessions?.filter((s: any) => s.status === "active").length || 0} active)
+              </h3>
+              {detail.desktopSessions?.some((s: any) => s.status === "active") && (
+                <button
+                  className="button secondary danger-text"
+                  style={{ fontSize: 12, padding: "4px 9px" }}
+                  disabled={busy}
+                  onClick={() =>
+                    void act(
+                      () => adminCall(token, "admin.desktop.revoke", { userId: selected.id }),
+                      "All desktop sessions for this account were revoked.",
+                    )
+                  }
+                >
+                  <Ban size={13} />
+                  Revoke All Devices
+                </button>
+              )}
+            </div>
+            <table className="access-table">
+              <thead>
+                <tr>
+                  <th>Device</th>
+                  <th>OS / App</th>
+                  <th>Last Active</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {detail.desktopSessions?.map((s: any) => (
+                  <tr key={s.id}>
+                    <td>
+                      <strong>{s.deviceLabel || "LensDesk Desktop"}</strong>
+                      <span className="muted admin-id">{s.id.slice(0, 8)}</span>
+                    </td>
+                    <td>{s.os || "—"} · v{s.appVersion || "2.0.0"}</td>
+                    <td>{when(s.lastSeen * 1000)}</td>
+                    <td>
+                      <span className={`payment-badge ${s.status === "active" ? "active" : "failed"}`}>
+                        {s.status}
+                      </span>
+                    </td>
+                    <td>
+                      {s.status === "active" ? (
+                        <button
+                          className="text-button danger-text"
+                          disabled={busy}
+                          onClick={() =>
+                            void act(
+                              () => adminCall(token, "admin.desktop.revokeSession", { sessionId: s.id }),
+                              "Desktop session was disconnected.",
+                            )
+                          }
+                        >
+                          Disconnect
+                        </button>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {(!detail.desktopSessions || !detail.desktopSessions.length) && (
+                  <tr>
+                    <td colSpan={5} className="muted">
+                      No desktop sessions recorded for this user.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
 
           <div className="admin-grant-row">
