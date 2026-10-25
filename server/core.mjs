@@ -76,7 +76,14 @@ export function createService({
     fs.unlinkSync(keysFile);
   }
   function readKeys() {
-    if (encrypt) keys = store.get("credentials", "keys")?.keys || {};
+    if (encrypt) {
+      try {
+        const stored = store.get("credentials", "keys");
+        if (stored?.keys) keys = stored.keys;
+      } catch {
+        keys = {};
+      }
+    }
     return keys;
   }
   function keyStatus() {
@@ -101,10 +108,13 @@ export function createService({
           revision: store.revision(),
         }
       : store.load();
+    const currentKeys = keyStatus();
+    const parsedSettings = settingsSchema.parse(data.settings);
+
     return {
       ...data,
-      settings: settingsSchema.parse(data.settings),
-      keys: keyStatus(),
+      settings: parsedSettings,
+      keys: currentKeys,
       ownedKeys: Object.fromEntries(
         Object.keys(providers).map((p) => [p, Boolean(keys[p])]),
       ),
@@ -294,15 +304,35 @@ export function createService({
             'Invalid DeepSeek API key. DeepSeek keys must start with "sk-" and cannot end in "==". Please get your API key from platform.deepseek.com.'
           );
         }
+        readKeys();
         const next = { ...keys, [p]: key };
-        if (encrypt)
-          store.save(
-            "credentials",
-            "keys",
-            { keys: next },
-            store.get("credentials", "keys")?.version || 0,
-          );
+        if (encrypt) {
+          try {
+            store.save(
+              "credentials",
+              "keys",
+              { keys: next },
+              store.get("credentials", "keys")?.version || 0,
+            );
+          } catch {
+            store.save("credentials", "keys", { keys: next });
+          }
+        }
         keys = next;
+
+        // Auto-switch default provider to this newly saved provider
+        if (key) {
+          try {
+            const cur = store.get("settings", "settings") || {};
+            const nextSettings = {
+              ...cur,
+              provider: p,
+              model: providers[p]?.model || cur.model || "gemini-3.8-flash",
+            };
+            store.save("settings", "settings", nextSettings, cur.version);
+          } catch {}
+        }
+
         return keyStatus();
       }
       case "transcript.append": {

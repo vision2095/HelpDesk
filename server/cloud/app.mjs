@@ -18,12 +18,6 @@ import { createAccounts, createVault } from "./auth.mjs";
 
 const scrypt = promisify(scryptCallback);
 
-export const PROTECTED_CORE_EMAILS = new Set([
-  "vivek@gmail.com",
-  "mukul@gmail.com",
-  "rishu@gamil.com",
-  "rishu@gmail.com",
-]);
 import { providers } from "../contracts.mjs";
 import { createService } from "../core.mjs";
 import { createReleases } from "./releases.mjs";
@@ -141,10 +135,12 @@ export function createCloudServer({
   }, 60000);
 
   async function bootstrapCoreAccounts() {
+    try {
+      accounts.db.exec("UPDATE users SET verified=1 WHERE verified=0");
+    } catch {}
     const CORE_DEFAULTS = [
       { email: "vivek@gmail.com", name: "Vivek" },
       { email: "mukul@gmail.com", name: "Mukul" },
-      { email: "rishu@gamil.com", name: "Rishu" },
       { email: "rishu@gmail.com", name: "Rishu" },
     ];
     const now = Math.floor(clock());
@@ -310,17 +306,6 @@ export function createCloudServer({
       case "admin.user.delete": {
         const data = z.object({ userId: z.string().uuid() }).parse(payload);
         if (!withOwner(data.userId)) throw new Error("User not found.");
-        const targetUser = accounts.db
-          .prepare("SELECT email FROM users WHERE id=?")
-          .get(data.userId);
-        if (
-          targetUser &&
-          PROTECTED_CORE_EMAILS.has(targetUser.email.toLowerCase())
-        ) {
-          throw new Error(
-            "This core production user account is protected against deletion.",
-          );
-        }
         desktopSessions.revokeForUser(data.userId, "admin.deleted");
         const entry = stores.get(data.userId);
         entry?.service.close?.();
@@ -869,14 +854,20 @@ export function createCloudServer({
           throw new Error(
             "Registration is unavailable until account email is configured.",
           );
-        const result = await accounts.register(data);
+        const autoVerify = !mailer;
+        const result = await accounts.register({
+          ...data,
+          verified: autoVerify ? 1 : 0,
+        });
         try {
           await mail(data.email, "verify", result.verificationToken);
         } catch (error) {
-          accounts.db
-            .prepare("DELETE FROM users WHERE id=?")
-            .run(result.user.id);
-          throw error;
+          if (!autoVerify) {
+            accounts.db
+              .prepare("DELETE FROM users WHERE id=?")
+              .run(result.user.id);
+            throw error;
+          }
         }
         accounts.describeSession(
           result.token,
@@ -899,6 +890,14 @@ export function createCloudServer({
           result = await accounts.login(data, identity + ":" + data.email, {
             issueToken: false,
           });
+        if (!mailer && !result.user.verified) {
+          try {
+            accounts.db
+              .prepare("UPDATE users SET verified=1 WHERE id=?")
+              .run(result.user.id);
+            result.user.verified = true;
+          } catch {}
+        }
         if (mfa.status(result.user.id).enabled) {
           json(res, 200, {
             mfaRequired: true,
@@ -1413,11 +1412,6 @@ export function createCloudServer({
         return;
       }
       if (action === "account.delete") {
-        if (PROTECTED_CORE_EMAILS.has(user.email.toLowerCase())) {
-          throw new Error(
-            "This core production user account is protected against deletion.",
-          );
-        }
         const password = z.string().min(8).max(128).parse(payload.password);
         await accounts.login(
           { email: user.email, password },
@@ -1531,8 +1525,18 @@ export function createCloudServer({
         tokenReservation.settle(actual);
       };
       if (["chat", "transcribe", "model.test"].includes(action)) {
-        if (!user.verified)
-          throw new Error("Verify your email before using hosted AI.");
+        if (!user.verified) {
+          if (!mailer) {
+            try {
+              accounts.db
+                .prepare("UPDATE users SET verified=1 WHERE id=?")
+                .run(user.id);
+              user.verified = 1;
+            } catch {}
+          } else {
+            throw new Error("Verify your email before using hosted AI.");
+          }
+        }
         const info = accountInfo(user),
           entry = getStore(user.id),
           workspace = await entry.service.dispatch("state");

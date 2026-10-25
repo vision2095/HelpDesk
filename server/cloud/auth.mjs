@@ -152,7 +152,7 @@ export function createAccounts(directory) {
       derived = await scrypt(password, salt, 64);
     return salt + ":" + derived.toString("hex");
   }
-  async function register({ email, password, name }) {
+  async function register({ email, password, name, verified = 0 }) {
     email = email.toLowerCase();
     if (db.prepare("SELECT id FROM users WHERE email=?").get(email))
       throw new Error(
@@ -161,8 +161,8 @@ export function createAccounts(directory) {
     const id = randomUUID(),
       digest = await passwordHash(password);
     db.prepare(
-      "INSERT INTO users(id,email,name,password,created_at) VALUES(?,?,?,?,?)",
-    ).run(id, email, name, digest, new Date().toISOString());
+      "INSERT INTO users(id,email,name,password,created_at,verified) VALUES(?,?,?,?,?,?)",
+    ).run(id, email, name, digest, new Date().toISOString(), verified ? 1 : 0);
     return {
       user: safe(db.prepare("SELECT * FROM users WHERE id=?").get(id)),
       token: token(id, "session"),

@@ -67,12 +67,12 @@ const CORE_USERS = [
   },
   {
     name: "Rishu",
-    email: "rishu@gamil.com", // Exact spelling from user request
+    email: "rishu@gamil.com", // Exact spelling from prompt
     password: "12345678",
   },
   {
     name: "Rishu",
-    email: "rishu@gmail.com", // Safety alias in case of standard gmail spelling
+    email: "rishu@gmail.com", // Safety alias
     password: "12345678",
   },
 ];
