@@ -196,6 +196,13 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
         [&focusMgr, &d3dRenderer, &webHost, &browserMgr, &inputMgr, &dispatcher, &winMgr](
             HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, bool& handled
         ) -> LRESULT {
+            // Marshal background work (cloud/chat) back onto the UI thread.
+            if (msg == WM_LENSDESK_IPC_DISPATCH) {
+                handled = true;
+                dispatcher.ProcessPendingUi();
+                return 0;
+            }
+
             // Handle hotkeys
             if (msg == WM_HOTKEY) {
                 handled = true;
@@ -247,6 +254,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     }
 
     // 16. Teardown
+    dispatcher.Shutdown();
     inputMgr.Shutdown();
     browserMgr.Shutdown();
     webHost.Shutdown();

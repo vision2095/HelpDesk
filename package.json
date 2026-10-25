@@ -14,7 +14,7 @@
     "desktop": "concurrently -k \"npm:dev\" \"wait-on http://127.0.0.1:5173 && electron . --dev\"",
     "start": "electron .",
     "build": "tsc -b && vite build",
-    "test": "node --test tests/*.test.mjs tests/unit/*.test.mjs",
+    "test": "node --experimental-strip-types --test tests/*.test.mjs tests/unit/*.test.mjs",
     "dist:mac": "npm run build && electron-builder --mac",
     "dist:mac:universal": "npm run build && electron-builder --mac dmg --universal --publish never",
     "dist:win": "node scripts/ensure-win-native.mjs && npm run build && electron-builder --win portable --x64 --publish never && node scripts/package-windows-zip.mjs",

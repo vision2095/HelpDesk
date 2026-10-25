@@ -32,6 +32,7 @@
 #include <sstream>
 #include <atomic>
 #include <mutex>
+#include <thread>
 #include <map>
 #include <unordered_map>
 #include <optional>
@@ -98,6 +99,33 @@ inline std::filesystem::path GetAppDataDirectory() {
 }
 
 // Base64 helper
+inline std::vector<unsigned char> Base64Decode(std::string_view text) {
+    static int table[256];
+    static bool initialized = false;
+    if (!initialized) {
+        for (int& value : table) value = -1;
+        const char* alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        for (int i = 0; i < 64; ++i) table[static_cast<unsigned char>(alphabet[i])] = i;
+        initialized = true;
+    }
+    std::vector<unsigned char> out;
+    out.reserve(text.size() * 3 / 4);
+    int buffer = 0;
+    int bits = 0;
+    for (unsigned char c : text) {
+        if (c == '=') break;
+        const int value = table[c];
+        if (value < 0) continue;
+        buffer = (buffer << 6) | value;
+        bits += 6;
+        if (bits >= 8) {
+            bits -= 8;
+            out.push_back(static_cast<unsigned char>((buffer >> bits) & 0xFF));
+        }
+    }
+    return out;
+}
+
 inline std::string Base64Encode(const unsigned char* data, size_t len) {
     static const char encodingTable[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     std::string encoded;

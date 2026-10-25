@@ -1971,7 +1971,10 @@ function App() {
   // Desktop launch is deliberately login-first. Nothing from the workshop is
   // mounted until the main-process gate has an active entitlement.
   const desktopAuthorized =
-    desktop && gate?.phase === "active" && Boolean(gate.entitlement);
+    desktop &&
+    gate?.phase === "active" &&
+    gate?.licenseValid === true &&
+    Boolean(gate.entitlement);
   if (desktop && !desktopAuthorized) {
     return (
       <FloatingGate
@@ -4146,7 +4149,7 @@ function App() {
         )}
         {desktop &&
           gate &&
-          gate.phase !== "active" &&
+          (gate.phase !== "active" || gate.licenseValid !== true) &&
           !["account", "downloads", "settings", "admin"].includes(page) && (
             <GateLock gate={gate} navigate={navigate} />
           )}

@@ -30,6 +30,8 @@ public:
     // API Keys (Encrypted with Windows DPAPI)
     bool SaveApiKey(const std::string& provider, const std::string& key);
     std::string GetApiKey(const std::string& provider);
+    bool HasApiKey(const std::string& provider);
+    json GetKeyStatus();
 
     // Workspaces
     json GetWorkspaces();

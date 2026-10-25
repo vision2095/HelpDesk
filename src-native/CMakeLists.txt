@@ -36,6 +36,7 @@ set(SOURCES
     src/input_manager.cpp
     src/capture_service.cpp
     src/storage_manager.cpp
+    src/cloud_client.cpp
     src/service_dispatcher.cpp
     third_party/imgui/imgui.cpp
     third_party/imgui/imgui_draw.cpp
@@ -63,6 +64,7 @@ target_link_libraries(RuntimeHost PRIVATE
     shlwapi
     windowscodecs
     crypt32
+    winhttp
     version
     d3dcompiler
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/webview2/lib/x64/WebView2LoaderStatic.lib

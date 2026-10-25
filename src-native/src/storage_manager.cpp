@@ -276,9 +276,38 @@ std::string StorageManager::GetApiKey(const std::string& provider) {
     std::string enc = keys.value(provider, "");
     if (enc.empty()) return "";
 
-    // Decrypt DPAPI
-    // For simplicity in this implementation, if stored as raw key or decrypt
-    return enc;
+    // Keys are stored as base64(DATA_BLOB) protected with the current
+    // Windows user's DPAPI key. Empty or malformed values are treated as
+    // "no key" rather than leaking ciphertext to a provider.
+    const auto bytes = Base64Decode(enc);
+    if (bytes.empty()) return "";
+    DATA_BLOB inBlob{};
+    inBlob.pbData = const_cast<BYTE*>(bytes.data());
+    inBlob.cbData = static_cast<DWORD>(bytes.size());
+    DATA_BLOB outBlob{};
+    if (!CryptUnprotectData(&inBlob, nullptr, nullptr, nullptr, nullptr,
+                            CRYPTPROTECT_UI_FORBIDDEN, &outBlob)) {
+        return "";
+    }
+    std::string plain(reinterpret_cast<char*>(outBlob.pbData), outBlob.cbData);
+    LocalFree(outBlob.pbData);
+    return plain;
+}
+
+bool StorageManager::HasApiKey(const std::string& provider) {
+    return !GetApiKey(provider).empty();
+}
+
+json StorageManager::GetKeyStatus() {
+    json status = {
+        { "openai", HasApiKey("openai") },
+        { "groq", HasApiKey("groq") },
+        { "gemini", HasApiKey("gemini") },
+        { "anthropic", HasApiKey("anthropic") },
+        { "deepseek", HasApiKey("deepseek") },
+        { "local", true }
+    };
+    return status;
 }
 
 json StorageManager::GetWorkspaces() {

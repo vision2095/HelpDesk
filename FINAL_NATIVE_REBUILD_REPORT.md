@@ -1,213 +1,266 @@
-# LensDesk 2.0 Windows Native Reconstruction Report
+# LensDesk 2.0 Native Windows Final Rebuild Report
 
-## Executive Summary
+**Report date:** 2026-10-25  
+**Workspace:** `C:\Users\hp\Downloads\LensDesk2.0-windows-native-final-rebuild\LensDesk2.0-windows-native-final-rebuild`  
+**Branch:** `windows-native-final-rebuild`  
+**Repository:** `https://github.com/VivekGitNinja/LensDesk2.0`
 
-**LensDesk 2.0** has been completely reconstructed as a high-performance **Native C++20 Win32** desktop application, replacing the legacy Electron desktop runtime on Windows with a modern composition architecture inspired by reverse-engineering research into HintLens.
+## 1. Verdict
 
-### Core Architecture Pillars
-- **Zero Electron Runtime**: Electron (`electron.exe`, `node.dll`, `ffmpeg.dll`, `resources.pak`) has been completely eliminated from the Windows application deliverable.
-- **Modern Windows Graphics**: **Direct3D 11.1** swapchain with **DirectComposition** (`dcomp.dll`) providing hardware-accelerated, transparent, flicker-free window composition.
-- **Dear ImGui Native Layer**: ImGui v1.91.x Win32 + DX11 overlay providing a low-latency native HUD, status pills, radial action wheel, and diagnostics.
-- **Microsoft Edge WebView2**: `ICoreWebView2CompositionController` attached directly to the DirectComposition visual tree, hosting the exact **LensDesk React 19** frontend with 100% visual and functional preservation.
-- **Deterministic Focus & Input Router**: Resolves the legacy typing and focus-loss bugs with an explicit 8-state Win32 focus state machine, proper `MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC)` integration, stable carets, and destination-verified auto-typing via Win32 `SendInput(KEYEVENTF_UNICODE)`.
-- **Capture Affinity**: Native `SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE)` (value 17) ensuring the overlay remains excluded from screen captures and recordings.
-- **Integrity**: Original repository `/Users/vivek/new repo/lensdesk-reviewed-1.3.6` remains completely untouched. All reconstructive work is isolated in `/Users/vivek/new repo/LensDesk2.0` on branch `windows-native-final-rebuild`.
-- **Real Windows Verification**: Compiled and linked with MSVC 2022 (v143) on a genuine Windows x64 runner (`windows-latest`, Run ID `40099652755`).
+**Functional native Windows rebuild, verified locally; not fully production-final for public distribution.**
 
----
+The native C++20 host builds and runs, real OS keyboard input works in the assistant, embedded browser, Notepad, Windows Terminal, VS Code, Chrome, and Edge, the subscription gate rejects signed-out access, and the final installer installs, launches, and uninstalls cleanly.
 
-## Architecture Diagram
+It is **not** appropriate to call this a fully production-final public release yet because:
 
-```mermaid
-graph TD
-    subgraph Host ["LensDesk 2.0 Windows Application (RuntimeHost.exe)"]
-        WinMain["wWinMain Entry Point<br/>(Single Instance Mutex / COM)"]
-        WinMgr["WindowManager<br/>(Per-Monitor V2 DPI, Borderless WS_POPUP, Tray)"]
-        FocusMgr["FocusManager<br/>(Deterministic 8-State Focus State Machine)"]
-        InputMgr["InputManager<br/>(RegisterHotKey & Safe SendInput AutoType)"]
-        StorageMgr["StorageManager<br/>(Atomic JSON & Windows DPAPI Key Encryption)"]
-        CaptureSvc["CaptureService<br/>(GDI / WIC Desktop Duplication & Region Snip)"]
-        Dispatcher["ServiceDispatcher<br/>(Complete C++ Implementation of 50+ IPC Actions)"]
-    end
+- The hosted subscription backend was tested only against a local cloud fixture, not a deployed production service.
+- No real provider API key was available, so live hosted-provider chat was not tested end to end; an OpenAI-compatible mock verified the request/stream path.
+- Firefox and Brave were not installed, so those browsers were not tested.
+- The installer and `RuntimeHost.exe` are unsigned.
+- The embedded browser uses one shared WebView2 controller with per-tab history, not a true multi-WebView implementation.
+- `npm run test:reference` is an Electron/Playwright check and fails against the native host because it waits for `.hintlens-overlay-shell`.
+- CI status must be confirmed after the delivery push; no `gh` CLI is installed.
 
-    subgraph Composition ["DirectComposition Visual Tree (dcomp.dll)"]
-        D3D["D3D11Renderer<br/>(DXGI Swapchain B8G8R8A8 Premultiplied)"]
-        RootVisual["IDCompositionTarget & Root Visual"]
-        D3DVisual["D3DVisual<br/>(Dear ImGui DX11 Overlay / Radial Wheel / Status)"]
-        HudVisual["HudVisual<br/>(Main HUD WebView2 Composition Controller)"]
-        BrowserVisual["BrowserVisual<br/>(Embedded Web Browser Composition Controller)"]
-    end
+## 2. Scope and constraints
 
-    subgraph UI ["LensDesk React 19 Frontend (https://lensdesk.local)"]
-        ReactHUD["React 19 Dark Glass HUD<br/>(Assistant / Notes / Resume Context / Settings)"]
-        Bridge["window.lens WebMessage Bridge<br/>(Drop-in Electron Preload Replacement)"]
-    end
+- Work was confined to the extracted workspace above. The original LensDesk 1.3.6 project was not modified.
+- The native architecture was preserved: C++20, Win32, Direct3D 11, DirectComposition, Dear ImGui, WebView2, and the existing React 19 frontend.
+- The existing LensDesk UI and floating HUD design were preserved.
+- Input tests used real OS `SendInput`, not CDP `fill()` or JavaScript value assignment.
+- Production CDP is disabled unless `WEBVIEW2_REMOTE_DEBUGGING_PORT` is explicitly set for local testing.
 
-    WinMain --> WinMgr
-    WinMain --> D3D
-    WinMain --> FocusMgr
-    WinMain --> Dispatcher
+## 3. Delivered artifacts
 
-    D3D --> RootVisual
-    RootVisual --> D3DVisual
-    RootVisual --> HudVisual
-    RootVisual --> BrowserVisual
+| Artifact | Path | Size | SHA-256 |
+| --- | --- | ---: | --- |
+| Native host | `build-native\bin\Release\RuntimeHost.exe` | 1,128,448 bytes | `7EC6992666AD6B3483E7F922DA104DC1A6FA40FFC544C68E63889DAF1DBB110D` |
+| Portable ZIP | `release\LensDesk-2.0.0-Windows-x64.zip` | 1,019,936 bytes | `10FE6B1613EFEE8804288F19AAB4785C84243963DE5E32D0571AB94EB03C7C73` |
+| NSIS installer | `release\LensDesk-2.0.0-Setup.exe` | 1,134,512 bytes | `8DC43F0CFAE1D25314BC622D0B7E8A903637177A70EA026348DBBBC923761AEB` |
+| WebView2 loader | `build-native\bin\Release\WebView2Loader.dll` | 194,912 bytes | `D3FCE90BDEECB08596E377DEA6A316354DD8949E32FF09B89D51BE00C14E21B6` |
 
-    HudVisual --> Bridge
-    Bridge --> ReactHUD
-    Bridge <-->|Bi-directional WebMessage| Dispatcher
-    Dispatcher --> StorageMgr
-    Dispatcher --> CaptureSvc
-    Dispatcher --> InputMgr
-    FocusMgr --> HudVisual
-    FocusMgr --> BrowserVisual
-    FocusMgr --> D3DVisual
+The authoritative hash list is also in `artifacts\final\SHA256SUMS.txt`.
+
+`RuntimeHost.exe` version metadata:
+
+- `FileDescription`: `LensDesk 2.0 Native Windows Host`
+- `ProductName`: `LensDesk 2.0`
+- `FileVersion` / `ProductVersion`: `2.0.0.0`
+- `OriginalFilename`: `RuntimeHost.exe`
+
+Both the host and installer are **NotSigned**.
+
+## 4. Preserved architecture
+
+- Native Win32 top-level window with per-monitor DPI handling and a floating HUD.
+- Direct3D 11 swapchain and DirectComposition visual tree.
+- Dear ImGui overlay for native HUD/status surfaces.
+- WebView2 composition controller for the React 19 frontend and the embedded browser.
+- Native service dispatcher for overlay, assistant/chat, browser, capture, storage, profiles, settings, cloud/gate, and auto-typing actions.
+- Windows DPAPI for saved API keys.
+- WebView2 keyboard routing through native focus ownership and `MoveFocus`; no nonexistent WebView2 keyboard-injection API is used.
+
+## 5. Defects found and fixed
+
+| Defect | Root cause | Fix | Verification |
+| --- | --- | --- | --- |
+| Subscription gate could remain active after expiry | A hardcoded/local `phase: "active"` path and UI checks that only looked at `phase`/`entitlement` | Removed the local active fallback. `CloudClient::AuthorizedNow()` now requires active phase, a non-null entitlement, verification within 120 seconds, and remaining time. Added a 45-second heartbeat. UI authorization now requires `licenseValid === true`. | Signed-out gate screenshot on the final installed build; gate/heartbeat tests in `npm test`; code inspection of `src-native\src\cloud_client.cpp` and `src\main.tsx`. |
+| Saved `captureProtection` and `alwaysOnTop` preferences were ignored at startup | Preferences were read by the UI, but the native window was created with safe defaults and the saved values were not applied | Apply persisted preferences in `ServiceDispatcher` initialization before the UI reads state. | `captureProtection:false` produced window affinity `0`; `captureProtection:true` produced affinity `17`; `alwaysOnTop:true` produced the topmost style. Screenshot tests use the explicit preference rather than bypassing capture protection. |
+| Embedded browser page rendered at the window origin, covering the toolbar | `ApplyLayout()` passed the screen offset in `put_Bounds` while the composition visual was already positioned; rendering and hit-testing disagreed | Offset `m_browserVisual` by the React layout origin and set controller bounds to local `(0,0,width,height)`. | `browser-os-typing.png` shows the title bar, tabs, address bar, page below, and bottom HUD. Real OS click and typing into the page succeeded. |
+| Assistant did not reliably regain keyboard focus after leaving the browser | Focus remained on the browser/WebView2 surface when switching views | `OverlayView` now focuses the assistant composer when the active view changes from `browser` to `assistant`; native focus ownership remains with WebView2. | Real OS assistant typing produced the expected mock response; `assistant-os-typing.png`. |
+| Browser Find overlay did not close cleanly on Escape | Escape closed the UI without clearing the native find state or returning focus | Added `closeFind()` to clear find text, close the overlay, and refocus the browser; viewport is hidden when no tab is active. | `npm test`; manual browser interaction. |
+| Production build exposed CDP port 9222 by default | Remote debugging was enabled unconditionally for testing | Only enable 9222 when `WEBVIEW2_REMOTE_DEBUGGING_PORT` is explicitly set. | Final launch with no environment variable: `cdp_9222_listeners=0` in `performance-final.txt`; installed launch also had no 9222 listener. |
+| Installer left `runtime_host.log` behind | Uninstaller did not delete the runtime log | Added `Delete "$INSTDIR\runtime_host.log"` to the uninstall section. | Final silent uninstall removed the install directory completely. |
+| Native ZIP check assumed the Electron layout | `scripts\windows-archive-check.mjs` only understood the Electron archive | Added a native archive branch that validates CRC, x64 PE/version metadata, the bundled WebView2 loader, and fresh frontend files while preserving the Electron branch. | `npm run test:windows-archive` passed. |
+| Build script depended on `cmake`/`makensis` being on `PATH` | Build could silently skip packaging on a clean machine | Added VS Build Tools CMake discovery, NSIS discovery, failure propagation, dist synchronization, and README/icon inclusion in the portable ZIP. | Final build and installer logs. |
+
+### 5.1 Subscription enforcement detail
+
+The final gate path is authoritative:
+
+- `ApplyAuthoritativeSnapshot()` sets `phase` from the server entitlement, not from a local constant.
+- `ApplyHeartbeat()` refreshes entitlement and verification time.
+- `AuthorizedNow()` returns false if the phase is not active, entitlement is missing, the last verification is older than 120 seconds, or remaining time is exhausted.
+- `GetGateView()` exposes `licenseValid`; `auth.status` and guarded operations use it.
+- The React desktop gate requires `gate.phase === "active" && gate.licenseValid === true && Boolean(gate.entitlement)`.
+
+The final installed build with cleared app data showed the sign-in gate (`gate-signed-out-final.png`), not the HUD.
+
+### 5.2 Browser composition detail
+
+`BrowserTabsManager::ApplyLayout()` now does the following:
+
+```cpp
+if (m_browserVisual) {
+    m_browserVisual->SetOffsetX(static_cast<float>(m_layout.x));
+    m_browserVisual->SetOffsetY(static_cast<float>(m_layout.y));
+}
+RECT rc{ 0, 0, 0, 0 };
+if (show) {
+    rc = RECT{ 0, 0, m_layout.width, m_layout.height };
+}
+m_controller->put_Bounds(rc);
+m_controller->put_IsVisible(show ? TRUE : FALSE);
 ```
 
----
+This keeps rendering and mouse hit-testing in the same coordinate space.
 
-## Architectural Comparison Matrix
+## 6. Build and static verification
 
-| Capability / Metric | Legacy LensDesk 1.3.6 | HintLens Reference (`TiWorker.exe`) | LensDesk 2.0 Native Reconstruction |
-| :--- | :--- | :--- | :--- |
-| **Runtime Architecture** | Electron (Chromium + Node.js) | Native Win32 C++ PE32+ | **Native C++20 Win32 PE32+** |
-| **Executable Size** | ~120 MB (Uncompressed ~260 MB) | ~2.1 MB | **~925 KB (RuntimeHost.exe)** |
-| **Total Distribution Size** | ~110 MB - 160 MB Installer | ~12 MB | **~906 KB (ZIP) / ~1.0 MB (Setup.exe)** |
-| **Memory Footprint** | ~350 MB - 600 MB (4+ processes) | ~40 MB - 65 MB | **~35 MB - 60 MB** |
-| **Window Compositor** | Electron `BrowserWindow` / WS_EX_LAYERED | DirectComposition (`dcomp.dll`) | **DirectComposition (`dcomp.dll`)** |
-| **Hardware Graphics** | Chromium Software/ANGLE compositor | Direct3D 11 (`d3d11.dll`) | **Direct3D 11.1 (`d3d11.dll`)** |
-| **Overlay UI Engine** | WebContentsView inside Electron | Dear ImGui DX11 Backend | **Dear ImGui v1.91.x + React 19 via WebView2** |
-| **Embedded Web Browser** | Electron `WebContentsView` (process heavy) | Microsoft Edge WebView2 | **Microsoft Edge WebView2 Composition Controller** |
-| **UI Aesthetics** | Dark Glass HUD / Cyan (`#06b6d4`) | HintLens HUD | **Exact LensDesk Dark Glass HUD / Cyan Preserved** |
-| **Keyboard Focus Model** | ❌ Frequent focus loss / hook thrash | Native Win32 input queue | **✅ Deterministic 8-State Win32 State Machine** |
-| **Caret Stability** | ❌ Caret disappears on overlay focus | Stable native caret | **✅ Stable caret via `MoveFocus(PROGRAMMATIC)`** |
-| **IME & Unicode** | ❌ Hook interferes with composition | Native IMM32 support | **✅ Native IMM32 + Chromium IME Composition** |
-| **Capture Exclusion** | Partial Electron `setContentProtection` | `WDA_EXCLUDEFROMCAPTURE` (17) | **`SetWindowDisplayAffinity(hwnd, 17)`** |
-| **Auto-Typing** | Node `uiohook` / `koffi` simulated events | Native Win32 `SendInput` | **Destination-verified `SendInput(KEYEVENTF_UNICODE)`** |
-| **Storage Security** | Plaintext JSON on disk | DPAPI / encrypted storage | **Windows DPAPI (`CryptProtectData`) Encrypted Keys** |
+- Compiler: Microsoft C/C++ Optimizing Compiler **19.51.36257 for x64**.
+- CMake: **4.3.1-msvc1**.
+- Configuration: **Release x64, C++20, Win32 subsystem**.
+- Build log: `artifacts\final\build-windows-native.log`.
+- PE audit log: `artifacts\final\native-binary-audit.log`.
 
----
+PE audit result:
 
-## Verified Windows PE Binary Audit
+- Architecture: `x86_64 (64-bit AMD64)`
+- Format: `PE32+ (Executable)`
+- Sections: `.text`, `.rdata`, `.data`, `.pdata`, `.rsrc`, `.reloc`
+- Native imports include `user32.dll`, `gdi32.dll`, `d3d11.dll`, `dcomp.dll`, `winhttp.dll`, `ole32.dll`, `shell32.dll`, `crypt32.dll`, `imm32.dll`.
+- No Electron runtime imports (`node.dll`, `ffmpeg.dll`, `v8.dll`) were found.
 
-The native binary compiled on Microsoft Windows Server 2025 using MSVC 2022 (v143) was subjected to automated PE header analysis (`node scripts/verify-native-binary.mjs`):
+## 7. Automated test results
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| `npm test` | **222 passed, 0 failed** | `artifacts\final\npm-test.log` |
+| `npm run test:windows-archive` | **Pass** — native ZIP passed CRC, x64 PE/version metadata, bundled WebView2 loader, and 4 fresh frontend files | `artifacts\final\native-archive-check.log` |
+| PE binary audit | **Pass** — x64 PE32+, native imports, zero Electron runtime dependencies | `artifacts\final\native-binary-audit.log` |
+| `npm run test:reference` | **Not applicable / fails** — Electron/Playwright check timed out waiting for `.hintlens-overlay-shell`, which the native host does not expose | `artifacts\final\reference-check.log` |
+
+The `test:reference` failure is documented, not hidden. It is an Electron workflow check and is not evidence against the native host.
+
+## 8. Real OS keyboard and browser tests
+
+All input below was produced with the `SendInput` harness in `artifacts\final\keyboard\sendinput.ps1`. No CDP `fill()` or JavaScript value assignment was used to enter text.
+
+| Target | Exact entered string | Evidence |
+| --- | --- | --- |
+| Notepad | `The quick brown fox jumps over the lazy dog 0123456789` | `artifacts\final\keyboard\notepad-e2e.txt` |
+| Windows Terminal | `LensDesk real OS typing - Windows Terminal ` | `artifacts\final\keyboard\terminal-e2e.txt` |
+| VS Code | `LensDesk real OS typing - VS Code 2026-10-25` | `artifacts\final\keyboard\vscode-e2e.txt` |
+| Google Chrome | `Chrome real OS typing 2026-10-25` | `artifacts\final\keyboard\chrome-e2e.txt`, `artifacts\final\keyboard\chrome-os-typing.png` |
+| Microsoft Edge | `Edge real OS typing 2026-10-25` | `artifacts\final\keyboard\edge-e2e.txt`, `artifacts\final\keyboard\edge-os-typing.png` |
+| LensDesk assistant | `Final fixed binary typing 2026-10-25` | `artifacts\final\assistant-os-typing.png` |
+| LensDesk embedded browser page input | `Fixed layout OS typing 2026-10-25` | `artifacts\final\browser-os-typing.png` |
+
+Notes:
+
+- Chrome and Edge were launched with isolated test profiles. The first Edge profile triggered Edge's own first-run Microsoft-account sync prompt; no credentials were entered. The clean Edge evidence was then produced in Edge guest mode, which avoids the prompt and extensions.
+- Firefox and Brave are not installed on this machine, so they could not be tested.
+- The assistant response was `Mock provider answer for: Final fixed binary typing 2026-10-25`, confirming that the real OS keystrokes reached the React composer and the native `lens:chat` bridge, then returned through the mock OpenAI-compatible provider on `127.0.0.1:4321/v1`.
+- The embedded browser was navigated by real OS address-bar typing to `http://127.0.0.1:4320/e2e-test.html`; the page input was then clicked and typed with real OS input.
+
+## 9. Screenshots
+
+| Screenshot | What it shows |
+| --- | --- |
+| `artifacts\final\assistant-os-typing.png` | Assistant with the real-OS prompt and mock response, final browser-fixed binary. |
+| `artifacts\final\browser-os-typing.png` | Embedded browser after the composition fix: toolbar, tabs, address bar, page below, and typed page input. |
+| `artifacts\final\gate-signed-out-final.png` | Final installed build with cleared app data: sign-in gate, no HUD. |
+| `artifacts\final\installed-final-hud.png` | Final installed build, signed-in HUD. |
+| `artifacts\final\keyboard\chrome-os-typing.png` | Chrome with the exact real-OS string in the page input. |
+| `artifacts\final\keyboard\edge-os-typing.png` | Edge guest window with the exact real-OS string in the page input. |
+
+## 10. Security and subscription results
+
+- **No hardcoded active subscription bypass remains.** The local "active" fallback was removed; authorization is derived from the hosted snapshot and entitlement.
+- **Offline grace is bounded.** `AuthorizedNow()` requires verification within 120 seconds; the heartbeat runs every 45 seconds.
+- **UI gate is authoritative.** The React desktop shell requires `licenseValid === true` in addition to active phase and entitlement.
+- **Signed-out access was verified visually** on the final installed build.
+- **DPAPI key storage was verified.** API keys are saved and read through Windows DPAPI (`CryptProtectData`); the mock chat path used the saved local configuration.
+- **Production CDP is off by default.** A normal launch with no `WEBVIEW2_REMOTE_DEBUGGING_PORT` had zero listeners on 9222. Setting the variable explicitly enables 9222 for local testing.
+- **Capture protection defaults to enabled.** Persisted `captureProtection` is applied at startup; screenshot verification explicitly opted out via the preference rather than faking a bypass.
+- **Installer is per-user.** It writes HKCU uninstall/App Paths keys and requests no elevation.
+- **No credentials are embedded in the repository.** The local cloud fixture account and test data were removed during cleanup.
+
+## 11. Packaging and installer lifecycle
+
+Installer build log: `artifacts\final\installer-build.log`.  
+Full verification record: `artifacts\final\installer-verification.txt`.
+
+Verified on the final installer:
+
+1. Silent install to `C:\Users\hp\AppData\Local\Temp\opencode\LensDeskInstallTest` exited `0`.
+2. `RuntimeHost.exe` hash matched the build output exactly.
+3. Version metadata was correct.
+4. `dist\index.html` and 3 frontend asset files were installed.
+5. HKCU uninstall key contained `DisplayName`, `DisplayVersion`, `Publisher`, `DisplayIcon`, and `UninstallString`.
+6. HKCU `App Paths\RuntimeHost.exe` pointed at the installed host.
+7. Start Menu shortcuts (`LensDesk.lnk`, `Uninstall.lnk`, `Website.lnk`) and the Desktop shortcut existed with correct targets.
+8. The installed host launched with no CDP listener on 9222.
+9. Silent uninstall exited `0` and removed the install directory, both HKCU keys, the Start Menu folder, and the Desktop shortcut.
+10. A second clean install was used to verify the signed-out gate; it also uninstalled completely.
+
+The portable ZIP was checked by `npm run test:windows-archive` and contains the host, WebView2 loader, icon/README, and fresh frontend assets.
+
+## 12. Performance
+
+Final smoke test (`artifacts\final\performance-final.txt`), 1040x740 window at 125% DPI:
+
+- Launch to window: **1,146 ms**
+- Working set: **61.0 MB**
+- Private memory: **47.7 MB**
+- Threads: **14**
+- CDP 9222 listeners: **0**
+
+These numbers are a local smoke result, not a benchmark across hardware.
+
+## 13. GitHub delivery and CI
+
+- Repository: `https://github.com/VivekGitNinja/LensDesk2.0`
+- Branch: `windows-native-final-rebuild`
+- Remote branch existed at delivery time (`git ls-remote` succeeded); the GitHub REST API returned 404 without authentication, consistent with a private repository.
+- The workspace originally had no `.git` directory. The final source was overlaid onto a clone of the remote branch and pushed as a delivery commit.
+- The repository contains `.github\workflows\windows-native-build.yml`, which runs the native build, tests, PE audit, runtime/interactive checks, ZIP packaging, NSIS installer build, and distribution verification on Windows.
+- CI run link/status should be read from the repository's Actions page after the push. No `gh` CLI was installed in this environment.
+
+## 14. Limitations and remaining production work
+
+1. **Hosted backend not production-deployed.** The local cloud fixture proved login, entitlement, heartbeat, and signed-out gating, but it is not a production service.
+2. **No real provider E2E.** The mock provider verified the OpenAI-compatible request/stream/commit path; a live hosted provider still needs a real key and production endpoint test.
+3. **Firefox/Brave untested.** Those browsers are not installed.
+4. **Unsigned binaries.** Code signing and SmartScreen reputation are not done.
+5. **Single shared WebView2 controller.** Tabs have independent history/state, but the implementation does not create one WebView2 per tab.
+6. **Electron-only reference test.** `npm run test:reference` cannot validate the native host.
+7. **CI confirmation.** The workflow is committed, but the run result must be checked after push.
+8. **Production deployment artifacts.** The hosted cloud service, TLS/reverse proxy, SMTP, payment webhook secrets, and release signing still require deployment-specific configuration.
+
+## 15. Evidence index
+
+All paths are relative to the workspace root.
 
 ```
-=================================================================
-  LensDesk 2.0 Native Windows Binary PE Audit
-=================================================================
-Auditing target: build-native/bin/Release/RuntimeHost.exe
-
-[PE Architecture]
-- Architecture: x86_64 (64-bit AMD64)
-- Format: PE32+ (Executable)
-- Section Count: 6 (.text, .rdata, .data, .pdata, .rsrc, .reloc)
-
-[Imported Native Dynamic Libraries]
-  * user32.dll             (Win32 Windowing, Message Pump, Input)
-  * gdi32.dll              (GDI Drawing and Screen BitBlt)
-  * d3d11.dll              (Direct3D 11.1 Hardware Rendering)
-  * dcomp.dll              (DirectComposition Visual Tree)
-  * ole32.dll              (COM Runtime & Smart Pointers)
-  * shell32.dll            (Shell Tray Icon & Notifications)
-  * crypt32.dll            (Windows DPAPI Data Protection)
-  * d3dcompiler_47.dll     (HLSL Shader Bytecode Compilation)
-  * kernel32.dll           (Win32 Core Subsystem)
-  * advapi32.dll           (Win32 Registry & Security)
-  * imm32.dll              (Input Method Editor Composition)
-  * msvcp140.dll           (C++ Standard Library)
-  * vcruntime140.dll       (Visual C++ Runtime)
-  * vcruntime140_1.dll     (Visual C++ Exception Handling)
-  * api-ms-win-crt-*       (Universal CRT subsystem)
-
-[Verification Results]
-  ✅ VERIFIED: Zero Electron runtime dependencies (node.dll / ffmpeg.dll absent).
-  ✅ VERIFIED: Genuine Win32 native application subsystem.
-=================================================================
+artifacts\final\
+  SHA256SUMS.txt
+  build-windows-native.log
+  native-binary-audit.log
+  npm-test.log
+  native-archive-check.log
+  reference-check.log
+  performance-final.txt
+  installer-build.log
+  installer-verification.txt
+  installed-runtime.log
+  assistant-os-typing.png
+  browser-os-typing.png
+  gate-signed-out-final.png
+  installed-final-hud.png
+  verification-summary.json
+  keyboard\
+    sendinput.ps1
+    notepad-e2e.txt
+    terminal-e2e.txt
+    vscode-e2e.txt
+    chrome-e2e.txt
+    chrome-os-typing.png
+    edge-e2e.txt
+    edge-os-typing.png
 ```
 
-### Release Artifact Checksums (SHA-256)
+## 16. Final assessment
 
-| Artifact Name | Size | SHA-256 Checksum |
-| :--- | :--- | :--- |
-| `RuntimeHost.exe` | 925 KB | `5f53645847e9dc1e4157a7b99330b056586c9c39cf4ede57b13cf2d609d7924a` |
-| `LensDesk-2.0.0-Setup.exe` | 1.0 MB | `eb762b58b8865082f926eb28059cd047e00c226f185b5e25070f0fcfb5d35f5d` |
-| `LensDesk-2.0.0-Windows-x64.zip` | 906 KB | `38671079111ac68e6b4b9773746edf625e924933a78e53fc7f31280222cf8788` |
-| `WebView2Loader.dll` | 190 KB | `6a4387d89052a3250117498cffbbf05cf25608bfa0c04297a760b830d1a47df1` |
+The rebuild is a genuine native Windows application, not an Electron wrapper. The highest-risk interactive defects found during final testing—assistant focus handoff, embedded-browser composition/hit-testing, startup preference application, stale subscription authorization, and installer cleanup—were fixed and re-tested with real OS input and final packaged artifacts.
 
----
-
-## Permanent Keyboard Typing Diagnosis & Technical Fix
-
-### Root Cause Analysis of Legacy Issues
-1. **Invalid API Assumption**: Early native drafts attempted to call `m_compositionController->SendKeyboardInput()`. However, the Microsoft Edge WebView2 SDK specification reveals that `ICoreWebView2CompositionController` **only exposes mouse and pointer injection** (`SendMouseInput`, `SendPointerInput`). There is no keyboard injection method on that interface.
-2. **Focus Stealing & Caret Invalidation**: Transparent floating windows with `WS_EX_TOPMOST` and `WS_EX_LAYERED` frequently oscillate focus when clicked. In Electron, this caused Chromium's render widget host to repeatedly fire `blur` events, clearing DOM selection ranges and freezing the textarea caret.
-3. **Global Hook Thrashing**: Global low-level keyboard hooks (`WH_KEYBOARD_LL`) intercepted keys at the OS level, colliding with active message queues and destroying dead keys, IME composition, and modifier states.
-
-### LensDesk 2.0 Native Solution
-1. **Standard Win32 Message Translation**:
-   Keystrokes are processed naturally through the standard Win32 message loop:
-   ```cpp
-   while (GetMessageW(&msg, nullptr, 0, 0)) {
-       TranslateMessage(&msg);
-       DispatchMessageW(&msg);
-   }
-   ```
-2. **Deterministic Focus Delegation via `MoveFocus`**:
-   Focus is transferred cleanly to WebView2 using `ICoreWebView2Controller::MoveFocus`:
-   ```cpp
-   controller->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
-   ```
-   When the controller owns focus, the Windows OS routes keyboard messages directly to the underlying Chromium HWND child window. This guarantees:
-   - Consistent, blinking, uninterrupted carets in the assistant prompt textarea.
-   - Flawless navigation (Backspace, Delete, Arrow keys, Home, End).
-   - Standard shortcuts: `Ctrl+A` (Select All), `Ctrl+C` (Copy), `Ctrl+V` (Paste), `Ctrl+Z` (Undo), `Ctrl+Y` (Redo).
-   - Full International IME composition via `IMM32` for Japanese, Chinese, Korean, and diacritics.
-3. **Focus State Machine**:
-   An 8-state deterministic coordinator (`FocusManager`) tracks input across:
-   - `State::OverlayHidden`
-   - `State::HudFocused`
-   - `State::BrowserFocused`
-   - `State::ImGuiCapturing`
-   - `State::ExternalAppActive`
-   - `State::AutoTypingActive`
-   - `State::ModalDialogOpen`
-   - `State::Transitioning`
-4. **Accelerator Key Management**:
-   The native host registers `add_AcceleratorKeyPressed` on WebView2 controllers, allowing global hotkeys (e.g. `Ctrl+\`, `Ctrl+Shift+L`) to bubble back to the native host while permitting standard editing shortcuts (`Ctrl+V`, `Ctrl+C`, `Ctrl+A`) to reach the DOM.
-5. **Destination-Verified Auto-Typing**:
-   Before initiating auto-typing, `InputManager::AutoType()` verifies that the target external window is in the foreground via `GetForegroundWindow()`, ensuring keystrokes are never emitted into void or background windows, and uses atomic `KEYEVENTF_UNICODE` events.
-
----
-
-## Complete 50+ Action Service Dispatcher
-
-The C++ `ServiceDispatcher` in `src-native/src/service_dispatcher.cpp` provides a 100% replacement for the Electron main process IPC handler:
-
-1. **Overlay Management**: `lens:overlay:show`, `lens:overlay:hide`, `lens:overlay:toggle`, `lens:overlay:setMode`, `lens:overlay:getBounds`, `lens:overlay:setBounds`, `lens:overlay:resetPosition`.
-2. **Assistant & Generation**: `lens:assistant:startSession`, `lens:assistant:stopSession`, `lens:assistant:query`, `lens:assistant:cancelQuery`, `lens:assistant:getHistory`, `lens:assistant:clearHistory`.
-3. **Capture & OCR**: `lens:capture:screen`, `lens:capture:window`, `lens:capture:region`, `lens:ocr:recognizeText`.
-4. **Embedded Browser**: `lens:browser:createTab`, `lens:browser:closeTab`, `lens:browser:navigate`, `lens:browser:goBack`, `lens:browser:goForward`, `lens:browser:reload`, `lens:browser:getTabs`.
-5. **Storage & DPAPI**: `lens:storage:get`, `lens:storage:set`, `lens:storage:delete`, `lens:storage:encrypt`, `lens:storage:decrypt`.
-6. **Auto-Typing & Clipboard**: `lens:input:autoType`, `lens:input:getClipboard`, `lens:input:setClipboard`.
-7. **Profiles & Sessions**: `lens:profiles:list`, `lens:profiles:save`, `lens:profiles:delete`, `lens:profiles:setActive`.
-8. **App Lifecycle & System**: `lens:app:getVersion`, `lens:app:getSystemInfo`, `lens:app:restart`, `lens:app:quit`.
-
----
-
-## Validation & Verification Summary
-
-1. **Unit & Architecture Test Suites**:
-   - `tests/native-architecture.test.mjs`: **10 / 10 passed** (PE validation, zero Electron binaries, DirectComposition wiring, DPAPI encryption, packaging integrity).
-   - Total test suite: **218 / 218 unit tests passed**.
-2. **GitHub Actions Real Windows CI**:
-   - Runner: `windows-2025-vs2026` (Microsoft Windows Server 2025, 10.0.26100)
-   - Compiler: Microsoft Visual C++ 2022 v143 (MSVC 19.44)
-   - Run ID: `40099652755` (Job ID: `120888989839`)
-   - Outcome: **Success (0 errors, 0 warnings)**
-3. **Packaging**:
-   - Standalone ZIP archive: `release/LensDesk-2.0.0-Windows-x64.zip` (906 KB)
-   - NSIS Setup Installer: `release/LensDesk-2.0.0-Setup.exe` (1.0 MB)
-4. **Repository Isolation**:
-   - Original project `/Users/vivek/new repo/lensdesk-reviewed-1.3.6` confirmed untouched.
-   - All rebuild commits cleanly tracked on branch `windows-native-final-rebuild` in `LensDesk2.0`.
+The correct production verdict is: **ready for controlled local/self-hosted evaluation and installer testing; not yet a fully production-final public release** until the hosted backend, live provider path, code signing, and CI/release confirmation are completed.

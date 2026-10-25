@@ -58,6 +58,7 @@ private:
 
     bool m_isReady = false;
     bool m_hasFocus = false;
+    bool m_initialFocusDone = false;
 
     EventRegistrationToken m_webMessageToken{};
     EventRegistrationToken m_gotFocusToken{};

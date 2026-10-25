@@ -127,6 +127,12 @@ void FocusManager::OnWindowFocusChanged(bool hasFocus) {
             OnWindowActivated(true);
         }
     } else {
+        // WebView2 hosts its input in a child window. When focus moves from
+        // the top-level host into that child, Windows still reports the same
+        // foreground window. That is an internal hand-off, not focus loss.
+        if (m_hwnd && GetForegroundWindow() == m_hwnd) {
+            return;
+        }
         TransitionTo(FocusState::FOCUS_LOST, "wm_killfocus");
     }
 }
@@ -159,23 +165,32 @@ LRESULT FocusManager::RouteMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
 
     // 3. Mouse input routing and deterministic focus selection
     if (msg >= WM_MOUSEFIRST && msg <= WM_MOUSELAST) {
-        int x = GET_X_LPARAM(lParam);
-        int y = GET_Y_LPARAM(lParam);
+        // Wheel messages carry screen coordinates; all other mouse messages
+        // carry client coordinates.
+        POINT pt{ GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+        if (msg == WM_MOUSEWHEEL || msg == WM_MOUSEHWHEEL) {
+            ScreenToClient(hwnd, &pt);
+        }
 
         bool inBrowser = false;
         if (m_browserMgr && m_browserMgr->HasActiveTab()) {
-            BrowserLayout bl = m_browserMgr->GetLayout();
-            if (x >= bl.x && x < (bl.x + bl.width) && y >= bl.y && y < (bl.y + bl.height)) {
+            const BrowserLayout bl = m_browserMgr->GetLayout();
+            if (pt.x >= bl.x && pt.x < (bl.x + bl.width) &&
+                pt.y >= bl.y && pt.y < (bl.y + bl.height)) {
                 inBrowser = true;
             }
         }
 
-        // On mouse-down, switch focus target deterministically
+        // On mouse-down, switch focus target deterministically. MoveFocus is
+        // called even when the state already matches because the actual OS
+        // focus may have moved (for example after a window activation).
         if (msg == WM_LBUTTONDOWN || msg == WM_RBUTTONDOWN) {
-            if (inBrowser) {
+            if (inBrowser && m_browserMgr) {
                 SetFocusTarget(FocusState::FOCUSED_BROWSER, "mouse_click_browser");
-            } else {
+                m_browserMgr->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
+            } else if (m_hudHost) {
                 SetFocusTarget(FocusState::FOCUSED_ASSISTANT, "mouse_click_assistant");
+                m_hudHost->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
             }
         }
 
@@ -206,7 +221,11 @@ json FocusManager::GetDiagnosticsJson() const {
         json j;
         j["timestamp"] = e.timestampMs;
         j["reason"] = e.reason;
-        j["fgHwnd"] = "0x" + std::to_string(e.foregroundHwnd);
+        std::ostringstream hex;
+        hex << "0x" << std::hex << e.foregroundHwnd;
+        j["fgHwnd"] = hex.str();
+        j["from"] = static_cast<int>(e.oldState);
+        j["to"] = static_cast<int>(e.newState);
         arr.push_back(j);
     }
 

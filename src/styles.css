@@ -4510,11 +4510,14 @@ kbd {
   padding: 5px 6px !important;
 }
 .browser-empty {
+  flex: 1;
   padding: 35px 25px;
   text-align: center;
   display: grid;
   gap: 15px;
   justify-items: center;
+  align-content: center;
+  overflow: auto;
 }
 .browser-find,
 .browser-downloads,

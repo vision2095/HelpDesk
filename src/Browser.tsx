@@ -60,6 +60,11 @@ export function WorkspaceBrowser({
       onError(error);
     }
   };
+  const closeFind = () => {
+    setShowFind(false);
+    setFind("");
+    void command("find", { text: "" }).then(() => command("focus"));
+  };
   useEffect(() => {
     mounted.current = true;
     const unsub = window.lens?.onBrowserState?.((next) => {
@@ -240,6 +245,12 @@ export function WorkspaceBrowser({
             event.preventDefault();
             void command("find", { text: find, next: true });
           }}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              closeFind();
+            }
+          }}
         >
           <input
             autoFocus
@@ -264,10 +275,7 @@ export function WorkspaceBrowser({
             type="button"
             className="icon-button"
             aria-label="Close find"
-            onClick={() => {
-              void command("find", { text: "" });
-              setShowFind(false);
-            }}
+            onClick={closeFind}
           >
             <X size={16} />
           </button>
@@ -324,6 +332,7 @@ export function WorkspaceBrowser({
       <div
         className="browser-viewport"
         ref={viewport}
+        hidden={!tab}
         tabIndex={-1}
         onClick={() => {
           void command("focus");

@@ -125,11 +125,13 @@ void ImGuiOverlay::RenderStatusPill() {
     ImGuiIO& io = ImGui::GetIO();
     m_state.fps = io.Framerate;
 
+    // The decorative status pill must never steal mouse or keyboard input
+    // from the assistant/browser WebView2 underneath it.
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration |
                              ImGuiWindowFlags_AlwaysAutoResize |
                              ImGuiWindowFlags_NoSavedSettings |
                              ImGuiWindowFlags_NoFocusOnAppearing |
-                             ImGuiWindowFlags_NoNav;
+                             ImGuiWindowFlags_NoInputs;
 
     ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - 240.0f, 16.0f), ImGuiCond_Always);
     ImGui::SetNextWindowBgAlpha(0.75f);
@@ -269,42 +271,38 @@ LRESULT ImGuiOverlay::HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         return 0;
     }
 
-    if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wParam, lParam)) {
-        handled = true;
-        return true;
-    }
+    // Always let the ImGui Win32 backend observe the message so its IO state
+    // stays current, but only consume input when an interactive native
+    // surface (radial menu or diagnostics window) is actually open.
+    const LRESULT imguiResult = ImGui_ImplWin32_WndProcHandler(hwnd, msg, wParam, lParam);
+    const bool interactive = m_state.showRadialMenu || m_state.showDiagnostics;
 
-    ImGuiIO& io = ImGui::GetIO();
-    if (m_state.showRadialMenu) {
-        // Radial menu consumes mouse events
+    if (interactive) {
+        if (imguiResult) {
+            handled = true;
+            return imguiResult;
+        }
         if (msg >= WM_MOUSEFIRST && msg <= WM_MOUSELAST) {
             handled = true;
             return 0;
         }
     }
 
-    if (io.WantCaptureMouse && (msg >= WM_MOUSEFIRST && msg <= WM_MOUSELAST)) {
-        handled = true;
-        return 0;
-    }
-
-    if (io.WantCaptureKeyboard && (msg >= WM_KEYFIRST && msg <= WM_KEYLAST)) {
-        handled = true;
-        return 0;
-    }
-
+    // Keyboard input is never consumed here. When the HUD or embedded
+    // browser has focus, WebView2 receives real Windows key messages through
+    // its own focused input window.
     handled = false;
     return 0;
 }
 
 bool ImGuiOverlay::WantCaptureMouse() const {
     if (!m_initialized) return false;
-    return ImGui::GetIO().WantCaptureMouse || m_state.showRadialMenu;
+    return m_state.showRadialMenu || m_state.showDiagnostics;
 }
 
 bool ImGuiOverlay::WantCaptureKeyboard() const {
-    if (!m_initialized) return false;
-    return ImGui::GetIO().WantCaptureKeyboard;
+    // Native surfaces have no text fields; the WebView2s own the keyboard.
+    return false;
 }
 
 } // namespace LensDesk
