@@ -42,6 +42,8 @@ private:
     void HandleChat(const json& payload, DispatchResponseCallback callback);
     void PostToUi(std::function<void()> work);
     void HeartbeatLoop();
+    json BuildFullState();
+    json GetGateView();
 
     WindowManager* m_winMgr = nullptr;
     WebView2Host* m_webHost = nullptr;

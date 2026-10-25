@@ -93,11 +93,116 @@ bool StorageManager::WriteJsonFileAtomic(const std::filesystem::path& path, cons
     }
 }
 
+json StorageManager::GetDefaultPreferences() {
+    return {
+        { "launchAtLogin", false },
+        { "closeToTray", false },
+        { "stealthDock", false },
+        { "alwaysOnTop", true },
+        { "captureProtection", true },
+        { "opacity", 1.0 },
+        { "provider", "openai" },
+        { "model", "gpt-4.1-mini" },
+        { "localBaseUrl", "http://127.0.0.1:11434/v1" },
+        { "language", "en" },
+        { "systemPrompt", "You are LensDesk, an intelligent desktop assistant." },
+        { "transcriptionProvider", "openai" },
+        { "transcriptionModel", "whisper-1" },
+        { "captureArchive", {
+            { "enabled", false },
+            { "directory", "" }
+        }},
+        { "capture", {
+            { "mode", "active" },
+            { "displayId", "" }
+        }},
+        { "mouse", {
+            { "enabled", false },
+            { "trigger", "middle" },
+            { "size", 100 },
+            { "opacity", 85 },
+            { "holdMs", 0 },
+            { "style", "wheel" },
+            { "slots", 6 },
+            { "mappings", {
+                { "1", "getAnswer" },
+                { "2", "capture" },
+                { "3", "autoType" },
+                { "4", "undo" },
+                { "5", "hide" },
+                { "6", "snip" },
+                { "7", "browser" },
+                { "8", "settings" }
+            }}
+        }},
+        { "shortcuts", {
+            { "toggle", "CommandOrControl+Shift+L" },
+            { "hide", "Shift+H" },
+            { "capture", "CommandOrControl+Shift+S" },
+            { "overlay", "CommandOrControl+Shift+O" },
+            { "hideAnswer", "CommandOrControl+Shift+A" },
+            { "autoType", "CommandOrControl+Shift+T" },
+            { "stopTyping", "CommandOrControl+Alt+Escape" },
+            { "clickThrough", "Shift+M" },
+            { "browser", "" },
+            { "theme", "" },
+            { "opacityUp", "" },
+            { "opacityDown", "" },
+            { "clearLastCapture", "" },
+            { "clearCaptures", "" },
+            { "cancelAnswer", "" },
+            { "shortcuts", "" },
+            { "scrollUp", "" },
+            { "scrollDown", "" },
+            { "moveUp", "" },
+            { "moveDown", "" },
+            { "moveLeft", "" },
+            { "moveRight", "" },
+            { "getAnswer", "" },
+            { "regionSnip", "" },
+            { "undo", "" },
+            { "clearBundle", "" },
+            { "clearChat", "" },
+            { "cycleProvider", "" },
+            { "cycleModel", "" },
+            { "mouseMode", "" },
+            { "stealth", "" },
+            { "restart", "" },
+            { "quit", "" }
+        }},
+        { "autoType", {
+            { "speed", "human" },
+            { "codeOnly", true },
+            { "delaySeconds", 1 },
+            { "wpm", 65 },
+            { "jitter", 0 },
+            { "mistakes", 0 },
+            { "pauses", 0 }
+        }},
+        { "browser", {
+            { "homePage", "https://www.google.com/" },
+            { "searchEngine", "google" },
+            { "zoom", 1.0 }
+        }}
+    };
+}
+
 json StorageManager::GetPreferences() {
     std::lock_guard<std::mutex> lock(m_mutex);
-    json prefs;
-    if (ReadJsonFile(m_prefsPath, prefs)) return prefs;
-    return json::object();
+    json defaults = GetDefaultPreferences();
+    json saved;
+    if (ReadJsonFile(m_prefsPath, saved) && saved.is_object()) {
+        for (auto& [k, v] : saved.items()) {
+            if (v.is_object() && defaults.contains(k) && defaults[k].is_object()) {
+                for (auto& [subK, subV] : v.items()) {
+                    defaults[k][subK] = subV;
+                }
+            } else {
+                defaults[k] = v;
+            }
+        }
+    }
+    return defaults;
 }
 
 bool StorageManager::SavePreferences(const json& prefs) {
@@ -252,6 +357,11 @@ bool StorageManager::SaveApiKey(const std::string& provider, const std::string& 
     std::lock_guard<std::mutex> lock(m_mutex);
     json keys;
     ReadJsonFile(m_keysPath, keys);
+
+    if (key.empty()) {
+        keys.erase(provider);
+        return WriteJsonFileAtomic(m_keysPath, keys);
+    }
 
     // Encrypt key with Windows DPAPI
     DATA_BLOB inBlob;

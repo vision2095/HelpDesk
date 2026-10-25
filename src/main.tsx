@@ -2134,9 +2134,10 @@ function App() {
   };
   const handleSaveDesktopPreferences = async (prefs: any) => {
     try {
-      const res = await api("desktop.preferences.save", prefs);
-      setDesktopPreferences(res);
-      setDesktopShortcuts(res.shortcuts);
+      const res: any = await api("desktop.preferences.save", prefs);
+      const updated = res?.shortcuts ? res : prefs;
+      setDesktopPreferences(updated);
+      setDesktopShortcuts(updated.shortcuts || {});
       notify("Desktop settings updated.");
     } catch (err: any) {
       fail(err.message || "Failed to save desktop preferences.");

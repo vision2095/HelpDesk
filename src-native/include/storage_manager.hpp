@@ -11,6 +11,7 @@ public:
     bool Initialize();
 
     // Preferences
+    static json GetDefaultPreferences();
     json GetPreferences();
     bool SavePreferences(const json& prefs);
 
