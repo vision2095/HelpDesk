@@ -1076,49 +1076,13 @@ function App() {
     setImages((old) => [...old, image].slice(0, 5));
   }
   async function toggleOverlayMode() {
-    if (desktop) {
-      const res = await api<{ floating: boolean }>("desktop.overlay");
-      if (res && typeof res.floating === "boolean") setFloating(res.floating);
-      setHintlensSettingsOpen(false);
+    if (!desktop) {
+      notify("Floating window is exclusive to the installed LensDesk desktop application.");
       return;
     }
-    if (pipActive && pipWindowRef.current) {
-      pipWindowRef.current.close();
-      setPipActive(false);
-      return;
-    }
-    if (!("documentPictureInPicture" in window)) {
-      setFloating((f) => !f);
-      notify(
-        "In-page overlay active. Open in Chrome or Edge for OS-wide Picture-in-Picture over any browser!",
-      );
-      return;
-    }
-    try {
-      const pip = await (window as any).documentPictureInPicture.requestWindow({
-        width: 440,
-        height: 680,
-      });
-      pipWindowRef.current = pip;
-      applyTheme(
-        stateRef.current?.settings.theme || "system",
-        pip.document,
-        stateRef.current?.settings,
-      );
-      setPipActive(true);
-      Array.from(
-        document.querySelectorAll('link[rel="stylesheet"], style'),
-      ).forEach((el) => {
-        pip.document.head.appendChild(el.cloneNode(true));
-      });
-      pip.document.body.className = document.body.className + " pip-mode";
-      pip.addEventListener("pagehide", () => {
-        setPipActive(false);
-        pipWindowRef.current = null;
-      });
-    } catch (err: any) {
-      notify(err?.message || "Could not open Picture-in-Picture overlay.");
-    }
+    const res = await api<{ floating: boolean }>("desktop.overlay");
+    if (res && typeof res.floating === "boolean") setFloating(res.floating);
+    setHintlensSettingsOpen(false);
   }
   async function captureRegion() {
     if (regionImage) return;
@@ -2449,14 +2413,16 @@ function App() {
                     </h1>
                     <p>Stay in the conversation. Find your next thought.</p>
                   </div>
-                  <button
-                    className="button secondary overlay-button"
-                    onClick={() => run(toggleOverlayMode)}
-                    title="Toggle floating overlay over any browser window"
-                  >
-                    <PanelRightOpen size={17} />
-                    Floating window<kbd>{keyLabel("overlay")}</kbd>
-                  </button>
+                  {desktop && (
+                    <button
+                      className="button secondary overlay-button"
+                      onClick={() => run(toggleOverlayMode)}
+                      title="Toggle floating overlay over any browser window"
+                    >
+                      <PanelRightOpen size={17} />
+                      Floating window<kbd>{keyLabel("overlay")}</kbd>
+                    </button>
+                  )}
                 </div>
                 <div className="session-toolbar">
                   <div className="session-name">
@@ -4386,28 +4352,6 @@ function App() {
         <div className="toast" role="status">
           <Check size={16} />
           {toast}
-        </div>
-      )}
-      {pipActive &&
-        pipWindowRef.current &&
-        createPortal(
-          <OverlayView {...overlayProps} />,
-          pipWindowRef.current.document.body,
-        )}
-      {!desktop && floating && !pipActive && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: 20,
-            right: 20,
-            width: 440,
-            height: 660,
-            zIndex: 99999,
-            boxShadow: "0 12px 40px rgba(0,0,0,0.28)",
-            overflow: "hidden",
-          }}
-        >
-          <OverlayView {...overlayProps} />
         </div>
       )}
       {hintlensSettingsOpen && (
