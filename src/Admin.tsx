@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import {
   Ban,
   ChevronRight,
+  Download,
   Loader2,
   Lock,
   RefreshCw,
@@ -84,6 +85,15 @@ export function Admin() {
   const [grantPlan, setGrantPlan] = useState("");
   const [grantNote, setGrantNote] = useState("");
   const [extendChoice, setExtendChoice] = useState("86400");
+  const [rememberToken, setRememberToken] = useState(true);
+
+  useEffect(() => {
+    const saved = sessionStorage.getItem("lensdesk_admin_token");
+    if (saved) {
+      setToken(saved);
+      loadAll(saved);
+    }
+  }, []);
 
   const authorized = Boolean(token && overview !== null);
 
@@ -117,7 +127,51 @@ export function Admin() {
   async function firstSignIn(e: React.FormEvent) {
     e.preventDefault();
     if (!token.trim()) return;
+    if (rememberToken) {
+      sessionStorage.setItem("lensdesk_admin_token", token.trim());
+    }
     await loadAll(token.trim());
+  }
+
+  function lockConsole() {
+    sessionStorage.removeItem("lensdesk_admin_token");
+    setToken("");
+    setOverview(null);
+    setUsers([]);
+    setSelected(null);
+    setDetail(null);
+  }
+
+  function exportUsersCSV() {
+    if (!users.length) return;
+    const headers = [
+      "ID",
+      "Email",
+      "Name",
+      "Role",
+      "Created At",
+      "Last Active",
+      "Subscription",
+      "Suspended",
+    ];
+    const rows = users.map((u) => [
+      `"${u.id || ""}"`,
+      `"${u.email || ""}"`,
+      `"${u.name || ""}"`,
+      `"${u.role || ""}"`,
+      `"${u.createdAt || ""}"`,
+      `"${u.lastActiveAt || ""}"`,
+      `"${u.subscription?.status || "None"}"`,
+      `"${u.suspended ? "Yes" : "No"}"`,
+    ]);
+    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `lensdesk_admin_users_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   async function openUser(userId: string) {
@@ -169,9 +223,20 @@ export function Admin() {
               placeholder="ADMIN_TOKEN"
             />
             <span className="field-help">
-              The token is kept in memory only and sent as a Bearer header.
+              The token is verified securely against the server and kept in session storage.
             </span>
           </label>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", margin: "10px 0 16px", fontSize: "12px", color: "var(--site-dark-muted, #9aa698)" }}>
+            <input
+              type="checkbox"
+              id="admin-remember"
+              checked={rememberToken}
+              onChange={(e) => setRememberToken(e.target.checked)}
+            />
+            <label htmlFor="admin-remember" style={{ margin: 0, cursor: "pointer" }}>
+              Remember token during this browser session
+            </label>
+          </div>
           <button className="button primary" disabled={busy}>
             {busy ? <Loader2 size={15} className="spin" /> : <ShieldCheck size={15} />}
             Unlock console
@@ -185,18 +250,41 @@ export function Admin() {
     <div className="content-page admin-page">
       <div className="page-heading">
         <div>
-          <div className="eyebrow">OPERATOR CONSOLE</div>
-          <h1>Service control.</h1>
+          <div className="site-kicker">
+            <span />
+            OPERATOR CONSOLE
+          </div>
+          <h1>Service control<span>.</span></h1>
           <p>Overview of accounts, desktop sessions, entitlements and payments.</p>
         </div>
-        <button
-          className="button secondary"
-          disabled={busy}
-          onClick={() => void loadAll()}
-        >
-          <RefreshCw size={15} />
-          Refresh
-        </button>
+        <div className="admin-header-actions">
+          {users.length > 0 && (
+            <button
+              className="button secondary"
+              type="button"
+              onClick={exportUsersCSV}
+            >
+              <Download size={14} />
+              Export CSV
+            </button>
+          )}
+          <button
+            className="button secondary"
+            disabled={busy}
+            onClick={() => void loadAll()}
+          >
+            <RefreshCw size={14} />
+            Refresh
+          </button>
+          <button
+            className="button secondary danger-text"
+            type="button"
+            onClick={lockConsole}
+          >
+            <Lock size={14} />
+            Lock Console
+          </button>
+        </div>
       </div>
       {(error || notice) && (
         <div className={`admin-banner${error ? " error" : ""}`}>
