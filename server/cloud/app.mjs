@@ -2,17 +2,28 @@ import { respondWithStream } from "../event-stream.mjs";
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
+import { promisify } from "node:util";
 import {
   randomBytes,
   randomUUID,
   createHash,
   timingSafeEqual,
+  scrypt as scryptCallback,
 } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import Stripe from "stripe";
 import nodemailer from "nodemailer";
 import { z } from "zod";
 import { createAccounts, createVault } from "./auth.mjs";
+
+const scrypt = promisify(scryptCallback);
+
+export const PROTECTED_CORE_EMAILS = new Set([
+  "vivek@gmail.com",
+  "mukul@gmail.com",
+  "rishu@gamil.com",
+  "rishu@gmail.com",
+]);
 import { providers } from "../contracts.mjs";
 import { createService } from "../core.mjs";
 import { createReleases } from "./releases.mjs";
@@ -128,6 +139,53 @@ export function createCloudServer({
       entitlements.expireSweep();
     } catch {}
   }, 60000);
+
+  async function bootstrapCoreAccounts() {
+    const CORE_DEFAULTS = [
+      { email: "vivek@gmail.com", name: "Vivek" },
+      { email: "mukul@gmail.com", name: "Mukul" },
+      { email: "rishu@gamil.com", name: "Rishu" },
+      { email: "rishu@gmail.com", name: "Rishu" },
+    ];
+    const now = Math.floor(clock());
+    for (const item of CORE_DEFAULTS) {
+      let row = accounts.db
+        .prepare("SELECT * FROM users WHERE lower(email)=?")
+        .get(item.email);
+      if (!row) {
+        const id = randomUUID();
+        const salt = randomBytes(16).toString("hex");
+        const derived = await scrypt("12345678", salt, 64);
+        const digest = salt + ":" + derived.toString("hex");
+        accounts.db
+          .prepare(
+            "INSERT INTO users(id,email,name,password,verified,created_at,subscription_status,subscription_expires,account_state) VALUES(?,?,?,?,1,?,'active',?,'active')",
+          )
+          .run(
+            id,
+            item.email,
+            item.name,
+            digest,
+            new Date().toISOString(),
+            Math.floor(now / 1000) + 30 * 86400,
+          );
+        row = accounts.db.prepare("SELECT * FROM users WHERE id=?").get(id);
+      }
+      const live = entitlements.authorize(row.id, now);
+      if (!live || live.remainingSeconds < 86400) {
+        entitlements.grantCustomDays({
+          userId: row.id,
+          days: 30,
+          actor: "system.bootstrap",
+          note: "Core production account 1-month entitlement",
+        });
+      }
+    }
+  }
+  bootstrapCoreAccounts().catch((err) => {
+    logger?.({ event: "bootstrap.error", error: err.message });
+  });
+
   function safeAdminCompare(req, secret, identity) {
     const provided = String(req.headers.authorization || "");
     if (!provided.startsWith("Bearer ")) return false;
@@ -252,6 +310,17 @@ export function createCloudServer({
       case "admin.user.delete": {
         const data = z.object({ userId: z.string().uuid() }).parse(payload);
         if (!withOwner(data.userId)) throw new Error("User not found.");
+        const targetUser = accounts.db
+          .prepare("SELECT email FROM users WHERE id=?")
+          .get(data.userId);
+        if (
+          targetUser &&
+          PROTECTED_CORE_EMAILS.has(targetUser.email.toLowerCase())
+        ) {
+          throw new Error(
+            "This core production user account is protected against deletion.",
+          );
+        }
         desktopSessions.revokeForUser(data.userId, "admin.deleted");
         const entry = stores.get(data.userId);
         entry?.service.close?.();
@@ -1344,6 +1413,11 @@ export function createCloudServer({
         return;
       }
       if (action === "account.delete") {
+        if (PROTECTED_CORE_EMAILS.has(user.email.toLowerCase())) {
+          throw new Error(
+            "This core production user account is protected against deletion.",
+          );
+        }
         const password = z.string().min(8).max(128).parse(payload.password);
         await accounts.login(
           { email: user.email, password },
