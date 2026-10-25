@@ -1225,6 +1225,27 @@ export function createCloudServer({
         json(res, 200, await payments.reconcile({ user, paymentId: data.paymentId }));
         return;
       }
+      if (action === "purchase.devActivate") {
+        if (payments.keyConfigured()) {
+          throw new Error("Live payments are configured. Please use standard checkout.");
+        }
+        const data = z.object({ planId: z.string().min(2).max(40) }).parse(payload);
+        const plan = plans.get(data.planId);
+        if (!plan) throw new Error("Choose a valid plan.");
+        const days = Math.max(1, Math.ceil(plan.durationSeconds / 86400));
+        const granted = entitlements.grantCustomDays({
+          userId: user.id,
+          days,
+          actor: "system.devActivate",
+          note: `Dev test activation: ${plan.label}`,
+        });
+        json(res, 200, {
+          ok: true,
+          entitlement: granted,
+          message: `Activated ${plan.label} plan (${days} days) for your account!`,
+        });
+        return;
+      }
       if (action === "purchase.history") {
         json(res, 200, { history: payments.history(user) });
         return;
@@ -1240,6 +1261,7 @@ export function createCloudServer({
           desktops: desktopSessions.listForUser(user.id, 10),
           serverTimeMs: Math.floor(clock()),
           plans: plans.public(),
+          paymentConfigured: payments.keyConfigured(),
         });
         return;
       }

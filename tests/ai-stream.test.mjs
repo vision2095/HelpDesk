@@ -268,10 +268,11 @@ test("model normalization maps legacy mockup IDs to fast production models and p
   assert.equal(normalizeModel("openai", "default"), "gpt-4o-mini");
   assert.equal(normalizeModel("openai", "gpt-4o"), "gpt-4o");
 
-  assert.equal(normalizeModel("gemini", "gemini-3.8-flash"), "gemini-1.5-flash");
-  assert.equal(normalizeModel("gemini", "gemini-2.5-flash"), "gemini-1.5-flash");
-  assert.equal(normalizeModel("gemini", ""), "gemini-1.5-flash");
-  assert.equal(normalizeModel("gemini", "gemini-2.0-flash"), "gemini-2.0-flash");
+  assert.equal(normalizeModel("gemini", "gemini-3.8-flash"), "gemini-3.5-flash-lite");
+  assert.equal(normalizeModel("gemini", "gemini-2.5-flash"), "gemini-3.5-flash-lite");
+  assert.equal(normalizeModel("gemini", "gemini-1.5-flash"), "gemini-3.5-flash-lite");
+  assert.equal(normalizeModel("gemini", ""), "gemini-3.5-flash-lite");
+  assert.equal(normalizeModel("gemini", "gemini-3.5-flash-lite"), "gemini-3.5-flash-lite");
 
   assert.equal(normalizeModel("anthropic", "claude-sonnet-4-5"), "claude-3-5-haiku-20241022");
   assert.equal(normalizeModel("anthropic", ""), "claude-3-5-haiku-20241022");
@@ -312,5 +313,5 @@ test("generateAnswer transmits normalized high-speed models in upstream request 
   });
 
   assert.equal(bodies[0].model, "gpt-4o-mini");
-  assert.equal(bodies[1].model, "gemini-1.5-flash");
+  assert.equal(bodies[1].model, "gemini-3.5-flash-lite");
 });

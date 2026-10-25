@@ -137,7 +137,7 @@ const defaultMouse = {
 const providers: [Provider, string, string][] = [
   ["openai", "OpenAI (Fast - gpt-4o-mini)", "gpt-4o-mini"],
   ["groq", "Groq (Ultra-Fast - LLaMA 3.3)", "llama-3.3-70b-versatile"],
-  ["gemini", "Google Gemini (Fast - 1.5-flash)", "gemini-1.5-flash"],
+  ["gemini", "Google Gemini (Fast - 3.5-flash-lite)", "gemini-3.5-flash-lite"],
   ["anthropic", "Anthropic (Fast - Haiku 3.5)", "claude-3-5-haiku-20241022"],
   ["deepseek", "DeepSeek (V3 Chat)", "deepseek-chat"],
   ["local", "Local LLM", "llama3.2"],

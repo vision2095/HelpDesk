@@ -7,7 +7,7 @@ export const providers = {
   },
   gemini: {
     url: "https://generativelanguage.googleapis.com/v1beta/openai",
-    model: "gemini-1.5-flash",
+    model: "gemini-3.5-flash-lite",
   },
   anthropic: {
     url: "https://api.anthropic.com/v1",
