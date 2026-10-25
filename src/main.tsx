@@ -754,7 +754,9 @@ function App() {
   const providerSwitchBusy = useRef(false);
   const cycleProvider = () =>
     run(async () => {
-      if (!settingsDraft || providerSwitchBusy.current || chatBusyRef.current)
+      const currentSettings =
+        settingsDraft || stateRef.current?.settings || state?.settings;
+      if (!currentSettings || providerSwitchBusy.current || chatBusyRef.current)
         return;
       providerSwitchBusy.current = true;
       try {
@@ -768,11 +770,11 @@ function App() {
         ];
         const next =
           providers[
-            (providers.indexOf(settingsDraft.provider) + 1) % providers.length
+            (providers.indexOf(currentSettings.provider) + 1) % providers.length
           ];
         const result = await api<{ models: { id: string }[] }>("model.list", {
           provider: next,
-          localBaseUrl: settingsDraft.localBaseUrl,
+          localBaseUrl: currentSettings.localBaseUrl,
         });
         if (!result.models?.length)
           throw new Error(
@@ -785,21 +787,23 @@ function App() {
     });
   const cycleModel = () =>
     run(async () => {
-      if (!settingsDraft || providerSwitchBusy.current || chatBusyRef.current)
+      const currentSettings =
+        settingsDraft || stateRef.current?.settings || state?.settings;
+      if (!currentSettings || providerSwitchBusy.current || chatBusyRef.current)
         return;
       providerSwitchBusy.current = true;
       try {
-        const provider = settingsDraft.provider;
+        const provider = currentSettings.provider;
         const result = await api<{ models: { id: string }[] }>("model.list", {
           provider,
-          localBaseUrl: settingsDraft.localBaseUrl,
+          localBaseUrl: currentSettings.localBaseUrl,
         });
         if (!result.models?.length)
           throw new Error(
             "No models returned. Connect to a provider before cycling models.",
           );
         const index = result.models.findIndex(
-          (m) => m.id === settingsDraft.model,
+          (m) => m.id === currentSettings.model,
         );
         await saveSettingsPatch({
           model: result.models[(index + 1) % result.models.length].id,
@@ -887,7 +891,7 @@ function App() {
       run(() =>
         saveSettingsPatch({
           opacity: Math.max(
-            0,
+            0.15,
             Math.min(
               1,
               (stateRef.current?.settings.opacity ?? 1) +
@@ -1482,22 +1486,24 @@ function App() {
     }
   }
   function handleOpacityChange(op: number) {
-    if (!settingsDraft) return;
-    const opacity = Math.max(0, Math.min(1, op));
-    const next = { ...settingsDraft, opacity };
+    const base = settingsDraft || stateRef.current?.settings || state?.settings;
+    if (!base) return;
+    const opacity = Math.max(0.15, Math.min(1, op));
+    const next = { ...base, opacity };
     setSettingsDraft(next);
     if (opacityTimer.current) clearTimeout(opacityTimer.current);
     opacityTimer.current = setTimeout(() => {
       void run(async () => {
         await saveSettingsPatch({ opacity });
       });
-    }, 250);
+    }, 150);
   }
   async function handleToggleStealth() {
-    if (!settingsDraft) return;
+    const base = settingsDraft || stateRef.current?.settings || state?.settings;
+    if (!base) return;
     const next = {
-      ...settingsDraft,
-      captureProtection: !settingsDraft.captureProtection,
+      ...base,
+      captureProtection: !base.captureProtection,
     };
     setSettingsDraft(next);
     await saveSettingsPatch({ captureProtection: next.captureProtection });
@@ -2306,10 +2312,12 @@ function App() {
     onToggleView: (v: "assistant" | "browser") => setFloatingView(v),
     renderBrowser: <WorkspaceBrowser onError={fail} />,
     onToggleInterviewLayout: () => {
-      if (!settingsDraft) return;
+      const base =
+        settingsDraft || stateRef.current?.settings || state?.settings;
+      if (!base) return;
       const nextLayout =
-        settingsDraft.interviewLayout === "compact" ? "full" : "compact";
-      setSettingsDraft({ ...settingsDraft, interviewLayout: nextLayout });
+        base.interviewLayout === "compact" ? "full" : "compact";
+      setSettingsDraft({ ...base, interviewLayout: nextLayout });
       void saveSettingsPatch({ interviewLayout: nextLayout });
     },
     onCycleProvider: cycleProvider,
@@ -4386,20 +4394,20 @@ function App() {
                   Window opacity{" "}
                   {!desktop && <span className="desktop-tag-pill">Desktop App Only</span>}
                   <span className="muted">
-                    {Math.round(settingsDraft.opacity * 100)}%
+                    {Math.max(15, Math.round(settingsDraft.opacity * 100))}%
                   </span>
                   <input
                     type="range"
-                    min="0"
+                    min="15"
                     max="100"
                     step="1"
                     disabled={!desktop}
-                    value={Math.round(settingsDraft.opacity * 100)}
+                    value={Math.max(15, Math.round(settingsDraft.opacity * 100))}
                     onChange={(e) =>
                       setSettingsDraft({
                         ...settingsDraft,
                         opacity: Math.max(
-                          0,
+                          0.15,
                           Math.min(1, Number(e.target.value) / 100),
                         ),
                       })

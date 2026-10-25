@@ -337,7 +337,7 @@ export function OverlayView({
     <div
       className={`hintlens-overlay-shell ${opacity <= 0.2 ? "ghost-mode" : ""} ${interviewLayout === "compact" ? "compact-interview-mode" : ""}`}
       style={{
-        backgroundColor: `rgba(15, 23, 42, ${Math.max(0, opacity)})`,
+        backgroundColor: `rgba(15, 23, 42, ${Math.max(0.15, opacity)})`,
       }}
       onMouseDownCapture={() => {
         window.lens?.invoke?.("desktop.focusWindow")?.catch?.(() => {});
@@ -1171,7 +1171,7 @@ export function OverlayView({
           <div className="bg-opacity-control">
             <span className="bg-label">BG</span>
             <div className="opacity-preset-pills">
-              {[100, 80, 60, 40, 0].map((val) => (
+              {[100, 80, 60, 40, 20].map((val) => (
                 <button
                   key={val}
                   type="button"
@@ -1179,20 +1179,20 @@ export function OverlayView({
                   onClick={() => onOpacityChange(val / 100)}
                   title={`Set opacity to ${val}%`}
                 >
-                  {val === 0 ? "0%" : `${val}%`}
+                  {`${val}%`}
                 </button>
               ))}
             </div>
-            <span className="bg-val-text">{Math.round(opacity * 100)}%</span>
+            <span className="bg-val-text">{Math.max(15, Math.round(opacity * 100))}%</span>
             <input
               type="range"
-              min={0}
+              min={15}
               max={100}
               step={1}
-              value={Math.round(opacity * 100)}
+              value={Math.max(15, Math.round(opacity * 100))}
               onChange={(e) => onOpacityChange(Number(e.target.value) / 100)}
               className="bg-slider-track"
-              title="Continuous cursor opacity (0% - 100%)"
+              title="Continuous cursor opacity (15% - 100%)"
             />
           </div>
 
