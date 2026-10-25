@@ -13,12 +13,15 @@ import {
   Clipboard,
   Clock,
   Code2,
+  Copy,
   Download,
+  FileDown,
   FileText,
   FolderOpen,
   History,
   ImagePlus,
   KeyRound,
+  Laptop,
   Layers,
   Loader2,
   Maximize2,
@@ -228,6 +231,65 @@ function IconButton({
     </button>
   );
 }
+function CodeBlock({ code, language }: { code: string; language: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="code-block-wrapper">
+      <div className="code-block-header">
+        <span>{language || "code"}</span>
+        <button
+          type="button"
+          className="code-copy-btn"
+          onClick={() => {
+            navigator.clipboard.writeText(code);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+          }}
+        >
+          {copied ? <Check size={12} /> : <Copy size={12} />}
+          {copied ? "Copied" : "Copy code"}
+        </button>
+      </div>
+      <pre><code>{code}</code></pre>
+    </div>
+  );
+}
+
+function PageNav({
+  current,
+  onNavigate,
+  isDesktop,
+}: {
+  current: string;
+  onNavigate: (p: string) => void;
+  isDesktop: boolean;
+}) {
+  const items = [
+    ...(!isDesktop ? [{ id: "home", label: "Landing Home", icon: Globe }] : []),
+    { id: "workspace", label: "Assistant", icon: Aperture },
+    { id: "profiles", label: "Profiles", icon: UserRound },
+    { id: "sessions", label: "Session History", icon: History },
+    { id: "downloads", label: "Desktop Downloads", icon: Download },
+    { id: "settings", label: "Settings", icon: Settings2 },
+    { id: "account", label: "Account & Cloud", icon: ShieldCheck },
+  ];
+  return (
+    <div className="quick-nav-bar" role="navigation" aria-label="Quick page navigation">
+      {items.map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          className={`quick-nav-pill ${current === item.id ? "active" : ""}`}
+          onClick={() => onNavigate(item.id)}
+        >
+          <item.icon size={13} />
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function App() {
   const [state, setState] = useState<State | null>(null),
     [desktopShortcuts, setDesktopShortcuts] =
@@ -242,6 +304,7 @@ function App() {
     [toast, setToast] = useState(""),
     [error, setError] = useState(""),
     [search, setSearch] = useState(""),
+    [sessionFilter, setSessionFilter] = useState("all"),
     [hintlensSettingsOpen, setHintlensSettingsOpen] = useState(false),
     [hintlensSettingsTab, setHintlensSettingsTab] = useState("Model"),
     [authModalOpen, setAuthModalOpen] = useState(false),
@@ -2403,6 +2466,7 @@ function App() {
               </div>
             ) : (
               <>
+                <PageNav current="workspace" onNavigate={navigate} isDesktop={desktop} />
                 <div className="page-heading">
                   <div>
                     <div className="eyebrow">
@@ -2902,14 +2966,27 @@ function App() {
                             ))}
                           </div>
                           {!keyCount && (
-                            <button
-                              className="key-nudge"
-                              onClick={() => navigate("settings")}
-                            >
-                              <KeyRound size={14} />
-                              Connect an AI provider to get started
-                              <ChevronRight size={14} />
-                            </button>
+                            <div className="download-portal-hero" style={{ marginTop: "24px", textAlign: "left" }}>
+                              <div className="site-kicker" style={{ marginBottom: "8px" }}>
+                                <span />
+                                READY TO BEGIN
+                              </div>
+                              <h3 style={{ margin: "0 0 8px", fontSize: "17px", color: "#f3f5ed" }}>
+                                Connect your AI provider or local model
+                              </h3>
+                              <p style={{ margin: "0 0 16px", fontSize: "13px", color: "#9aa698", lineHeight: 1.5 }}>
+                                LensDesk works directly with your OpenAI, Anthropic, Gemini, Groq, DeepSeek, or local Ollama endpoints. Your keys stay encrypted on your device.
+                              </p>
+                              <button
+                                type="button"
+                                className="download-action-btn primary"
+                                style={{ width: "auto", display: "inline-flex", padding: "10px 18px", fontSize: "12px" }}
+                                onClick={() => navigate("settings")}
+                              >
+                                <KeyRound size={14} />
+                                Open Settings & Connect Provider
+                              </button>
+                            </div>
                           )}
                         </div>
                       ) : (
@@ -3004,6 +3081,14 @@ function App() {
                                       </a>
                                     ),
                                     img: () => null,
+                                    code: ({ node, inline, className, children, ...props }: any) => {
+                                      const match = /language-(\w+)/.exec(className || "");
+                                      const text = String(children).replace(/\n$/, "");
+                                      if (!inline && (match || text.includes("\n"))) {
+                                        return <CodeBlock language={match ? match[1] : "code"} code={text} />;
+                                      }
+                                      return <code className={className} {...props}>{children}</code>;
+                                    },
                                   }}
                                 >
                                   {m.content}
@@ -3037,7 +3122,17 @@ function App() {
                             <div className="markdown">
                               <ReactMarkdown
                                 remarkPlugins={[remarkGfm]}
-                                components={{ img: () => null }}
+                                components={{
+                                  img: () => null,
+                                  code: ({ node, inline, className, children, ...props }: any) => {
+                                    const match = /language-(\w+)/.exec(className || "");
+                                    const text = String(children).replace(/\n$/, "");
+                                    if (!inline && (match || text.includes("\n"))) {
+                                      return <CodeBlock language={match ? match[1] : "code"} code={text} />;
+                                    }
+                                    return <code className={className} {...props}>{children}</code>;
+                                  },
+                                }}
                               >
                                 {streamingText}
                               </ReactMarkdown>
@@ -3254,20 +3349,80 @@ function App() {
         {page === "admin" && <Admin />}
         {page === "sessions" && (
           <div className="content-page">
+            <PageNav current="sessions" onNavigate={navigate} isDesktop={desktop} />
             <div className="page-heading">
               <div>
-                <div className="eyebrow">PICK UP WHERE YOU LEFT OFF</div>
-                <h1>Every conversation, kept.</h1>
-                <p>Your notes, transcripts, and answers, together.</p>
+                <div className="site-kicker">
+                  <span />
+                  CONVERSATION ARCHIVE
+                </div>
+                <h1>Every conversation, kept<span>.</span></h1>
+                <p>Your notes, transcripts, and answers, safely archived.</p>
               </div>
-              <button
-                className="button primary"
-                onClick={() => setModal("new")}
-              >
-                <Plus size={17} />
-                New session
-              </button>
+              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                {state.sessions.length > 0 && (
+                  <button
+                    type="button"
+                    className="button secondary"
+                    onClick={() => {
+                      const blob = new Blob(
+                        [JSON.stringify(state.sessions, null, 2)],
+                        { type: "application/json" },
+                      );
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `lensdesk_sessions_${new Date().toISOString().slice(0, 10)}.json`;
+                      a.click();
+                      setTimeout(() => URL.revokeObjectURL(url), 1000);
+                      notify("Exported all sessions to JSON file.");
+                    }}
+                  >
+                    <Download size={15} />
+                    Export All (JSON)
+                  </button>
+                )}
+                <button
+                  className="button primary"
+                  onClick={() => setModal("new")}
+                >
+                  <Plus size={17} />
+                  New session
+                </button>
+              </div>
             </div>
+
+            <div className="session-filter-row">
+              {[
+                { id: "all", label: `All (${state.sessions.length})` },
+                {
+                  id: "open",
+                  label: `Open (${state.sessions.filter((s) => !s.endedAt).length})`,
+                },
+                {
+                  id: "completed",
+                  label: `Completed (${state.sessions.filter((s) => Boolean(s.endedAt)).length})`,
+                },
+                {
+                  id: "coding",
+                  label: `Coding (${state.sessions.filter((s) => s.mode === "coding").length})`,
+                },
+                {
+                  id: "system-design",
+                  label: `System Design (${state.sessions.filter((s) => s.mode === "system-design").length})`,
+                },
+              ].map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  className={`session-filter-btn ${sessionFilter === f.id ? "active" : ""}`}
+                  onClick={() => setSessionFilter(f.id)}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
             <div className="list-toolbar">
               <div className="search-box">
                 <Search size={17} />
@@ -3278,21 +3433,33 @@ function App() {
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
-              <span>{state.sessions.length} sessions</span>
+              <span className="local-tag">
+                <ShieldCheck size={14} />
+                {state.sessions.length} sessions encrypted locally
+              </span>
             </div>
             <div className="session-list">
               {state.sessions
-                .filter((s) =>
-                  [
-                    s.title,
-                    s.notes,
-                    s.transcript,
-                    ...s.messages.map((m) => m.content),
-                  ]
-                    .join(" ")
-                    .toLowerCase()
-                    .includes(search.toLowerCase()),
-                )
+                .filter((s) => {
+                  const matchesSearch =
+                    !search.trim() ||
+                    [
+                      s.title,
+                      s.notes,
+                      s.transcript,
+                      ...s.messages.map((m) => m.content),
+                    ]
+                      .join(" ")
+                      .toLowerCase()
+                      .includes(search.toLowerCase());
+                  if (!matchesSearch) return false;
+                  if (sessionFilter === "open") return !s.endedAt;
+                  if (sessionFilter === "completed") return Boolean(s.endedAt);
+                  if (sessionFilter === "coding") return s.mode === "coding";
+                  if (sessionFilter === "system-design")
+                    return s.mode === "system-design";
+                  return true;
+                })
                 .map((s) => (
                   <button
                     className="session-card"
@@ -3380,12 +3547,16 @@ function App() {
         )}
         {page === "profiles" && (
           <div className="content-page">
+            <PageNav current="profiles" onNavigate={navigate} isDesktop={desktop} />
             <div className="page-heading">
               <div>
-                <div className="eyebrow">CONTEXT THAT SOUNDS LIKE YOU</div>
-                <h1>Bring your experience.</h1>
+                <div className="site-kicker">
+                  <span />
+                  INTERVIEW & WORK PERSONAS
+                </div>
+                <h1>Bring your experience<span>.</span></h1>
                 <p>
-                  Give your assistant the details that make answers relevant.
+                  Give your assistant the details, resume context, and role requirements that make answers relevant.
                 </p>
               </div>
               <button
@@ -3398,6 +3569,106 @@ function App() {
                 <Plus size={17} />
                 New profile
               </button>
+            </div>
+
+            <div className="template-picker-section">
+              <div className="site-kicker" style={{ marginBottom: "6px" }}>
+                <span />
+                QUICK-START PRE-CONFIGURED TEMPLATES
+              </div>
+              <div className="template-chips-grid">
+                <button
+                  type="button"
+                  className="template-chip-card"
+                  onClick={() => {
+                    setProfileDraft({
+                      id: uid(),
+                      name: "Senior Software Engineer",
+                      role: "Staff / Senior Software Engineer",
+                      company: "Tech Lead",
+                      resume: "10+ years designing distributed systems, low-latency microservices, cloud infrastructure, and database optimization. Expert in C++, Go, TypeScript, and AWS/GCP.",
+                      jobDescription: "Seeking senior engineering leaders capable of scaling multi-tenant distributed platforms, driving architectural decisions, mentoring team members, and solving complex algorithmic challenges. Focus on optimal algorithms, time/space complexity (Big-O), edge cases, and robust production trade-offs.",
+                    });
+                    setConfirmProfileDelete(false);
+                    notify("Loaded Senior Software Engineer template.");
+                  }}
+                >
+                  <Code2 size={20} className="template-chip-icon" />
+                  <div>
+                    <strong>Coding & Algorithms Copilot</strong>
+                    <span>Senior engineer context with time/space complexity focus.</span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  className="template-chip-card"
+                  onClick={() => {
+                    setProfileDraft({
+                      id: uid(),
+                      name: "System Design Architect",
+                      role: "Principal Cloud Architect",
+                      company: "Distributed Systems",
+                      resume: "Architected high-throughput pipelines processing 500k+ events/sec. Deep expertise in event-driven streaming (Kafka), distributed caches (Redis), relational and NoSQL partitioning.",
+                      jobDescription: "Lead system design interviews focusing on scalability, load balancing, caching tiers, data storage schemas, and resilience. Structure responses into: 1) Requirements & Scope, 2) Capacity Estimations, 3) High-Level Architecture, 4) Component Deep Dives, 5) Trade-offs.",
+                    });
+                    setConfirmProfileDelete(false);
+                    notify("Loaded System Design Architect template.");
+                  }}
+                >
+                  <Layers size={20} className="template-chip-icon" />
+                  <div>
+                    <strong>System Design Architect</strong>
+                    <span>Scalable architecture, trade-offs, and data pipelines.</span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  className="template-chip-card"
+                  onClick={() => {
+                    setProfileDraft({
+                      id: uid(),
+                      name: "Executive Meeting Scribe",
+                      role: "Executive Chief of Staff",
+                      company: "Executive Operations",
+                      resume: "Corporate strategist and executive scribe specializing in high-stakes boardroom meetings, strategy reviews, and technical cross-functional summits.",
+                      jobDescription: "Produce concise, bulleted executive briefings, highlighted decision logs, action items with assigned owners, and risk assessments. Keep summaries ultra-crisp, highlight actionable commitments, and omit conversational filler.",
+                    });
+                    setConfirmProfileDelete(false);
+                    notify("Loaded Meeting Scribe template.");
+                  }}
+                >
+                  <AudioLines size={20} className="template-chip-icon" />
+                  <div>
+                    <strong>Live Meeting Scribe</strong>
+                    <span>Action items, decision logs, and concise executive takeaways.</span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  className="template-chip-card"
+                  onClick={() => {
+                    setProfileDraft({
+                      id: uid(),
+                      name: "Leadership & STAR Interview",
+                      role: "Engineering Manager / Director",
+                      company: "Leadership",
+                      resume: "Led multiple high-performing engineering teams. Champion of engineering culture, conflict resolution, career development, and hiring excellence.",
+                      jobDescription: "Answer behavioral interview questions using the STAR framework (Situation, Task, Action, Result) with strong leadership focus. Highlight ownership, measurable business outcomes, empathy, and collaborative conflict resolution.",
+                    });
+                    setConfirmProfileDelete(false);
+                    notify("Loaded Leadership template.");
+                  }}
+                >
+                  <UserRound size={20} className="template-chip-icon" />
+                  <div>
+                    <strong>STAR Behavioral Copilot</strong>
+                    <span>Situation, Task, Action, Result structured storytelling.</span>
+                  </div>
+                </button>
+              </div>
             </div>
             <div className="profile-layout">
               <div className="profile-list">
@@ -3595,11 +3866,15 @@ function App() {
         )}
         {page === "settings" && settingsDraft && (
           <div className="content-page settings-page">
+            <PageNav current="settings" onNavigate={navigate} isDesktop={desktop} />
             <div className="page-heading">
               <div>
-                <div className="eyebrow">MAKE YOURSELF AT HOME</div>
-                <h1>Your assistant, your way.</h1>
-                <p>Choose your models, add your keys, and set the tone.</p>
+                <div className="site-kicker">
+                  <span />
+                  PREFERENCES & MODELS
+                </div>
+                <h1>Your assistant, your way<span>.</span></h1>
+                <p>Choose your models, configure API keys, and customize assistant behavior.</p>
               </div>
               <span className="local-tag">
                 <ShieldCheck size={15} />
@@ -3875,12 +4150,16 @@ function App() {
                 </label>
                 <div className="toggle-row">
                   <div>
-                    <strong>Keep window on top</strong>
-                    <p>Keep your workspace within reach.</p>
+                    <strong>
+                      Keep window on top
+                      {!desktop && <span className="desktop-tag-pill">Desktop App Only</span>}
+                    </strong>
+                    <p>Keep your workspace pinned above all other windows.</p>
                   </div>
                   <input
                     type="checkbox"
                     aria-label="Keep window on top"
+                    disabled={!desktop}
                     checked={settingsDraft.alwaysOnTop}
                     onChange={(e) =>
                       setSettingsDraft({
@@ -3892,10 +4171,12 @@ function App() {
                 </div>
                 <div className="toggle-row">
                   <div>
-                    <strong>Protect window from capture</strong>
+                    <strong>
+                      Protect window from capture
+                      {!desktop && <span className="desktop-tag-pill">Desktop App Only</span>}
+                    </strong>
                     <p>
-                      Requests OS capture exclusion. Some macOS capture apps can
-                      still capture it.
+                      Requests OS capture exclusion. Protects private notes and AI answers from screen recording.
                     </p>
                   </div>
                   <input
@@ -3913,6 +4194,7 @@ function App() {
                 </div>
                 <label>
                   Window opacity{" "}
+                  {!desktop && <span className="desktop-tag-pill">Desktop App Only</span>}
                   <span className="muted">
                     {Math.round(settingsDraft.opacity * 100)}%
                   </span>
@@ -3921,6 +4203,7 @@ function App() {
                     min="0"
                     max="100"
                     step="1"
+                    disabled={!desktop}
                     value={Math.round(settingsDraft.opacity * 100)}
                     onChange={(e) =>
                       setSettingsDraft({
@@ -4006,77 +4289,217 @@ function App() {
         )}
         {page === "downloads" && (
           <div className="content-page">
+            <PageNav current="downloads" onNavigate={navigate} isDesktop={desktop} />
             <div className="page-heading">
               <div>
-                <div className="eyebrow">
-                  A SMALL WINDOW. A LITTLE MORE CLARITY.
+                <div className="site-kicker">
+                  <span />
+                  NATIVE DESKTOP APPLICATIONS
                 </div>
-                <h1>At home on your desktop.</h1>
-                <p>LensDesk is built for macOS and Windows.</p>
+                <h1>Direct Desktop Downloads<span>.</span></h1>
+                <p>
+                  Experience the true OS-level floating overlay, global hotkeys,
+                  and stealth click-through with our native Windows and macOS applications.
+                </p>
               </div>
               <Monitor size={44} strokeWidth={1} />
             </div>
+
+            <div className="download-grid-cards">
+              <article className="download-card-featured">
+                <span className="download-card-badge">RECOMMENDED</span>
+                <div>
+                  <div className="download-card-title">
+                    <Laptop size={24} style={{ color: "var(--site-accent, #d8f56b)" }} />
+                    <h3>Windows Installer</h3>
+                  </div>
+                  <p className="download-card-desc">
+                    Complete native x64 Windows installer with Start menu integration,
+                    desktop shortcut, and automatic WebView2 bootstrapping.
+                  </p>
+                  <div className="download-card-meta">
+                    <span>Windows 10 & 11 (64-bit)</span>
+                    <span>·</span>
+                    <span>1.15 MB Setup.exe</span>
+                  </div>
+                </div>
+                <a
+                  className="download-action-btn primary"
+                  href="https://github.com/VivekGitNinja/LensDesk2.0/releases/download/v2.0.0/LensDesk-2.0.0-Setup.exe"
+                  download="LensDesk-2.0.0-Setup.exe"
+                >
+                  <Download size={16} />
+                  Download Installer (.exe)
+                </a>
+              </article>
+
+              <article className="download-card-featured">
+                <span className="download-card-badge" style={{ background: "rgba(255,255,255,0.08)", color: "#e5ede3" }}>
+                  PORTABLE
+                </span>
+                <div>
+                  <div className="download-card-title">
+                    <FolderOpen size={24} style={{ color: "#9aa698" }} />
+                    <h3>Windows Portable</h3>
+                  </div>
+                  <p className="download-card-desc">
+                    Standalone archive that requires no installation or administrator rights.
+                    Extract anywhere or run directly from a USB drive.
+                  </p>
+                  <div className="download-card-meta">
+                    <span>Windows 10 & 11 (64-bit)</span>
+                    <span>·</span>
+                    <span>1.06 MB ZIP</span>
+                  </div>
+                </div>
+                <a
+                  className="download-action-btn secondary"
+                  href="https://github.com/VivekGitNinja/LensDesk2.0/releases/download/v2.0.0/LensDesk-2.0.0-Windows-x64.zip"
+                  download="LensDesk-2.0.0-Windows-x64.zip"
+                >
+                  <Download size={16} />
+                  Download Portable (.zip)
+                </a>
+              </article>
+
+              <article className="download-card-featured">
+                <span className="download-card-badge" style={{ background: "rgba(255,255,255,0.08)", color: "#e5ede3" }}>
+                  MACOS
+                </span>
+                <div>
+                  <div className="download-card-title">
+                    <Aperture size={24} style={{ color: "#9aa698" }} />
+                    <h3>macOS Universal</h3>
+                  </div>
+                  <p className="download-card-desc">
+                    Standard Apple disk image supporting both Apple Silicon (M1/M2/M3/M4)
+                    and Intel-based Mac computers.
+                  </p>
+                  <div className="download-card-meta">
+                    <span>macOS 12+ (Monterey, Sonoma, Sequoia)</span>
+                    <span>·</span>
+                    <span>DMG</span>
+                  </div>
+                </div>
+                <a
+                  className="download-action-btn secondary"
+                  href="/downloads/LensDesk-2.0.0-macOS.dmg"
+                  download="LensDesk-2.0.0-macOS.dmg"
+                >
+                  <Download size={16} />
+                  Download macOS (.dmg)
+                </a>
+              </article>
+            </div>
+
+            <section className="form-card" style={{ marginBottom: "30px" }}>
+              <div className="form-heading">
+                <h2>
+                  <Sparkles size={18} />
+                  Why the Desktop App is Better
+                </h2>
+              </div>
+              <div style={{ overflowX: "auto" }}>
+                <table className="feature-matrix-table">
+                  <thead>
+                    <tr>
+                      <th>Capability</th>
+                      <th>Installed Desktop App</th>
+                      <th>Web Browser Version</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td><strong>Floating Overlay Window</strong></td>
+                      <td style={{ color: "var(--site-accent, #d8f56b)" }}>✓ OS-wide hardware-accelerated overlay</td>
+                      <td style={{ color: "#9aa698" }}>✗ Restricted to desktop app</td>
+                    </tr>
+                    <tr>
+                      <td><strong>Global Keyboard Shortcuts</strong></td>
+                      <td style={{ color: "var(--site-accent, #d8f56b)" }}>✓ Works anywhere across entire OS</td>
+                      <td style={{ color: "#9aa698" }}>Only when website tab is focused</td>
+                    </tr>
+                    <tr>
+                      <td><strong>Stealth & Click-Through</strong></td>
+                      <td style={{ color: "var(--site-accent, #d8f56b)" }}>✓ Native transparent window click-through</td>
+                      <td style={{ color: "#9aa698" }}>✗ Not possible in web browsers</td>
+                    </tr>
+                    <tr>
+                      <td><strong>Direct Screen Snip</strong></td>
+                      <td style={{ color: "var(--site-accent, #d8f56b)" }}>✓ Silent background screen capture</td>
+                      <td style={{ color: "#9aa698" }}>Requires permission popup every time</td>
+                    </tr>
+                    <tr>
+                      <td><strong>Encrypted Offline Storage</strong></td>
+                      <td style={{ color: "var(--site-accent, #d8f56b)" }}>✓ Native OS DPAPI / Keychain encryption</td>
+                      <td style={{ color: "#9aa698" }}>Browser IndexedDB / Session storage</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
             <div className="guide-grid">
               <section className="form-card">
                 <div className="form-heading">
                   <h2>
                     <Command size={19} />
-                    Stay in your flow
+                    Desktop Shortcuts
                   </h2>
                 </div>
                 <div className="shortcut">
                   <div>
                     <strong>Show or hide LensDesk</strong>
-                    <p>Return to your workspace from anywhere.</p>
+                    <p>Summon or dismiss your floating copilot from anywhere.</p>
                   </div>
                   <kbd>{keyLabel("toggle")}</kbd>
                 </div>
                 <div className="shortcut">
                   <div>
-                    <strong>Capture a screenshot</strong>
-                    <p>Choose a screen or window to attach.</p>
+                    <strong>Capture screenshot</strong>
+                    <p>Instant silent screen snip attached to your conversation.</p>
                   </div>
                   <kbd>{keyLabel("capture")}</kbd>
                 </div>
                 <div className="shortcut">
                   <div>
-                    <strong>Toggle floating window</strong>
-                    <p>A compact, always-on-top workspace.</p>
+                    <strong>Toggle floating overlay</strong>
+                    <p>Switch between full workspace and compact stealth window.</p>
                   </div>
                   <kbd>{keyLabel("overlay")}</kbd>
                 </div>
                 <p className="field-help">
-                  Global shortcuts work in the desktop app. Your operating
-                  system may reserve a shortcut for another app.
+                  Shortcuts can be fully customized in Settings.
                 </p>
               </section>
+
               <section className="form-card">
                 <div className="form-heading">
                   <h2>
                     <Play size={18} />
-                    Your first conversation
+                    Quick Installation Guide
                   </h2>
                 </div>
                 {[
                   [
-                    "Connect a provider",
-                    "Open Settings, save an API key, then save your chosen model.",
+                    "1. Download Release",
+                    "Choose either the Setup installer (.exe) or Portable ZIP for Windows.",
                   ],
                   [
-                    "Bring your context",
-                    "Create a profile with your resume and target role.",
+                    "2. Run & Launch",
+                    "Run the installer or extract the ZIP. Windows SmartScreen may show an initial prompt—click More Info -> Run Anyway.",
                   ],
                   [
-                    "Start a session",
-                    "Ask a question, attach a screenshot, or record your microphone.",
+                    "3. Configure or Bring Keys",
+                    "Open Settings to add your OpenAI, Anthropic, Gemini, DeepSeek, or local Ollama key.",
                   ],
                   [
-                    "Keep what matters",
-                    "Export a session as Markdown or PDF, or back up your full workspace.",
+                    "4. Summon with Hotkey",
+                    "Press Ctrl+Shift+Space (or Alt+Space) anytime to bring up your assistant while working.",
                   ],
-                ].map(([title, text], i) => (
+                ].map(([title, text]) => (
                   <div className="guide-step" key={title}>
-                    <span>{i + 1}</span>
+                    <span style={{ background: "rgba(216,245,107,0.15)", color: "var(--site-accent, #d8f56b)" }}>✓</span>
                     <div>
                       <strong>{title}</strong>
                       <p>{text}</p>
@@ -4085,33 +4508,6 @@ function App() {
                 ))}
               </section>
             </div>
-            <section className="desktop-note">
-              <ShieldCheck size={22} />
-              <div>
-                <h3>Local by default. Connected when you ask.</h3>
-                <p>
-                  Your sessions stay on your device. Questions, selected
-                  screenshots, profile context, and recordings are sent to your
-                  chosen AI provider when used. On macOS, enable Microphone and
-                  Screen Recording access in System Settings. Local desktop use
-                  works with your own API keys. Sign in under Account & cloud to
-                  sync with your hosted service or manage a subscription.
-                </p>
-              </div>
-            </section>
-            <section className="form-card">
-              <h2>Install a built release</h2>
-              <p>
-                macOS: open the LensDesk DMG and drag the app to Applications.
-                Windows: run the LensDesk installer and choose your installation
-                folder.
-              </p>
-              <p className="field-help">
-                Release installers must be built and signed for distribution.
-                This workspace includes native build commands and CI packaging;
-                a public download service is not configured.
-              </p>
-            </section>
           </div>
         )}
         {desktop &&

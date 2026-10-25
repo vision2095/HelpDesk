@@ -109,12 +109,48 @@ export function Home({ navigate }: HomeProps) {
   const plans: any[] = Array.isArray(info?.accessPlans)
     ? info.accessPlans
     : [];
-  const builds = BUILDS.map((build) => {
+  const detectedBuilds = BUILDS.map((build) => {
     const artifact = info?.downloads?.[build.key];
     return artifact?.url ? { ...build, artifact } : null;
   }).filter(Boolean) as Array<
     (typeof BUILDS)[number] & { artifact: any }
   >;
+  const fallbackBuilds = [
+    {
+      key: "windows",
+      platform: "Windows",
+      variant: "Setup Installer (Recommended)",
+      detail: "Windows 10 & 11 · 64-bit EXE",
+      artifact: {
+        url: "https://github.com/VivekGitNinja/LensDesk2.0/releases/download/v2.0.0/LensDesk-2.0.0-Setup.exe",
+        version: "2.0.0",
+        size: 1155422,
+      },
+    },
+    {
+      key: "windows-portable",
+      platform: "Windows",
+      variant: "Portable Archive",
+      detail: "Windows 10 & 11 · 64-bit ZIP",
+      artifact: {
+        url: "https://github.com/VivekGitNinja/LensDesk2.0/releases/download/v2.0.0/LensDesk-2.0.0-Windows-x64.zip",
+        version: "2.0.0",
+        size: 1063786,
+      },
+    },
+    {
+      key: "mac-arm64",
+      platform: "macOS",
+      variant: "Apple silicon",
+      detail: "M-series Macs · DMG",
+      artifact: {
+        url: "/downloads/LensDesk-2.0.0-arm64.dmg",
+        version: "2.0.0",
+        size: 94000000,
+      },
+    },
+  ];
+  const builds = detectedBuilds.length ? detectedBuilds : fallbackBuilds;
   const publicReady = Boolean(info) || publicError;
   const isMac =
     typeof navigator !== "undefined" &&
@@ -136,7 +172,7 @@ export function Home({ navigate }: HomeProps) {
 
   function openWorkspace() {
     setMenuOpen(false);
-    navigate(signedIn ? "workspace" : "account");
+    navigate("workspace");
   }
 
   return (
@@ -163,58 +199,67 @@ export function Home({ navigate }: HomeProps) {
             <a href="#product" onClick={() => setMenuOpen(false)}>
               Product
             </a>
-            <a href="#workflow" onClick={() => setMenuOpen(false)}>
-              How it works
-            </a>
-            <a href="#workshop" onClick={() => setMenuOpen(false)}>
-              Web workshop
-            </a>
+            <button
+              type="button"
+              className="site-nav-text"
+              onClick={() => {
+                setMenuOpen(false);
+                navigate("workspace");
+              }}
+            >
+              Assistant
+            </button>
+            <button
+              type="button"
+              className="site-nav-text"
+              onClick={() => {
+                setMenuOpen(false);
+                navigate("profiles");
+              }}
+            >
+              Profiles
+            </button>
+            <button
+              type="button"
+              className="site-nav-text"
+              onClick={() => {
+                setMenuOpen(false);
+                navigate("downloads");
+              }}
+            >
+              Downloads
+            </button>
+            <button
+              type="button"
+              className="site-nav-text"
+              onClick={() => {
+                setMenuOpen(false);
+                navigate("settings");
+              }}
+            >
+              Settings
+            </button>
             <a href="#pricing" onClick={() => setMenuOpen(false)}>
               Pricing
-            </a>
-            <a href="#download" onClick={() => setMenuOpen(false)}>
-              Download
             </a>
           </nav>
 
           <div className="site-nav-actions">
-            {signedIn ? (
-              <>
-                <button
-                  type="button"
-                  className="site-nav-text"
-                  onClick={() => navigate("account")}
-                >
-                  Account
-                </button>
-                <button
-                  type="button"
-                  className="site-nav-button"
-                  onClick={openWorkspace}
-                >
-                  Open workspace
-                  <ArrowUpRight size={14} />
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  className="site-nav-text"
-                  onClick={() => navigate("account")}
-                >
-                  {accountReady ? "Sign in" : "Workspace"}
-                </button>
-                <button
-                  type="button"
-                  className="site-nav-button"
-                  onClick={() => jump("download")}
-                >
-                  Download
-                  <Download size={14} />
-                </button>
-              </>
-            )}
+            <button
+              type="button"
+              className="site-nav-text"
+              onClick={() => navigate("account")}
+            >
+              {signedIn ? "Account" : "Sign in"}
+            </button>
+            <button
+              type="button"
+              className="site-nav-button"
+              onClick={openWorkspace}
+            >
+              Open Assistant
+              <ArrowUpRight size={14} />
+            </button>
           </div>
 
           <button
@@ -233,28 +278,31 @@ export function Home({ navigate }: HomeProps) {
             <a href="#product" onClick={() => setMenuOpen(false)}>
               Product
             </a>
-            <a href="#workflow" onClick={() => setMenuOpen(false)}>
-              How it works
-            </a>
-            <a href="#workshop" onClick={() => setMenuOpen(false)}>
-              Web workshop
-            </a>
+            <button type="button" onClick={() => { setMenuOpen(false); navigate("workspace"); }}>
+              Assistant Workspace
+            </button>
+            <button type="button" onClick={() => { setMenuOpen(false); navigate("profiles"); }}>
+              Interview Profiles
+            </button>
+            <button type="button" onClick={() => { setMenuOpen(false); navigate("downloads"); }}>
+              Desktop Downloads
+            </button>
+            <button type="button" onClick={() => { setMenuOpen(false); navigate("settings"); }}>
+              Settings
+            </button>
             <a href="#pricing" onClick={() => setMenuOpen(false)}>
               Pricing
             </a>
-            <a href="#download" onClick={() => setMenuOpen(false)}>
-              Download
-            </a>
             <div className="site-mobile-menu-actions">
               <button type="button" onClick={() => navigate("account")}>
-                {signedIn ? "Account" : "Sign in"}
+                {signedIn ? "Account & Cloud" : "Sign in"}
               </button>
               <button
                 type="button"
                 className="primary"
                 onClick={openWorkspace}
               >
-                {signedIn ? "Open workspace" : "Create an account"}
+                Open Assistant
                 <ArrowUpRight size={14} />
               </button>
             </div>
@@ -842,7 +890,11 @@ export function Home({ navigate }: HomeProps) {
                           >
                             <Download size={15} />
                             Download{" "}
-                            {build.platform === "Windows" ? "ZIP" : "DMG"}
+                            {build.key === "windows"
+                              ? "Setup (.exe)"
+                              : build.key === "windows-portable"
+                                ? "ZIP (.zip)"
+                                : "DMG"}
                           </a>
                         </article>
                       ))}
