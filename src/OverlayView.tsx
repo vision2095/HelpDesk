@@ -889,6 +889,41 @@ export function OverlayView({
                 </div>
               )}
 
+              {/* Error Alert */}
+              {error && (
+                <div
+                  className="hintlens-error-banner"
+                  style={{
+                    margin: "8px 0",
+                    padding: "10px 14px",
+                    borderRadius: "8px",
+                    background: "rgba(239, 68, 68, 0.15)",
+                    border: "1px solid rgba(239, 68, 68, 0.35)",
+                    color: "#fca5a5",
+                    fontSize: "12px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "10px",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: 1 }}>
+                    <span style={{ fontSize: "14px" }}>⚠️</span>
+                    <span style={{ lineHeight: 1.4 }}>{error}</span>
+                  </div>
+                  {onConnectProvider && (
+                    <button
+                      type="button"
+                      className="toolbar-btn secondary"
+                      onClick={onConnectProvider}
+                      style={{ fontSize: "11px", padding: "4px 8px", whiteSpace: "nowrap" }}
+                    >
+                      Settings
+                    </button>
+                  )}
+                </div>
+              )}
+
               <div ref={messagesEndRef} />
             </div>
 

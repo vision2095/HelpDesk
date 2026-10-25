@@ -982,9 +982,36 @@ function App() {
         return;
       }
 
-      // Native registration is the sole owner for remaining shortcuts on desktop; renderer fallbacks caused
-      // duplicate actions and ignored rebinding when another window had focus.
-      if (desktop || isInput) return;
+      // Plain Shift+A: Get Answer / Snap & Solve if not typing in an input field
+      if (
+        !isInput &&
+        e.shiftKey &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.altKey &&
+        e.key.toLowerCase() === "a"
+      ) {
+        e.preventDefault();
+        shortcutHandlerRef.current("getAnswer");
+        return;
+      }
+
+      // Plain Shift+S: Quick screen capture if not typing in an input field
+      if (
+        !isInput &&
+        e.shiftKey &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.altKey &&
+        e.key.toLowerCase() === "s"
+      ) {
+        e.preventDefault();
+        shortcutHandlerRef.current("capture");
+        return;
+      }
+
+      // If focused inside an input or textarea, let normal typing occur without triggering global hotkeys
+      if (isInput) return;
       const activeHotkeys = {
         ...DEFAULT_HINTLENS_HOTKEYS,
         ...desktopPreferences?.shortcuts,
@@ -1361,6 +1388,12 @@ function App() {
     }
     const defaultSolvePrompt =
       "Answer the question shown on the screen directly, accurately, and concisely. State the final answer or solution first, followed by brief key points only if necessary.";
+
+    // If user already typed a question, solve directly with that question!
+    if (images.length === 0 && question.trim()) {
+      await send(question.trim(), undefined, [], { webSearch: false });
+      return;
+    }
 
     // If we already have captured screenshots in the bundle, solve with them!
     if (images.length > 0) {
@@ -2216,9 +2249,22 @@ function App() {
     images,
     onRemoveImage: (idx: number) =>
       setImages((old) => old.filter((_, i) => i !== idx)),
-    provider: settingsDraft?.provider || "openai",
-    model: settingsDraft?.model || "gpt-4o-mini",
-    providerReady: state.settings.provider === "local" || Boolean(state.keys[state.settings.provider]),
+    provider: (() => {
+      const draftP = settingsDraft?.provider;
+      const stateP = state.settings?.provider;
+      if (draftP && (state.keys?.[draftP] || state.ownedKeys?.[draftP])) return draftP;
+      if (stateP && (state.keys?.[stateP] || state.ownedKeys?.[stateP])) return stateP;
+      const anyWithKey = (Object.keys(state.keys || {}) as Provider[]).find((p) => Boolean(state.keys[p] || state.ownedKeys?.[p]));
+      return anyWithKey || draftP || stateP || "gemini";
+    })(),
+    model: settingsDraft?.model || state.settings?.model || "gemini-2.5-flash",
+    providerReady: Boolean(
+      (settingsDraft?.provider === "local" || state.settings?.provider === "local") ||
+      (settingsDraft?.provider && (state.keys?.[settingsDraft.provider] || state.ownedKeys?.[settingsDraft.provider])) ||
+      (state.settings?.provider && (state.keys?.[state.settings.provider] || state.ownedKeys?.[state.settings.provider])) ||
+      Object.values(state.keys || {}).some(Boolean) ||
+      Object.values(state.ownedKeys || {}).some(Boolean)
+    ),
     onConnectProvider: () => {
       setFloatingView("assistant");
       setHintlensSettingsTab("Model");

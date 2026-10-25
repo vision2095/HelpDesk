@@ -162,26 +162,32 @@ function registerShortcuts(preferences) {
   const register = (action, accelerator) => {
     const callback = callbacks[action];
     if (!callback || !accelerator) return;
+    let registered = false;
     try {
-      if (globalShortcut.register(accelerator, callback)) return;
+      if (globalShortcut.register(accelerator, callback)) registered = true;
     } catch {}
     // If accelerator lacks primary modifier (e.g. "Shift+T"), also register with CommandOrControl
     // so the user can use either Shift+T (via hook) or Cmd+Shift+T (via globalShortcut).
     if (!/(command|control|ctrl|cmd|alt|option)/i.test(accelerator)) {
       try {
-        globalShortcut.register(`CommandOrControl+${accelerator}`, callback);
+        if (globalShortcut.register(`CommandOrControl+${accelerator}`, callback)) registered = true;
       } catch {}
     }
     if (!gkeys.isAvailable() && (!isMac || systemPreferences.isTrustedAccessibilityClient(false))) {
       gkeys.start({ getWindow: () => mainWindow });
     }
-    // Windows hook fallback: uiohook still sees the key when RegisterHotKey
-    // is unavailable or the combination is owned by another app.
+    // Also register combo on uiohook so global key works even when globalShortcut has conflicts
     if (gkeys.isAvailable()) {
       gkeys.registerCombo(accelerator, callback);
-      return;
+      const plain = accelerator.replace(/^CommandOrControl\+/i, "").replace(/^Ctrl\+/i, "");
+      if (plain && plain !== accelerator) {
+        gkeys.registerCombo(plain, callback);
+      }
+      registered = true;
     }
-    errors.push(`${action}: ${accelerator} is unavailable`);
+    if (!registered) {
+      errors.push(`${action}: ${accelerator} is unavailable`);
+    }
   };
   for (const [action, accelerator] of Object.entries(
     preferences?.shortcuts || {},
@@ -203,6 +209,10 @@ function registerShortcuts(preferences) {
       gkeys.registerCombo("CommandOrControl+Shift+H", toggleHide);
       gkeys.registerCombo("Shift+M", toggleClickThrough);
       gkeys.registerCombo("Control+Shift+Space", toggleTyping);
+      if (callbacks.getAnswer) gkeys.registerCombo("Shift+A", callbacks.getAnswer);
+      if (callbacks.capture) gkeys.registerCombo("Shift+S", callbacks.capture);
+      if (callbacks.autoType) gkeys.registerCombo("Shift+T", callbacks.autoType);
+      if (callbacks.undo) gkeys.registerCombo("Shift+U", callbacks.undo);
     } else {
       try {
         if (!globalShortcut.register("Shift+H", toggleHide) && process.platform !== "darwin") {
@@ -235,6 +245,10 @@ function registerShortcuts(preferences) {
 
     combo("Control+Shift+Space", "typing", toggleTyping);
     combo("Control+Alt+L", "click", toggleClickThrough);
+    if (callbacks.getAnswer) combo("Shift+A", "getAnswer", callbacks.getAnswer);
+    if (callbacks.capture) combo("Shift+S", "capture", callbacks.capture);
+    if (callbacks.autoType) combo("Shift+T", "autoType", callbacks.autoType);
+    if (callbacks.undo) combo("Shift+U", "undo", callbacks.undo);
 
     // SEB ka hook hamare hook se aage aa jata hai — 20s me apna hook dobara install karo
     setInterval(() => { if (gkeys.isAvailable()) gkeys.rehook(); }, 20000);

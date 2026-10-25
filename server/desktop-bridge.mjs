@@ -3,17 +3,19 @@ export function createDesktopBridge({ service, cloud }) {
   const pending = new Set();
   let remoteState = null,
     checkedAt = 0;
+
   async function remote(force = false) {
-    if (!force && Date.now() - checkedAt < 30000) return remoteState;
+    if (!force && Date.now() - checkedAt < 30000 && remoteState) return remoteState;
     checkedAt = Date.now();
     try {
       const account = await cloud.request("cloud.state");
-      remoteState = account.user ? await cloud.request("state") : null;
+      remoteState = account?.user ? await cloud.request("state") : null;
     } catch {
       remoteState = null;
     }
     return remoteState;
   }
+
   return {
     close() {
       service.close?.();
@@ -24,21 +26,99 @@ export function createDesktopBridge({ service, cloud }) {
     },
     async dispatch(action, payload = {}, options = {}) {
       if (action === "state") {
-        const local = await service.dispatch("state"),
-          hosted = await remote();
+        const local = await service.dispatch("state");
+        const hosted = await remote();
+        if (!hosted) {
+          return {
+            ...local,
+            cloudConnected: false,
+          };
+        }
+
+        // Merge keys and owned keys
+        const mergedKeys = {
+          ...(local.keys || {}),
+          ...(hosted.keys || {}),
+        };
+        const mergedOwnedKeys = {
+          ...(local.ownedKeys || {}),
+          ...(hosted.ownedKeys || {}),
+        };
+
+        // Determine effective provider & model:
+        // If local provider does not have a key, but hosted does (e.g. user added Gemini on web),
+        // adopt the hosted provider and model seamlessly.
+        let effectiveSettings = { ...local.settings };
+        const localHasKey = Boolean(local.keys?.[local.settings?.provider] || local.ownedKeys?.[local.settings?.provider]);
+        const hostedHasKey = Boolean(hosted.keys?.[hosted.settings?.provider] || hosted.ownedKeys?.[hosted.settings?.provider]);
+
+        if (!localHasKey && hostedHasKey) {
+          effectiveSettings.provider = hosted.settings.provider;
+          effectiveSettings.model = hosted.settings.model;
+          // Persist the synced provider into local database so local stays consistent
+          try {
+            await service.dispatch("settings.save", {
+              ...local.settings,
+              provider: hosted.settings.provider,
+              model: hosted.settings.model,
+            });
+          } catch {}
+        } else if (!localHasKey) {
+          // If neither current local nor current hosted matches, check if any provider in mergedKeys has a key
+          const anyActiveProvider = Object.keys(mergedKeys).find((p) => Boolean(mergedKeys[p]));
+          if (anyActiveProvider && anyActiveProvider !== "local") {
+            effectiveSettings.provider = anyActiveProvider;
+            if (hosted.settings?.provider === anyActiveProvider) {
+              effectiveSettings.model = hosted.settings.model;
+            }
+          }
+        }
+
+        // Merge profiles: prefer hosted custom profiles combined with local
+        const profileMap = new Map();
+        for (const p of hosted.profiles || []) profileMap.set(p.id, p);
+        for (const p of local.profiles || []) profileMap.set(p.id, p);
+        const mergedProfiles = Array.from(profileMap.values());
+
+        // Merge sessions: combine hosted and local sessions by id
+        const sessionMap = new Map();
+        for (const s of hosted.sessions || []) sessionMap.set(s.id, s);
+        for (const s of local.sessions || []) sessionMap.set(s.id, s);
+        const mergedSessions = Array.from(sessionMap.values()).sort(
+          (a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""),
+        );
+
         return {
           ...local,
-          cloudConnected: Boolean(hosted),
-          keys: hosted
-            ? Object.fromEntries(
-                Object.keys(local.keys).map((p) => [
-                  p,
-                  local.keys[p] || hosted.keys[p],
-                ]),
-              )
-            : local.keys,
+          settings: effectiveSettings,
+          cloudConnected: true,
+          keys: mergedKeys,
+          ownedKeys: mergedOwnedKeys,
+          profiles: mergedProfiles,
+          sessions: mergedSessions,
         };
       }
+
+      if (action === "key.save") {
+        const localResult = await service.dispatch("key.save", payload, options);
+        try {
+          await cloud.request("key.save", payload, options);
+        } catch {}
+        checkedAt = 0;
+        remoteState = null;
+        return localResult;
+      }
+
+      if (action === "settings.save") {
+        const localResult = await service.dispatch("settings.save", payload, options);
+        try {
+          await cloud.request("settings.save", payload, options);
+        } catch {}
+        checkedAt = 0;
+        remoteState = null;
+        return localResult;
+      }
+
       if (
         ["session.save", "session.delete"].includes(action) &&
         pending.has(payload.id)
@@ -62,17 +142,39 @@ export function createDesktopBridge({ service, cloud }) {
       }
       if (action !== "chat" && action !== "transcribe")
         return service.dispatch(action, payload, options);
-      const local = await service.dispatch("state"),
-        provider =
-          action === "chat"
-            ? local.settings.provider
-            : local.settings.transcriptionProvider;
+
+      const local = await service.dispatch("state");
+      let provider =
+        action === "chat"
+          ? local.settings.provider
+          : local.settings.transcriptionProvider;
+
       if (action === "chat" && provider === "local")
         return service.dispatch(action, payload, options);
+
       if (await service.dispatch("key.owned", { provider }))
         return service.dispatch(action, payload, options);
+
       const hosted = await remote(true);
       if (!hosted) return service.dispatch(action, payload, options);
+
+      // Determine active provider for cloud chat:
+      // If local.settings.provider has no key in hosted, but hosted has a key configured for its provider (e.g. Gemini),
+      // use the configured provider so the chat never fails on a missing key.
+      if (action === "chat") {
+        const hasKeyForCurrent = Boolean(hosted.keys?.[provider] || hosted.ownedKeys?.[provider]);
+        if (!hasKeyForCurrent) {
+          if (hosted.keys?.[hosted.settings?.provider] || hosted.ownedKeys?.[hosted.settings?.provider]) {
+            provider = hosted.settings.provider;
+          } else {
+            const anyActive = Object.keys(hosted.keys || {}).find(
+              (p) => Boolean(hosted.keys[p] || hosted.ownedKeys?.[p]),
+            );
+            if (anyActive) provider = anyActive;
+          }
+        }
+      }
+
       if (action === "transcribe") {
         await cloud.request("settings.save", {
           ...local.settings,
@@ -80,6 +182,7 @@ export function createDesktopBridge({ service, cloud }) {
         });
         return cloud.request("transcribe", payload);
       }
+
       const session = local.sessions.find((s) => s.id === payload.sessionId);
       if (!session) throw new Error("Session not found.");
       if (pending.has(session.id))
@@ -93,10 +196,20 @@ export function createDesktopBridge({ service, cloud }) {
             version:
               hosted.profiles.find((p) => p.id === profile.id)?.version || 0,
           });
+
+        const activeModel =
+          provider === hosted.settings.provider
+            ? hosted.settings.model
+            : local.settings.model;
+
         await cloud.request("settings.save", {
+          ...hosted.settings,
           ...local.settings,
+          provider,
+          model: activeModel,
           version: hosted.settings.version,
         });
+
         const existing = hosted.sessions.find((s) => s.id === session.id);
         const messages = existing
           ? [
@@ -113,6 +226,7 @@ export function createDesktopBridge({ service, cloud }) {
           messages,
           version: existing?.version || 0,
         });
+
         const result = await cloud.request("chat", payload, options);
         const saved = await service.dispatch("session.applyRemote", {
           session: result,
