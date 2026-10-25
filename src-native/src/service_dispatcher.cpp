@@ -1234,7 +1234,7 @@ void ServiceDispatcher::HandleChat(const json& payload, DispatchResponseCallback
     if (provider != "local") {
         apiKey = m_storageMgr ? m_storageMgr->GetApiKey(provider) : "";
         if (apiKey.empty()) {
-            std::string fallbackAnswer = "LensDesk 2.0 Native Windows Host is active and ready.\n\n"
+            std::string fallbackAnswer = "LensDesk 2.0 Native Windows Host is fully active with native C++20 + DirectComposition.\n\n"
                                          "• Direct3D 11.1 hardware-accelerated transparent HUD\n"
                                          "• Dear ImGui native HUD overlay with status pill\n"
                                          "• Microsoft Edge WebView2 hosting React 19\n"
