@@ -2,6 +2,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { execFileSync } = require("node:child_process");
 
 let ResEdit = null;
 try {
@@ -11,6 +12,20 @@ try {
 }
 
 module.exports = async function fixWinVersionInfo(context) {
+  if (context.electronPlatformName === "darwin") {
+    const appName = `${context.packager.appInfo.productFilename}.app`;
+    const appPath = path.join(context.appOutDir, appName);
+    if (fs.existsSync(appPath)) {
+      try {
+        console.log("[macOS afterPack] Deep signing app bundle with ad-hoc signature:", appPath);
+        execFileSync("codesign", ["--force", "--deep", "-s", "-", appPath], { stdio: "inherit" });
+        console.log("[macOS afterPack] Successfully signed:", appPath);
+      } catch (err) {
+        console.warn("[macOS afterPack] Code signing warning:", err.message);
+      }
+    }
+    return;
+  }
   if (!ResEdit || context.electronPlatformName !== "win32") return;
   const { NtExecutable, NtExecutableResource, Resource } = ResEdit;
   const exeName = `${context.packager.appInfo.productFilename}.exe`;

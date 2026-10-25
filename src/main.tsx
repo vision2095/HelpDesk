@@ -4699,19 +4699,19 @@ function App() {
                 {[
                   [
                     "1. Download Release",
-                    "Choose either the Setup installer (.exe) or Portable ZIP for Windows.",
+                    "Choose either macOS Apple Silicon / Intel DMG or the Windows installer (.exe) / portable (.zip).",
                   ],
                   [
                     "2. Run & Launch",
-                    "Run the installer or extract the ZIP. Windows SmartScreen may show an initial prompt—click More Info -> Run Anyway.",
+                    "macOS: Open the DMG and drag LensDesk into Applications. If macOS Gatekeeper shows a prompt, run 'xattr -cr /Applications/LensDesk.app' in Terminal or right-click -> Open. Windows: Click More Info -> Run Anyway.",
                   ],
                   [
-                    "3. Configure or Bring Keys",
-                    "Open Settings to add your OpenAI, Anthropic, Gemini, DeepSeek, or local Ollama key.",
+                    "3. Automatic Key Sync",
+                    "Your cloud API keys and profiles sync automatically when signed in. You can also set or change keys directly in Settings.",
                   ],
                   [
                     "4. Summon with Hotkey",
-                    "Press Ctrl+Shift+Space (or Alt+Space) anytime to bring up your assistant while working.",
+                    "Press Shift+A (Get Answer) or Shift+S (Capture) anytime to instantly get answers while working.",
                   ],
                 ].map(([title, text]) => (
                   <div className="guide-step" key={title}>
