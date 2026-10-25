@@ -368,7 +368,10 @@ function App() {
     [clickThrough, setClickThrough] = useState(false),
     [workspaceWebSearch, setWorkspaceWebSearch] = useState(false),
     [detectedQuestion, setDetectedQuestion] = useState<string | null>(null),
-    [autoAnswer, setAutoAnswer] = useState(true);
+    [autoAnswer, setAutoAnswer] = useState(true),
+    [modelTesting, setModelTesting] = useState(false),
+    [quickKeyModal, setQuickKeyModal] = useState<Provider | null>(null),
+    [quickKeyInput, setQuickKeyInput] = useState("");
   const pipWindowRef = useRef<Window | null>(null);
   const shortcutHandlerRef = useRef<(action: string) => void>(() => {});
   const autoAnswerRef = useRef(true);
@@ -512,6 +515,77 @@ function App() {
       if (window.lens) await api("desktop.appearance");
       return next;
     });
+  }
+
+  async function testCurrentModel(providerOverride?: Provider) {
+    if (modelTesting || !state) return;
+    const targetProvider = providerOverride || state.settings.provider;
+    if (targetProvider === "local") {
+      notify("Local model server selected (localhost:11434/v1).");
+      return;
+    }
+    const hasKey = state.keys[targetProvider];
+    if (!hasKey) {
+      setQuickKeyModal(targetProvider);
+      return;
+    }
+    setModelTesting(true);
+    try {
+      const activeModel =
+        state.settings.model ||
+        providerMeta[targetProvider]?.model ||
+        "gpt-4.1-mini";
+      const result: any = await api("model.test", {
+        provider: targetProvider,
+        model: activeModel,
+      });
+      if (result?.ok) {
+        notify(`✓ ${providerMeta[targetProvider].label} connection confirmed!`);
+      } else {
+        notify(`Connection test response: ${JSON.stringify(result)}`);
+      }
+    } catch (err: any) {
+      notify(`Connection test: ${err.message || String(err)}`);
+    } finally {
+      setModelTesting(false);
+    }
+  }
+
+  async function handleWorkshopProviderChange(newProvider: Provider) {
+    await saveSettingsPatch({
+      provider: newProvider,
+      model: providerMeta[newProvider].model,
+    });
+    setSettingsDraft((old) =>
+      old
+        ? {
+            ...old,
+            provider: newProvider,
+            model: providerMeta[newProvider].model,
+          }
+        : old,
+    );
+    notify(`${providerMeta[newProvider].label} set as default active provider.`);
+  }
+
+  async function handleQuickKeySave() {
+    if (!quickKeyModal || !quickKeyInput.trim()) return;
+    const p = quickKeyModal;
+    const key = quickKeyInput.trim();
+    try {
+      await api("key.save", { provider: p, key });
+      await saveSettingsPatch({
+        provider: p,
+        model: providerMeta[p].model,
+      });
+      await refresh();
+      setQuickKeyModal(null);
+      setQuickKeyInput("");
+      notify(`${providerMeta[p].label} API key saved and activated!`);
+      void testCurrentModel(p);
+    } catch (err: any) {
+      notify(`Error saving key: ${err.message || String(err)}`);
+    }
   }
   async function run(fn: () => Promise<unknown>) {
     try {
@@ -2958,10 +3032,64 @@ function App() {
                         Assistant<span className="ai-badge">AI</span>
                       </div>
                       <div className="answer-actions">
-                        <span className="model-label">
-                          <span />
-                          {providerMeta[state.settings.provider].label}
-                        </span>
+                        <div className="workshop-model-bar">
+                          <select
+                            aria-label="Active AI Provider"
+                            className="workshop-provider-select"
+                            value={state.settings.provider}
+                            onChange={(e) =>
+                              run(() =>
+                                handleWorkshopProviderChange(
+                                  e.target.value as Provider,
+                                ),
+                              )
+                            }
+                          >
+                            {Object.entries(providerMeta)
+                              .filter(([id]) => id !== "local" || desktop)
+                              .map(([id, meta]) => {
+                                const isReady =
+                                  id === "local" ||
+                                  Boolean(state.keys[id as Provider]);
+                                return (
+                                  <option key={id} value={id}>
+                                    {meta.label} {isReady ? "✓ Ready" : "· Key needed"}
+                                  </option>
+                                );
+                              })}
+                          </select>
+                          {state.settings.provider !== "local" &&
+                          !state.keys[state.settings.provider] ? (
+                            <button
+                              type="button"
+                              className="workshop-add-key-pill"
+                              onClick={() =>
+                                setQuickKeyModal(state.settings.provider)
+                              }
+                              title="Add API Key for this provider"
+                            >
+                              + Add Key
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="workshop-test-btn"
+                              disabled={modelTesting}
+                              onClick={() => void testCurrentModel()}
+                              title="Test API connection with this provider"
+                            >
+                              {modelTesting ? (
+                                <>
+                                  <Loader2 size={12} className="spin" /> Testing…
+                                </>
+                              ) : (
+                                <>
+                                  <Sparkles size={12} /> Test
+                                </>
+                              )}
+                            </button>
+                          )}
+                        </div>
                         <IconButton
                           label="Export Markdown"
                           disabled={!current || sessionDisabled}
@@ -4848,6 +4976,59 @@ function App() {
           triggerButton={desktopPreferences?.mouse?.trigger === "right" ? 2 : 1}
           onSelectAction={handleRadialAction}
         />
+      )}
+      {quickKeyModal && (
+        <div
+          className="quick-key-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setQuickKeyModal(null);
+          }}
+        >
+          <div className="quick-key-card" role="dialog" aria-modal="true">
+            <h3>
+              <span>Enter {providerMeta[quickKeyModal].label} Key</span>
+              <IconButton
+                label="Close"
+                onClick={() => setQuickKeyModal(null)}
+              >
+                <X size={16} />
+              </IconButton>
+            </h3>
+            <p>
+              Paste your API key below. It will be encrypted at rest with
+              AES-256-GCM and set as your active default provider.
+            </p>
+            <input
+              type="password"
+              className="quick-key-input"
+              placeholder={`Paste ${providerMeta[quickKeyModal].label} API key...`}
+              value={quickKeyInput}
+              autoFocus
+              onChange={(e) => setQuickKeyInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void handleQuickKeySave();
+                if (e.key === "Escape") setQuickKeyModal(null);
+              }}
+            />
+            <div className="quick-key-actions">
+              <button
+                type="button"
+                className="button secondary"
+                onClick={() => setQuickKeyModal(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="button primary"
+                disabled={!quickKeyInput.trim()}
+                onClick={() => void handleQuickKeySave()}
+              >
+                Save & Set Default
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

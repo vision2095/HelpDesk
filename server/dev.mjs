@@ -1,9 +1,30 @@
 import { respondWithStream } from "./event-stream.mjs";
 import http from "node:http";
 import path from "node:path";
+import fs from "node:fs";
+import { randomBytes } from "node:crypto";
 import { createService } from "./core.mjs";
+import { createVault } from "./cloud/auth.mjs";
+
+const devDataDir = path.resolve(process.env.LENSDESK_DATA_DIR || ".data/browser");
+fs.mkdirSync(devDataDir, { recursive: true, mode: 0o700 });
+const keyPath = path.join(path.resolve(".data/cloud"), "development-master.key");
+let masterKey = "";
+if (fs.existsSync(keyPath)) {
+  masterKey = fs.readFileSync(keyPath, "utf8").trim();
+} else {
+  const localKeyPath = path.join(devDataDir, "master.key");
+  if (!fs.existsSync(localKeyPath)) {
+    fs.writeFileSync(localKeyPath, randomBytes(32).toString("hex"), { mode: 0o600 });
+  }
+  masterKey = fs.readFileSync(localKeyPath, "utf8").trim();
+}
+const vault = createVault(masterKey);
+
 const service = createService({
-  directory: path.resolve(process.env.LENSDESK_DATA_DIR || ".data/browser"),
+  directory: devDataDir,
+  encrypt: vault.encrypt,
+  decrypt: vault.decrypt,
 });
 const allowedOrigins = new Set([
   "http://127.0.0.1:5173",
