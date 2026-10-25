@@ -149,11 +149,22 @@ export function createReleases(directory, origin) {
         return true;
       }
       if (url.pathname.startsWith("/downloads/")) {
-        let platform = url.pathname.split("/")[2];
-        if (platform === "mac-silicon" || platform === "arm64") platform = "mac-arm64";
+        let platform = url.pathname.split("/")[2] || "";
+        if (platform === "mac-silicon" || platform === "arm64" || platform === "mac" || platform === "darwin") platform = "mac-arm64";
         if (platform === "mac-intel" || platform === "x64") platform = "mac-x64";
         if (platform === "win" || platform === "win32") platform = "windows";
-        const artifact = artifacts[platform];
+        let artifact = artifacts[platform];
+        if (!artifact) {
+          artifact = Object.values(artifacts).find(
+            (a) => a.name === platform || path.basename(platform) === a.name || platform.toLowerCase().includes(a.version),
+          );
+        }
+        if (!artifact && platform.toLowerCase().includes("mac")) {
+          artifact = artifacts["mac-arm64"] || artifacts["mac-x64"];
+        }
+        if (!artifact && (platform.toLowerCase().includes("win") || platform.toLowerCase().endsWith(".exe") || platform.toLowerCase().endsWith(".zip") || platform.toLowerCase().endsWith(".msi"))) {
+          artifact = artifacts.windows;
+        }
         if (!artifact) {
           res.writeHead(404);
           res.end("Download is not available for this platform.");

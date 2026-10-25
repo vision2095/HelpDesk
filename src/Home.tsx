@@ -142,11 +142,22 @@ export function Home({ navigate }: HomeProps) {
       key: "mac-arm64",
       platform: "macOS",
       variant: "Apple silicon",
-      detail: "M-series Macs · DMG",
+      detail: "M-series Macs (M1/M2/M3/M4) · DMG",
       artifact: {
-        url: "/downloads/LensDesk-2.0.0-arm64.dmg",
+        url: "/downloads/mac-arm64",
         version: "2.0.0",
-        size: 94000000,
+        size: 142530915,
+      },
+    },
+    {
+      key: "mac-x64",
+      platform: "macOS",
+      variant: "Intel",
+      detail: "Intel Macs · DMG",
+      artifact: {
+        url: "/downloads/mac-x64",
+        version: "2.0.0",
+        size: 146320739,
       },
     },
   ];

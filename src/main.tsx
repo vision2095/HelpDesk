@@ -4506,31 +4506,58 @@ function App() {
               </article>
 
               <article className="download-card-featured">
-                <span className="download-card-badge" style={{ background: "rgba(255,255,255,0.08)", color: "#e5ede3" }}>
-                  MACOS
+                <span className="download-card-badge" style={{ background: "rgba(216,245,107,0.15)", color: "var(--site-accent, #d8f56b)" }}>
+                  MACOS (APPLE SILICON)
                 </span>
                 <div>
                   <div className="download-card-title">
-                    <Aperture size={24} style={{ color: "#9aa698" }} />
-                    <h3>macOS Universal</h3>
+                    <Aperture size={24} style={{ color: "var(--site-accent, #d8f56b)" }} />
+                    <h3>macOS Apple Silicon</h3>
                   </div>
                   <p className="download-card-desc">
-                    Standard Apple disk image supporting both Apple Silicon (M1/M2/M3/M4)
-                    and Intel-based Mac computers.
+                    Native Apple Silicon DMG package optimized for M1, M2, M3, and M4 Macs with native ARM64 performance, floating overlay, and global shortcuts.
                   </p>
                   <div className="download-card-meta">
-                    <span>macOS 12+ (Monterey, Sonoma, Sequoia)</span>
+                    <span>macOS 12+ (Apple Silicon M1/M2/M3/M4)</span>
                     <span>·</span>
-                    <span>DMG</span>
+                    <span>136 MB DMG</span>
+                  </div>
+                </div>
+                <a
+                  className="download-action-btn primary"
+                  href="/downloads/mac-arm64"
+                  download="LensDesk-2.0.0-macOS-Apple-Silicon-arm64.dmg"
+                >
+                  <Download size={16} />
+                  Download Apple Silicon (.dmg)
+                </a>
+              </article>
+
+              <article className="download-card-featured">
+                <span className="download-card-badge" style={{ background: "rgba(255,255,255,0.08)", color: "#e5ede3" }}>
+                  MACOS (INTEL)
+                </span>
+                <div>
+                  <div className="download-card-title">
+                    <Laptop size={24} style={{ color: "#9aa698" }} />
+                    <h3>macOS Intel</h3>
+                  </div>
+                  <p className="download-card-desc">
+                    Native Intel 64-bit DMG package for Intel Core i5, i7, and i9 Mac computers.
+                  </p>
+                  <div className="download-card-meta">
+                    <span>macOS 12+ (Intel 64-bit)</span>
+                    <span>·</span>
+                    <span>140 MB DMG</span>
                   </div>
                 </div>
                 <a
                   className="download-action-btn secondary"
-                  href="/downloads/LensDesk-2.0.0-macOS.dmg"
-                  download="LensDesk-2.0.0-macOS.dmg"
+                  href="/downloads/mac-x64"
+                  download="LensDesk-2.0.0-macOS-Intel-x64.dmg"
                 >
                   <Download size={16} />
-                  Download macOS (.dmg)
+                  Download Intel (.dmg)
                 </a>
               </article>
             </div>

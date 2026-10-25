@@ -31,6 +31,9 @@ import {
   createPayments,
   createRazorpayClient,
 } from "./payments.mjs";
+import { getDatabasePool } from "./postgres-db.mjs";
+import { runPostgresMigrations, importFromSqlite } from "./postgres-migrations.mjs";
+import { createPostgresStore } from "./postgres-store.mjs";
 import { measureAudio } from "../media.mjs";
 const credentials = z.object({
   email: z
@@ -92,6 +95,14 @@ export function createCloudServer({
     audit,
   });
   const desktopSessions = createDesktopSessions({ db: accounts.db, clock, audit });
+  let pgPool = null;
+  let pgStore = null;
+  try {
+    pgPool = getDatabasePool();
+    pgStore = createPostgresStore({ pool: pgPool, clock, plans });
+    runPostgresMigrations(pgPool).catch(() => {});
+    importFromSqlite(pgPool, directory).catch(() => {});
+  } catch {}
   const payments = createPayments({
     db: accounts.db,
     entitlements,
@@ -821,7 +832,7 @@ export function createCloudServer({
       // Desktop login target acquisition. Login never grants protected
       // access without a live entitlement, and an existing active desktop
       // session must either block sign-in or take over explicitly.
-      const acquireDesktop = (res, { desktopUser, payloadBody }) => {
+      const acquireDesktop = async (res, { desktopUser, payloadBody }) => {
         const entitlement = entitlements.authorize(desktopUser.id);
         if (!entitlement) {
           json(res, 403, {
@@ -834,6 +845,31 @@ export function createCloudServer({
           });
           return;
         }
+
+        if (pgStore) {
+          try {
+            const pgSeat = await pgStore.acquireDesktopSeat({
+              userId: desktopUser.id,
+              deviceLabel: String(payloadBody.deviceLabel || "LensDesk desktop").slice(0, 120),
+              os: String(payloadBody.os || "").slice(0, 60),
+              appVersion: String(payloadBody.appVersion || "").slice(0, 40),
+              takeover: payloadBody.takeover === true,
+              deviceId: payloadBody.deviceId || null,
+            });
+            if (pgSeat.takeoverRequired) {
+              json(res, 409, {
+                code: "TAKEOVER_REQUIRED",
+                error:
+                  "This account is already signed in on a desktop device. Confirm takeover to sign out that device and use it here.",
+                existing: pgSeat.existing,
+              });
+              return;
+            }
+          } catch (err) {
+            console.warn("[PG Acquire warning]", err.message);
+          }
+        }
+
         const session = desktopSessions.acquire({
           userId: desktopUser.id,
           deviceLabel: String(payloadBody.deviceLabel || "LensDesk desktop").slice(0, 120),
@@ -975,7 +1011,10 @@ export function createCloudServer({
         return;
       }
       if (action === "auth.logout") {
-        if (rawToken) accounts.logout(rawToken);
+        if (rawToken) {
+          accounts.logout(rawToken);
+          if (pgStore) await pgStore.logoutSession(rawToken);
+        }
         cookie(res, "");
         json(res, 200, { ok: true });
         return;
@@ -1045,7 +1084,7 @@ export function createCloudServer({
           });
           return;
         }
-        acquireDesktop(res, { desktopUser: result.user, payloadBody: payload });
+        await acquireDesktop(res, { desktopUser: result.user, payloadBody: payload });
         return;
       }
       if (action === "desktop.mfa") {
@@ -1060,7 +1099,7 @@ export function createCloudServer({
         mfa.verify(challenged.id, code);
         accounts.logout(challenge);
         accounts.audit(challenged.id, "desktop.mfa_signed_in");
-        acquireDesktop(res, { desktopUser: challenged, payloadBody: payload });
+        await acquireDesktop(res, { desktopUser: challenged, payloadBody: payload });
         return;
       }
       if (action === "desktop.refresh") {
@@ -1170,6 +1209,14 @@ export function createCloudServer({
           });
           return;
         }
+        if (pgStore) {
+          try {
+            await pgStore.desktopHeartbeat({
+              accessToken: rawToken,
+              interviewMode: payload.interviewMode === true,
+            });
+          } catch {}
+        }
         const entitlement = entitlements.authorize(user.id);
         json(res, 200, {
           ok: true,
@@ -1183,6 +1230,11 @@ export function createCloudServer({
         return;
       }
       if (action === "desktop.logout") {
+        if (pgStore && rawToken) {
+          try {
+            await pgStore.desktopLogout(rawToken);
+          } catch {}
+        }
         if (desktopAccess)
           desktopSessions.revoke(desktopAccess.sessionId, "logout");
         if (!desktopAccess && user)
@@ -1375,11 +1427,77 @@ export function createCloudServer({
         json(res, 200, result);
         return;
       }
-      if (action === "account.sessions") {
+      if (action === "account.devices") {
+        if (pgStore) {
+          try {
+            const devData = await pgStore.listDevices(user.id, rawToken);
+            json(res, 200, devData);
+            return;
+          } catch {}
+        }
         json(res, 200, {
+          devices: [],
           sessions: accounts.sessions(user.id, rawToken),
           desktopSessions: desktopSessions.listForUser(user.id, 10),
         });
+        return;
+      }
+      if (action === "account.device.revoke") {
+        const deviceId = z.string().min(1).max(128).parse(payload.deviceId);
+        if (pgStore) {
+          try {
+            const result = await pgStore.revokeDevice(user.id, deviceId);
+            json(res, 200, { ok: true, ...result });
+            return;
+          } catch (err) {
+            json(res, 400, { error: err.message });
+            return;
+          }
+        }
+        json(res, 200, { ok: true });
+        return;
+      }
+      if (action === "account.device.pair") {
+        const deviceId = z.string().min(1).max(128).parse(payload.deviceId);
+        if (pgStore) {
+          try {
+            const currentSession = await pgStore.userForToken(rawToken);
+            const result = await pgStore.pairDevice(user.id, currentSession?.session_id, deviceId, payload.pairingCode);
+            json(res, 200, { ok: true, ...result });
+            return;
+          } catch (err) {
+            json(res, 400, { error: err.message });
+            return;
+          }
+        }
+        json(res, 200, { ok: true });
+        return;
+      }
+      if (action === "account.sessions") {
+        let devInfo = null;
+        if (pgStore) {
+          try {
+            devInfo = await pgStore.listDevices(user.id, rawToken);
+          } catch {}
+        }
+        json(res, 200, {
+          sessions: accounts.sessions(user.id, rawToken),
+          desktopSessions: desktopSessions.listForUser(user.id, 10),
+          devices: devInfo?.devices || [],
+          unassigned: devInfo?.unassigned || [],
+          activeSeat: devInfo?.activeSeat || null,
+        });
+        return;
+      }
+      if (action === "account.sessions.revokeAll") {
+        if (pgStore) {
+          try {
+            await pgStore.revokeAll(user.id);
+          } catch {}
+        }
+        cookie(res, "");
+        const revoked = desktopSessions.revokeForUser(user.id, "user-signout-everywhere");
+        json(res, 200, { ok: true, signedOut: true, revokedCount: revoked });
         return;
       }
       if (action === "account.desktop.revokeAll") {
@@ -1435,6 +1553,11 @@ export function createCloudServer({
           { issueToken: false },
         );
         if (action === "account.sessions.revokeOthers") {
+          if (pgStore) {
+            try {
+              await pgStore.revokeOtherDevices(user.id, rawToken);
+            } catch {}
+          }
           json(res, 200, accounts.revokeOthers(user.id, rawToken));
           return;
         }
@@ -1741,6 +1864,8 @@ export function createCloudServer({
     desktopSessions,
     payments,
     plans,
+    pgStore,
+    pgPool,
     close: async () => {
       clearInterval(sweepTimer);
       await new Promise((resolve) => server.close(resolve));
