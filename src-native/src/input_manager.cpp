@@ -14,17 +14,123 @@ InputManager::~InputManager() {
 bool InputManager::Initialize(HWND hwnd) {
     m_hwnd = hwnd;
 
-    // Register default global hotkeys
-    // 1. Ctrl+Shift+L: Toggle Overlay
-    RegisterHotkey(101, MOD_CONTROL | MOD_SHIFT, 'L', "desktop.overlay");
-    // 2. Ctrl+Shift+S: AI Snip Screen
-    RegisterHotkey(102, MOD_CONTROL | MOD_SHIFT, 'S', "desktop.capture");
-    // 3. Ctrl+Shift+A: AutoType last answer
-    RegisterHotkey(103, MOD_CONTROL | MOD_SHIFT, 'A', "desktop.autoType");
-    // 4. Ctrl+Alt+R: Radial Menu
-    RegisterHotkey(104, MOD_CONTROL | MOD_ALT, 'R', "overlay.radial");
+    // Register standard default global hotkeys
+    RegisterHotkey(101, MOD_CONTROL | MOD_SHIFT, 'L', "toggle");
+    RegisterHotkey(102, MOD_SHIFT, 'H', "hide");
+    RegisterHotkey(103, MOD_CONTROL | MOD_SHIFT, 'S', "capture");
+    RegisterHotkey(104, MOD_CONTROL | MOD_SHIFT, 'O', "overlay");
+    RegisterHotkey(105, MOD_CONTROL | MOD_SHIFT, 'A', "hideAnswer");
+    RegisterHotkey(106, MOD_CONTROL | MOD_SHIFT, 'T', "autoType");
+    RegisterHotkey(107, MOD_CONTROL | MOD_ALT, VK_ESCAPE, "stopTyping");
+    RegisterHotkey(108, MOD_SHIFT, 'M', "clickThrough");
+    RegisterHotkey(109, MOD_CONTROL | MOD_ALT, 'R', "overlay.radial");
 
     return true;
+}
+
+bool InputManager::ParseAccelerator(const std::string& accelerator, UINT& outModifiers, UINT& outVk) {
+    outModifiers = 0;
+    outVk = 0;
+    if (accelerator.empty()) return false;
+
+    std::vector<std::string> parts;
+    std::string current;
+    for (char c : accelerator) {
+        if (c == '+') {
+            if (!current.empty()) {
+                parts.push_back(current);
+                current.clear();
+            }
+        } else if (!std::isspace(static_cast<unsigned char>(c))) {
+            current += c;
+        }
+    }
+    if (!current.empty()) parts.push_back(current);
+    if (parts.empty()) return false;
+
+    for (size_t i = 0; i < parts.size(); ++i) {
+        std::string part = parts[i];
+        std::string lower;
+        for (char c : part) lower += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+        if (lower == "ctrl" || lower == "control" || lower == "commandorcontrol" || lower == "cmdorctrl") {
+            outModifiers |= MOD_CONTROL;
+        } else if (lower == "shift") {
+            outModifiers |= MOD_SHIFT;
+        } else if (lower == "alt" || lower == "option") {
+            outModifiers |= MOD_ALT;
+        } else if (lower == "meta" || lower == "command" || lower == "cmd" || lower == "super" || lower == "win") {
+            outModifiers |= MOD_WIN;
+        } else {
+            // Key
+            if (part.size() == 1) {
+                char c = part[0];
+                if (c >= 'a' && c <= 'z') outVk = static_cast<UINT>('A' + (c - 'a'));
+                else if (c >= 'A' && c <= 'Z') outVk = static_cast<UINT>(c);
+                else if (c >= '0' && c <= '9') outVk = static_cast<UINT>(c);
+                else if (c == '`' || c == '~') outVk = VK_OEM_3;
+                else if (c == '-' || c == '_') outVk = VK_OEM_MINUS;
+                else if (c == '=' || c == '+') outVk = VK_OEM_PLUS;
+                else if (c == '[' || c == '{') outVk = VK_OEM_4;
+                else if (c == ']' || c == '}') outVk = VK_OEM_6;
+                else if (c == '\\' || c == '|') outVk = VK_OEM_5;
+                else if (c == ';' || c == ':') outVk = VK_OEM_1;
+                else if (c == '\'' || c == '\"') outVk = VK_OEM_7;
+                else if (c == ',' || c == '<') outVk = VK_OEM_COMMA;
+                else if (c == '.' || c == '>') outVk = VK_OEM_PERIOD;
+                else if (c == '/' || c == '?') outVk = VK_OEM_2;
+                else if (c == ' ') outVk = VK_SPACE;
+            } else {
+                if (lower == "space") outVk = VK_SPACE;
+                else if (lower == "escape" || lower == "esc") outVk = VK_ESCAPE;
+                else if (lower == "return" || lower == "enter") outVk = VK_RETURN;
+                else if (lower == "tab") outVk = VK_TAB;
+                else if (lower == "backspace") outVk = VK_BACK;
+                else if (lower == "delete" || lower == "del") outVk = VK_DELETE;
+                else if (lower == "insert" || lower == "ins") outVk = VK_INSERT;
+                else if (lower == "home") outVk = VK_HOME;
+                else if (lower == "end") outVk = VK_END;
+                else if (lower == "pageup") outVk = VK_PRIOR;
+                else if (lower == "pagedown") outVk = VK_NEXT;
+                else if (lower == "up") outVk = VK_UP;
+                else if (lower == "down") outVk = VK_DOWN;
+                else if (lower == "left") outVk = VK_LEFT;
+                else if (lower == "right") outVk = VK_RIGHT;
+                else if (lower.size() >= 2 && lower[0] == 'f') {
+                    try {
+                        int fNum = std::stoi(lower.substr(1));
+                        if (fNum >= 1 && fNum <= 24) {
+                            outVk = VK_F1 + (fNum - 1);
+                        }
+                    } catch (...) {}
+                }
+            }
+        }
+    }
+
+    return outVk != 0;
+}
+
+bool InputManager::RegisterAccelerator(int id, const std::string& accelerator, const std::string& actionName) {
+    UINT modifiers = 0;
+    UINT vkCode = 0;
+    if (!ParseAccelerator(accelerator, modifiers, vkCode)) return false;
+    return RegisterHotkey(id, modifiers, vkCode, actionName);
+}
+
+void InputManager::UpdateShortcuts(const json& shortcuts) {
+    if (!m_hwnd || !shortcuts.is_object()) return;
+
+    UnregisterAllHotkeys();
+
+    int nextId = 1000;
+    for (const auto& [action, accValue] : shortcuts.items()) {
+        if (!accValue.is_string()) continue;
+        std::string accelerator = accValue.get<std::string>();
+        if (accelerator.empty()) continue;
+
+        RegisterAccelerator(nextId++, accelerator, action);
+    }
 }
 
 void InputManager::Shutdown() {

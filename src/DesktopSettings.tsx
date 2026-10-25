@@ -578,7 +578,7 @@ export function DesktopSettings({
         className="shortcuts-list"
         style={{ display: "flex", flexDirection: "column", gap: 12 }}
       >
-        {Object.entries(preferences.shortcuts as Record<string, string>).map(
+        {Object.entries((preferences?.shortcuts || {}) as Record<string, string>).map(
           ([action, value]) => {
             const meta = SHORTCUT_LABELS[action] || {
               label: action,
@@ -761,8 +761,10 @@ export function DesktopSettings({
           onClick={async () => {
             setBusy(true);
             try {
-              const res = await api("desktop.preferences.save", preferences);
-              setPreferences(res);
+              const res: any = await api("desktop.preferences.save", preferences);
+              if (res && res.shortcuts) {
+                setPreferences(res);
+              }
               onNotice("Desktop hotkeys and settings saved successfully.");
             } catch (error) {
               onError(error);

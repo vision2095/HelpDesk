@@ -19,7 +19,11 @@ public:
     void Shutdown();
 
     bool RegisterHotkey(int id, UINT modifiers, UINT vkCode, const std::string& actionName);
+    bool RegisterAccelerator(int id, const std::string& accelerator, const std::string& actionName);
+    void UpdateShortcuts(const json& shortcuts);
     void UnregisterAllHotkeys();
+
+    static bool ParseAccelerator(const std::string& accelerator, UINT& outModifiers, UINT& outVk);
 
     LRESULT HandleHotkey(WPARAM wParam, LPARAM lParam);
 

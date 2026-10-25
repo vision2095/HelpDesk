@@ -248,6 +248,29 @@ try {
   assert.ok(authStatus, "auth.status must return auth status object.");
   console.log(`      Auth Status Contract Verified: mode=${authStatus.mode || "local"}`);
 
+  // Test Desktop Preferences & Hotkeys Contract
+  console.log("      Verifying desktop.preferences & hotkey save contracts...");
+  const desktopPrefs = await page.evaluate(() => window.lens.invoke("desktop.preferences"));
+  assert.ok(desktopPrefs && desktopPrefs.shortcuts, "desktop.preferences must return object with shortcuts.");
+  assert.ok(desktopPrefs.shortcuts.toggle, "default shortcuts must include toggle.");
+
+  const savedDesktopPrefs = await page.evaluate(async (p) => {
+    return await window.lens.invoke("desktop.preferences.save", {
+      ...p,
+      shortcuts: { ...p.shortcuts, toggle: "CommandOrControl+Shift+L" }
+    });
+  }, desktopPrefs);
+  assert.ok(savedDesktopPrefs && savedDesktopPrefs.shortcuts, "desktop.preferences.save must return updated preferences.");
+
+  // Test Settings Save returning full State Contract
+  console.log("      Verifying settings.save contract returns full State...");
+  const savedState = await page.evaluate(async () => {
+    return await window.lens.invoke("settings.save", { provider: "local", model: "llama3.2" });
+  });
+  assert.ok(savedState && savedState.settings, "settings.save must return full State object with settings.");
+  assert.ok(Array.isArray(savedState.sessions), "settings.save must return State object with sessions array.");
+  console.log("      Settings & Hotkey Contracts: VERIFIED.");
+
   const finalScreenshot = path.join(EVIDENCE_DIR, "04-contracts-verified.png");
   await page.screenshot({ path: finalScreenshot });
   console.log(`      Contracts Verified. Screenshot: ${finalScreenshot}`);
