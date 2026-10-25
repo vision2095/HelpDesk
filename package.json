@@ -31,6 +31,7 @@
     "format": "prettier --write src server desktop scripts tests *.json *.ts *.md *.yaml",
     "test:packaged": "node scripts/packaged-check.mjs",
     "test:hosted-browser": "node scripts/cloud-browser-check.mjs",
+    "test:audit": "node scripts/e2e-website-full-audit.mjs",
     "test:stream-browser": "node scripts/stream-browser-check.mjs",
     "test:bundles": "node scripts/bundle-check.mjs",
     "test:windows-archive": "node scripts/windows-archive-check.mjs",

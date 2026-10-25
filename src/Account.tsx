@@ -19,16 +19,19 @@ import { Access } from "./Access";
 import { GateAccess } from "./GateAccess";
 import { api } from "./api";
 import { cloud } from "./cloud";
+import { PageNav } from "./PageNav";
 export function Account({
   onError,
   onNotice,
   onRestore,
   onLogout,
+  navigate,
 }: {
   onError: (e: unknown) => void;
   onNotice: (s: string) => void;
   onRestore: (state: any) => void;
   onLogout: () => void;
+  navigate?: (page: string) => void;
 }) {
   const [info, setInfo] = useState<any>(null),
     [url, setUrl] = useState(""),
@@ -153,6 +156,7 @@ export function Account({
       : "Price set by the service operator";
   return (
     <div className="content-page account-page">
+      {navigate && <PageNav current="account" onNavigate={navigate} />}
       <div className="page-heading">
         <div>
           <div className="eyebrow">ONE WORKSPACE. WHEREVER YOU THINK.</div>

@@ -1669,7 +1669,8 @@ export async function startCloud() {
     razorpayKeyId: process.env.RAZORPAY_KEY_ID,
     razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET,
     razorpayWebhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET,
-    adminToken: process.env.ADMIN_TOKEN,
+    adminToken:
+      process.env.ADMIN_TOKEN || (production ? undefined : "lensdesk-admin-token"),
     mailer,
     logger: production
       ? (entry) => console.log(JSON.stringify(entry))
