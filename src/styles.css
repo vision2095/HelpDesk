@@ -5152,7 +5152,8 @@ kbd {
   width: 100%;
   height: 100vh;
   box-sizing: border-box;
-  background: rgba(15, 23, 42, 0.94);
+  background: rgba(13, 17, 13, 0.96);
+  backdrop-filter: blur(20px);
   color: var(--ink, #f1f5f9);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   overflow: hidden;
@@ -5166,8 +5167,8 @@ kbd {
   height: 38px;
   flex-shrink: 0;
   padding: 0 14px;
-  background: rgba(15, 23, 42, 0.98);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(13, 17, 13, 0.98);
+  border-bottom: 1px solid rgba(216, 245, 107, 0.12);
   -webkit-app-region: drag;
 }
 
@@ -5707,7 +5708,7 @@ kbd {
   align-items: center;
   justify-content: space-between;
   padding: 6px 14px;
-  background: rgba(11, 17, 32, 0.95);
+  background: rgba(13, 17, 13, 0.98);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   font-size: 12px;
   flex-shrink: 0;
@@ -5729,8 +5730,8 @@ kbd {
 }
 
 .status-dot.ready {
-  background: #22c55e;
-  box-shadow: 0 0 6px #22c55e;
+  background: #d8f56b;
+  box-shadow: 0 0 8px rgba(216, 245, 107, 0.6);
 }
 
 .status-dot.busy {
@@ -5763,11 +5764,19 @@ kbd {
   cursor: pointer;
   min-width: 0;
   white-space: nowrap;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.provider-status-badge:hover {
+  background: rgba(216, 245, 107, 0.1);
+  color: #d8f56b;
 }
 
 .provider-glyph {
   font-size: 14px;
-  color: #38bdf8;
+  color: #d8f56b;
 }
 
 .provider-glyph.groq {
@@ -5800,7 +5809,7 @@ kbd {
   gap: 10px;
   flex-shrink: 0;
   padding: 8px 14px;
-  background: rgba(15, 23, 42, 0.98);
+  background: rgba(15, 20, 15, 0.98);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -5829,23 +5838,28 @@ kbd {
 }
 
 .toolbar-btn.primary.get-answer {
-  background: #0284c7;
-  color: #ffffff;
-  border-color: #38bdf8;
+  background: #d8f56b;
+  color: #0d110d;
+  border-color: #d8f56b;
+  font-weight: 700;
+  box-shadow: 0 0 12px rgba(216, 245, 107, 0.25);
 }
 
 .toolbar-btn.primary.get-answer:hover {
-  background: #0369a1;
+  background: #bfe645;
+  box-shadow: 0 0 16px rgba(216, 245, 107, 0.45);
 }
 
 .toolbar-btn.secondary {
-  background: #1e293b;
+  background: rgba(255, 255, 255, 0.05);
   color: #f1f5f9;
   border-color: rgba(255, 255, 255, 0.1);
 }
 
 .toolbar-btn.secondary:hover {
-  background: #334155;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(216, 245, 107, 0.35);
+  color: #d8f56b;
 }
 
 .toolbar-btn.secondary.active-typing {
@@ -5967,7 +5981,7 @@ kbd {
   flex-direction: column;
   gap: 6px;
   padding: 8px 14px 10px;
-  background: rgba(11, 17, 32, 0.98);
+  background: rgba(13, 17, 13, 0.98);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   flex-shrink: 0;
   max-height: 120px;
@@ -5985,12 +5999,18 @@ kbd {
   display: flex;
   align-items: center;
   gap: 6px;
-  background: rgba(30, 41, 59, 0.7);
+  background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
   padding: 3px 8px;
   font-size: 11px;
   color: #cbd5e1;
+  transition: all 0.15s ease;
+}
+
+.legend-pill:hover {
+  border-color: rgba(216, 245, 107, 0.4);
+  background: rgba(216, 245, 107, 0.08);
 }
 
 .legend-pill .pill-name {
@@ -5998,24 +6018,24 @@ kbd {
 }
 
 .legend-pill .pill-key {
-  background: rgba(15, 23, 42, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(216, 245, 107, 0.3);
   border-radius: 4px;
   padding: 1px 5px;
   font-size: 10px;
   font-family: inherit;
-  color: #38bdf8;
-  font-weight: 600;
+  color: #d8f56b;
+  font-weight: 700;
 }
 
 .legend-pill.active-green {
-  border-color: #22c55e;
-  background: rgba(34, 197, 94, 0.15);
+  border-color: #d8f56b;
+  background: rgba(216, 245, 107, 0.15);
 }
 
 .legend-pill.active-green .pill-name,
 .legend-pill.active-green .pill-key {
-  color: #22c55e;
+  color: #d8f56b;
 }
 
 /* ========================================================================= */
