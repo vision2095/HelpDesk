@@ -2302,6 +2302,9 @@ function App() {
   if (page === "home") {
     return <Home navigate={navigate} />;
   }
+  if (page === "admin") {
+    return <Admin navigate={navigate} />;
+  }
   return (
     <div className={`app-shell ${desktop ? "desktop-shell" : "web-shell"}`}>
       {regionDialog}
@@ -2327,9 +2330,6 @@ function App() {
             { id: "sessions", label: "Session history", icon: History },
             { id: "profiles", label: "Interview profiles", icon: UserRound },
             { id: "account", label: "Account & cloud", icon: ShieldCheck },
-            ...(!desktop
-              ? [{ id: "admin", label: "Admin console", icon: KeyRound }]
-              : []),
             ...(desktop
               ? [{ id: "browser", label: "Browser", icon: Globe }]
               : []),
@@ -3406,7 +3406,6 @@ function App() {
             navigate={navigate}
           />
         )}
-        {page === "admin" && <Admin navigate={navigate} />}
         {page === "sessions" && (
           <div className="content-page">
             <PageNav current="sessions" onNavigate={navigate} isDesktop={desktop} />
