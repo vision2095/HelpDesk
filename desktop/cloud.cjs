@@ -269,7 +269,7 @@ function createCloudClient({
         throw new Error(
           "Cloud connection changed during this request. Retry using the current connection.",
         );
-      if (response.headers.get("content-type")?.includes("text/event-stream")) {
+      if (response.headers?.get?.("content-type")?.includes("text/event-stream")) {
         const { readEventStream } = await import("../server/event-stream.mjs");
         return readEventStream(response, options.onEvent, options.signal);
       }
@@ -286,7 +286,53 @@ function createCloudClient({
           "Cloud connection changed during this request. Retry using the current connection.",
         );
       if (!response.ok) {
-        if (response.status === 401 && config.token) {
+        if (
+          response.status === 401 &&
+          config.refreshToken &&
+          action !== "desktop.refresh" &&
+          action !== "desktop.logout" &&
+          action !== "auth.logout"
+        ) {
+          try {
+            const refreshRes = await fetchImpl(
+              requested.url + "/api/desktop.refresh",
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "X-LensDesk-Client": "desktop",
+                },
+                body: JSON.stringify({ refreshToken: config.refreshToken }),
+                signal: AbortSignal.timeout(5000),
+              },
+            );
+            if (refreshRes.ok) {
+              const refreshData = await refreshRes.json();
+              if (refreshData?.accessToken) {
+                const next = {
+                  ...config,
+                  token: refreshData.accessToken,
+                  refreshToken: refreshData.refreshToken || config.refreshToken,
+                  desktopSessionId:
+                    refreshData.session?.id || config.desktopSessionId,
+                };
+                persist(next);
+                config = next;
+                revision++;
+                return this.request(action, payload, options);
+              }
+            }
+          } catch {}
+          const next = {
+            ...config,
+            token: "",
+            refreshToken: "",
+            desktopSessionId: "",
+          };
+          persist(next);
+          config = next;
+          revision++;
+        } else if (response.status === 401 && config.token) {
           const next = {
             ...config,
             token: "",

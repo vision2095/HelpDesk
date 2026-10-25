@@ -4328,8 +4328,9 @@ function App() {
                   <textarea
                     rows={6}
                     maxLength={20000}
-                    value={settingsDraft.systemPrompt}
+                    value={settingsDraft?.systemPrompt || ""}
                     onChange={(e) =>
+                      settingsDraft &&
                       setSettingsDraft({
                         ...settingsDraft,
                         systemPrompt: e.target.value,
@@ -4417,6 +4418,7 @@ function App() {
                 className="button primary"
                 onClick={() =>
                   run(async () => {
+                    if (!settingsDraft) return;
                     const patch = Object.fromEntries(
                       Object.entries(settingsDraft).filter(
                         ([key, value]) =>

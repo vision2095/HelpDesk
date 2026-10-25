@@ -55,14 +55,6 @@ export function createDesktopBridge({ service, cloud }) {
         if (!localHasKey && hostedHasKey) {
           effectiveSettings.provider = hosted.settings.provider;
           effectiveSettings.model = hosted.settings.model;
-          // Persist the synced provider into local database so local stays consistent
-          try {
-            await service.dispatch("settings.save", {
-              ...local.settings,
-              provider: hosted.settings.provider,
-              model: hosted.settings.model,
-            });
-          } catch {}
         } else if (!localHasKey) {
           // If neither current local nor current hosted matches, check if any provider in mergedKeys has a key
           const anyActiveProvider = Object.keys(mergedKeys).find((p) => Boolean(mergedKeys[p]));
@@ -72,6 +64,16 @@ export function createDesktopBridge({ service, cloud }) {
               effectiveSettings.model = hosted.settings.model;
             }
           }
+        }
+
+        // Adopt hosted systemPrompt if hosted has custom instructions and local is blank/default
+        if (
+          hosted.settings?.systemPrompt &&
+          hosted.settings.systemPrompt !== local.settings?.systemPrompt &&
+          (!local.settings?.systemPrompt ||
+            local.settings.systemPrompt.startsWith("Give clear, practical answers"))
+        ) {
+          effectiveSettings.systemPrompt = hosted.settings.systemPrompt;
         }
 
         // Merge profiles: prefer hosted custom profiles combined with local
@@ -110,13 +112,14 @@ export function createDesktopBridge({ service, cloud }) {
       }
 
       if (action === "settings.save") {
-        const localResult = await service.dispatch("settings.save", payload, options);
+        const { version, ...cleanPayload } = payload || {};
+        await service.dispatch("settings.save", cleanPayload, options);
         try {
-          await cloud.request("settings.save", payload, options);
+          await cloud.request("settings.save", cleanPayload, options);
         } catch {}
         checkedAt = 0;
         remoteState = null;
-        return localResult;
+        return this.dispatch("state");
       }
 
       if (

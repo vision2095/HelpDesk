@@ -364,7 +364,7 @@ export function HintLensSettingsModal({
           "Text colors must be a # followed by six hexadecimal digits.",
         );
       if (
-        draft.systemPrompt.length > 2000 &&
+        (draft.systemPrompt || "").length > 2000 &&
         draft.systemPrompt !== settingsBase.systemPrompt
       )
         throw new Error(
@@ -761,8 +761,8 @@ export function HintLensSettingsModal({
                     aria-label="System Prompt"
                     className="hintlens-textarea"
                     rows={7}
-                    maxLength={Math.max(2000, settingsBase.systemPrompt.length)}
-                    value={draft.systemPrompt}
+                    maxLength={Math.max(2000, (settingsBase?.systemPrompt || "").length)}
+                    value={draft.systemPrompt || ""}
                     onChange={(event) =>
                       changeSetting({ systemPrompt: event.target.value })
                     }
@@ -770,8 +770,8 @@ export function HintLensSettingsModal({
                 )}
                 <div className="textarea-footer">
                   <span>
-                    {draft.systemPrompt.length} / 2000 characters
-                    {draft.systemPrompt.length > 2000 &&
+                    {(draft.systemPrompt || "").length} / 2000 characters
+                    {(draft.systemPrompt || "").length > 2000 &&
                       " · existing longer prompt retained; edited prompts require 2,000 or fewer"}
                   </span>
                   <button
