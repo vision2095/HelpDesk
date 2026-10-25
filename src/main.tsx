@@ -255,6 +255,43 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
   );
 }
 
+function getPageFromPath(path: string, isDesktop: boolean): string {
+  if (isDesktop) return "workspace";
+  const clean = path.toLowerCase().replace(/\/+$/, "") || "/";
+  if (clean === "" || clean === "/" || clean === "/home") return "home";
+  if (clean === "/workshop" || clean === "/assistant" || clean === "/workspace") return "workspace";
+  if (clean === "/account" || clean === "/login" || clean === "/register" || clean === "/security") return "account";
+  if (clean === "/admin" || clean === "/operator") return "admin";
+  if (clean === "/downloads" || clean === "/download") return "downloads";
+  if (clean === "/profiles") return "profiles";
+  if (clean === "/sessions" || clean === "/history") return "sessions";
+  if (clean === "/settings") return "settings";
+  return "home";
+}
+
+function getPathForPage(p: string): string {
+  switch (p) {
+    case "home":
+      return "/";
+    case "workspace":
+      return "/workshop";
+    case "account":
+      return "/account";
+    case "admin":
+      return "/admin";
+    case "downloads":
+      return "/downloads";
+    case "profiles":
+      return "/profiles";
+    case "sessions":
+      return "/sessions";
+    case "settings":
+      return "/settings";
+    default:
+      return "/" + p;
+  }
+}
+
 function PageNav({
   current,
   onNavigate,
@@ -265,13 +302,13 @@ function PageNav({
   isDesktop: boolean;
 }) {
   const items = [
-    ...(!isDesktop ? [{ id: "home", label: "Landing Home", icon: Globe }] : []),
     { id: "workspace", label: "Assistant", icon: Aperture },
     { id: "profiles", label: "Profiles", icon: UserRound },
     { id: "sessions", label: "Session History", icon: History },
     { id: "downloads", label: "Desktop Downloads", icon: Download },
     { id: "settings", label: "Settings", icon: Settings2 },
     { id: "account", label: "Account & Cloud", icon: ShieldCheck },
+    ...(!isDesktop ? [{ id: "admin", label: "Admin", icon: KeyRound }] : []),
   ];
   return (
     <div className="quick-nav-bar" role="navigation" aria-label="Quick page navigation">
@@ -294,7 +331,10 @@ function App() {
   const [state, setState] = useState<State | null>(null),
     [desktopShortcuts, setDesktopShortcuts] =
       useState<Record<string, string>>(),
-    [page, setPage] = useState(!window.lens ? "home" : "workspace"),
+    [page, setPage] = useState(() =>
+      getPageFromPath(window.location.pathname, Boolean(window.lens)),
+    ),
+    [showContext, setShowContext] = useState(false),
     [activeId, setActiveId] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
     [question, setQuestion] = useState(""),
@@ -1972,7 +2012,24 @@ function App() {
     if (!(await flushDrafts())) return;
     setPage(next);
     setError("");
+    if (!desktop) {
+      const targetUrl = getPathForPage(next);
+      if (window.location.pathname !== targetUrl) {
+        window.history.pushState({ page: next }, "", targetUrl);
+      }
+    }
   }
+
+  useEffect(() => {
+    if (desktop) return;
+    const handlePopState = () => {
+      const target = getPageFromPath(window.location.pathname, false);
+      setPage(target);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [desktop]);
+
   async function selectSession(s: Session) {
     if (busy || recording || transcribing) {
       notify("Finish the current recording or request first.");
@@ -1984,6 +2041,12 @@ function App() {
     setQuestion("");
     setImages([]);
     setError("");
+    if (!desktop) {
+      const targetUrl = getPathForPage("workspace");
+      if (window.location.pathname !== targetUrl) {
+        window.history.pushState({ page: "workspace" }, "", targetUrl);
+      }
+    }
   }
   function emptyProfile(): Profile {
     return {
@@ -2256,13 +2319,13 @@ function App() {
         <div className="workspace-label">YOUR WORKSPACE</div>
         <nav>
           {[
-            ...(!desktop
-              ? [{ id: "home", label: "Landing Page", icon: Globe }]
-              : []),
             { id: "workspace", label: "Assistant", icon: Aperture },
             { id: "sessions", label: "Session history", icon: History },
             { id: "profiles", label: "Interview profiles", icon: UserRound },
             { id: "account", label: "Account & cloud", icon: ShieldCheck },
+            ...(!desktop
+              ? [{ id: "admin", label: "Admin console", icon: KeyRound }]
+              : []),
             ...(desktop
               ? [{ id: "browser", label: "Browser", icon: Globe }]
               : []),
@@ -2465,35 +2528,14 @@ function App() {
               </div>
             ) : (
               <>
-                <PageNav current="workspace" onNavigate={navigate} isDesktop={desktop} />
-                <div className="page-heading">
-                  <div>
-                    <div className="eyebrow">
-                      A LITTLE CLARITY GOES A LONG WAY
-                    </div>
-                    <h1>
-                      Your thinking space<span>.</span>
-                    </h1>
-                    <p>Stay in the conversation. Find your next thought.</p>
-                  </div>
-                  {desktop && (
-                    <button
-                      className="button secondary overlay-button"
-                      onClick={() => run(toggleOverlayMode)}
-                      title="Toggle floating overlay over any browser window"
-                    >
-                      <PanelRightOpen size={17} />
-                      Floating window<kbd>{keyLabel("overlay")}</kbd>
-                    </button>
-                  )}
-                </div>
-                <div className="session-toolbar">
-                  <div className="session-name">
+                <div className="workspace-header-bar">
+                  <div className="workspace-header-left">
                     <span
                       className={`status-orb ${current && !current.endedAt ? "live" : ""}`}
                     />
                     {current ? (
                       <input
+                        className="workspace-title-input"
                         aria-label="Session title"
                         key={current.id}
                         defaultValue={current.title}
@@ -2510,66 +2552,78 @@ function App() {
                         }}
                       />
                     ) : (
-                      <strong>No active session</strong>
+                      <h2 className="workspace-header-title">LensDesk Assistant</h2>
                     )}
-                    <span className="session-type">
-                      {current
-                        ? modeLabels[current.mode]
-                        : "Ready when you are"}
-                    </span>
-                  </div>
-                  <div className="session-controls">
-                    {current && (
-                      <>
-                        <span className="timer">
-                          <Clock size={14} />
-                          {Math.floor(elapsed / 60)
-                            .toString()
-                            .padStart(2, "0")}
-                          :{(elapsed % 60).toString().padStart(2, "0")}
-                        </span>
+                    <div className="mode-chips">
+                      {(["general", "coding", "system-design", "behavioral"] as Mode[]).map((m) => (
                         <button
-                          className="text-button"
-                          disabled={sessionDisabled}
-                          onClick={() =>
-                            run(async () => {
-                              await saveSession({
-                                ...current,
-                                endedAt: current.endedAt
-                                  ? undefined
-                                  : new Date().toISOString(),
+                          key={m}
+                          type="button"
+                          className={`mode-chip ${current?.mode === m ? "active" : ""}`}
+                          onClick={() => {
+                            if (current) {
+                              run(async () => {
+                                await saveSession({ ...current, mode: m });
                               });
-                            })
-                          }
+                            }
+                          }}
                         >
-                          {current.endedAt ? (
-                            <Play size={14} />
-                          ) : (
-                            <Square size={12} />
-                          )}{" "}
-                          {current.endedAt ? "Resume" : "End session"}
+                          {modeLabels[m]}
                         </button>
-                      </>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="workspace-header-right">
+                    {current && (
+                      <span className="timer" style={{ fontSize: "12px", color: "var(--site-dark-muted, #9aa698)" }}>
+                        <Clock size={13} style={{ marginRight: 4, verticalAlign: "middle" }} />
+                        {Math.floor(elapsed / 60)
+                          .toString()
+                          .padStart(2, "0")}
+                        :{(elapsed % 60).toString().padStart(2, "0")}
+                      </span>
                     )}
                     <button
-                      className="icon-button"
-                      title="New session"
-                      aria-label="New session"
+                      type="button"
+                      className={`button secondary ${showContext ? "active" : ""}`}
+                      style={{ padding: "6px 12px", fontSize: "12px" }}
+                      onClick={() => setShowContext(!showContext)}
+                      title={showContext ? "Hide Context & Notes" : "Show Context & Notes"}
+                    >
+                      <FileText size={14} />
+                      {showContext ? "Hide Notes" : "Notes & Context"}
+                    </button>
+                    <button
+                      type="button"
+                      className="button primary"
+                      style={{ padding: "6px 14px", fontSize: "12px" }}
                       disabled={sessionDisabled}
                       onClick={() => setModal("new")}
                     >
-                      <Plus size={19} />
+                      <Plus size={15} />
+                      New Chat
                     </button>
+                    {desktop && (
+                      <button
+                        className="button secondary overlay-button"
+                        onClick={() => run(toggleOverlayMode)}
+                        title="Toggle floating overlay over any browser window"
+                      >
+                        <PanelRightOpen size={15} />
+                        Overlay
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div
-                  className={`workbench ${state.settings.interviewLayout === "compact" ? "compact-interview" : ""}`}
+                  className={`workbench ${showContext ? "with-context" : "full-chat"}`}
                 >
-                  <section className="context-panel">
-                    <div className="panel-header">
-                      <div className="panel-tabs">
-                        <button
-                          className={tab === "transcript" ? "active" : ""}
+                  {showContext && (
+                    <section className="context-panel">
+                      <div className="panel-header">
+                        <div className="panel-tabs">
+                          <button
+                            className={tab === "transcript" ? "active" : ""}
                           onClick={() => setTab("transcript")}
                         >
                           <AudioLines size={16} />
@@ -2889,6 +2943,7 @@ function App() {
                       </IconButton>
                     </div>
                   </section>
+                  )}
                   <section className="answer-panel">
                     <div className="panel-header">
                       <div className="panel-title">
