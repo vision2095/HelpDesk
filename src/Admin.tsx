@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Download,
   Laptop,
+  KeyRound,
   Loader2,
   Lock,
   Monitor,
@@ -679,6 +680,33 @@ export function Admin({ navigate }: { navigate?: (page: string) => void } = {}) 
               >
                 <Ban size={13} />
                 Revoke desktop sessions
+              </button>
+              <button
+                className="text-button"
+                disabled={busy}
+                onClick={() => {
+                  const newPass = window.prompt(
+                    `Enter new password for ${selected.email} (minimum 6 characters):`,
+                    "12345678",
+                  );
+                  if (!newPass) return;
+                  if (newPass.length < 6) {
+                    alert("Password must be at least 6 characters.");
+                    return;
+                  }
+                  void act(
+                    async () => {
+                      return await adminCall(token, "admin.user.resetPassword", {
+                        userId: selected.id,
+                        newPassword: newPass,
+                      });
+                    },
+                    `Password for ${selected.email} has been updated to "${newPass}".`,
+                  );
+                }}
+              >
+                <KeyRound size={13} />
+                Reset Password
               </button>
               <button
                 className="text-button danger"

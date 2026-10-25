@@ -135,12 +135,12 @@ const defaultMouse = {
   } as Record<number, string>,
 };
 const providers: [Provider, string, string][] = [
-  ["gemini", "Gemini", "gemini-3.8-flash"],
-  ["groq", "Groq", "llama-3.3-70b-versatile"],
-  ["openai", "OpenAI", "gpt-4.1-mini"],
-  ["anthropic", "Anthropic", "claude-sonnet-4-5"],
-  ["deepseek", "DeepSeek", "deepseek-chat"],
-  ["local", "Local", ""],
+  ["openai", "OpenAI (Fast - gpt-4o-mini)", "gpt-4o-mini"],
+  ["groq", "Groq (Ultra-Fast - LLaMA 3.3)", "llama-3.3-70b-versatile"],
+  ["gemini", "Google Gemini (Fast - 1.5-flash)", "gemini-1.5-flash"],
+  ["anthropic", "Anthropic (Fast - Haiku 3.5)", "claude-3-5-haiku-20241022"],
+  ["deepseek", "DeepSeek (V3 Chat)", "deepseek-chat"],
+  ["local", "Local LLM", "llama3.2"],
 ];
 const editableKeys: (keyof Settings)[] = [
   "provider",

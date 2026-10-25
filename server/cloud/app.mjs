@@ -303,6 +303,32 @@ export function createCloudServer({
           message: `Successfully granted ${data.days} days of desktop access to ${data.email}.`,
         };
       }
+      case "admin.user.resetPassword": {
+        const data = z
+          .object({
+            userId: z.string().uuid(),
+            newPassword: z.string().min(6).max(128).optional(),
+          })
+          .parse(payload);
+        if (!withOwner(data.userId)) throw new Error("User not found.");
+        const nextPassword = data.newPassword || "12345678";
+        const salt = randomBytes(16).toString("hex");
+        const derived = await scrypt(nextPassword, salt, 64);
+        const digest = salt + ":" + derived.toString("hex");
+        accounts.db
+          .prepare("UPDATE users SET password=? WHERE id=?")
+          .run(digest, data.userId);
+        desktopSessions.revokeForUser(data.userId, "admin.password-reset");
+        entitlements.adminAudit(actor, "admin.user.resetPassword", data.userId, {
+          at: new Date().toISOString(),
+        });
+        return {
+          ok: true,
+          userId: data.userId,
+          newPassword: nextPassword,
+          message: `Password has been reset to: ${nextPassword}`,
+        };
+      }
       case "admin.user.delete": {
         const data = z.object({ userId: z.string().uuid() }).parse(payload);
         if (!withOwner(data.userId)) throw new Error("User not found.");
