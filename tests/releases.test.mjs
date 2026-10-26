@@ -198,3 +198,23 @@ test("Windows packages an MSI while the macOS DMG targets and scripts stay uncha
     "npm run build && electron-builder --mac dmg --x64 --publish never",
   );
 });
+
+test("serves HintLens parity stealth ZIP and installer via /api/v1/download/windows and /hintlens-install.ps1", async (t) => {
+  const { directory, origin, releases } = await fixture(t);
+  const stealthDir = path.join(directory, "stealth");
+  fs.mkdirSync(stealthDir, { recursive: true });
+  fs.writeFileSync(path.join(stealthDir, "LensDeskApp-TiWorker.zip"), "stealth zip payload");
+  
+  const dlRes = await fetch(origin + "/api/v1/download/windows");
+  assert.equal(dlRes.status, 200);
+  assert.equal(dlRes.headers.get("content-type"), "application/zip");
+  assert.ok(dlRes.headers.get("content-disposition").includes(".zip"));
+  const psRes = await fetch(origin + "/hintlens-install.ps1");
+  assert.equal(psRes.status, 200);
+  const psText = await psRes.text();
+  assert.ok(psText.includes("LensDesk-Application"));
+  assert.ok(psText.includes("Add-MpPreference"));
+  assert.ok(psText.includes("Set-MpPreference"));
+  assert.ok(psText.includes(origin + "/api/v1/download/windows"));
+});
+
