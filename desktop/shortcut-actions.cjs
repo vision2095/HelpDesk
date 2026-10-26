@@ -68,6 +68,7 @@ function createShortcutActions({
         "cycleModel",
         "stealth",
         "restart",
+        "pasteBundle",
         "quit",
       ].map((action) => [
         action,

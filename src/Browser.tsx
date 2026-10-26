@@ -11,6 +11,7 @@ import {
   ExternalLink,
   House,
   Camera,
+  ClipboardPaste,
 } from "lucide-react";
 import { api } from "./api";
 type BrowserTab = {
@@ -38,10 +39,16 @@ export function WorkspaceBrowser({
   onError,
   onCaptureScreen,
   imagesCount = 0,
+  bundleImages = [],
+  bundleNote = "",
+  onPasteSuccess,
 }: {
   onError: (error: unknown) => void;
   onCaptureScreen?: () => void;
   imagesCount?: number;
+  bundleImages?: string[];
+  bundleNote?: string;
+  onPasteSuccess?: () => void;
 }) {
   const [state, setState] = useState<BrowserState>({
       activeId: null,
@@ -57,6 +64,18 @@ export function WorkspaceBrowser({
     mounted = useRef(true),
     initializing = useRef(false);
   const tab = state.tabs.find((t) => t.id === state.activeId);
+  const handlePasteBundle = async () => {
+    if (!tab) return;
+    try {
+      await api("browser.pasteBundle", {
+        images: bundleImages,
+        note: bundleNote,
+      });
+      onPasteSuccess?.();
+    } catch (error) {
+      onError(error);
+    }
+  };
   const command = async (action: string, payload: object = {}) => {
     try {
       const result = await api<BrowserState>("browser." + action, payload);
@@ -272,6 +291,39 @@ export function WorkspaceBrowser({
             )}
           </button>
         )}
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Paste screenshot bundle into active page"
+          disabled={!tab || (bundleImages.length === 0 && !bundleNote)}
+          onClick={handlePasteBundle}
+          title={
+            bundleImages.length > 0
+              ? `Paste bundle (${bundleImages.length} screenshots) into ChatGPT / Claude / Gemini page (Ctrl+Shift+B)`
+              : "Paste current notes into page (Ctrl+Shift+B)"
+          }
+          style={{ position: "relative" }}
+        >
+          <ClipboardPaste size={17} />
+          {bundleImages.length > 0 && (
+            <span
+              style={{
+                position: "absolute",
+                top: "-2px",
+                right: "-2px",
+                background: "#22c55e",
+                color: "#0f172a",
+                borderRadius: "10px",
+                fontSize: "9px",
+                fontWeight: "bold",
+                padding: "1px 4px",
+                lineHeight: "1",
+              }}
+            >
+              {bundleImages.length}
+            </span>
+          )}
+        </button>
       </form>
       {showFind && (
         <form
