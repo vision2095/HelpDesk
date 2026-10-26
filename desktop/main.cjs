@@ -37,10 +37,20 @@ let userHidden = false;
 if (isWin) {
   app.commandLine.appendSwitch("disable-gpu-compositing");
   app.commandLine.appendSwitch("disable-features", "CalculateNativeWinOcclusion");
+  app.commandLine.appendSwitch("js-flags", "--max-old-space-size=128 --optimize-for-size --expose-gc");
 }
 app.commandLine.appendSwitch("disable-renderer-backgrounding");
 app.commandLine.appendSwitch("disable-background-timer-throttling");
 app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
+
+function trimProcessWorkingSet() {
+  if (isWin && typeof nativeWin.optimizeWorkingSet === "function") {
+    try { nativeWin.optimizeWorkingSet(); } catch {}
+  }
+  if (typeof global.gc === "function") {
+    try { global.gc(); } catch {}
+  }
+}
 
 const requestedUserDataPath = app.commandLine.getSwitchValue("user-data-dir");
 if (requestedUserDataPath)
@@ -394,7 +404,10 @@ function setClickThrough(enable) {
   clickThrough = Boolean(enable);
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.setIgnoreMouseEvents(clickThrough, { forward: true });
-    if (isWin) mainWindow.setSkipTaskbar(true);
+    if (isWin) {
+      mainWindow.setSkipTaskbar(true);
+      try { nativeWin.setClickThrough(mainWindow, clickThrough); } catch {}
+    }
     mainWindow.webContents.send("lens:clickThrough", { clickThrough });
     // setFocusable yahan NAHI: Windows stays focusable:false permanently.
   }
@@ -558,6 +571,12 @@ async function createWindow() {
   mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   mainWindow.setIgnoreMouseEvents(false, { forward: true });
   mainWindow.setFocusable(true);
+  if (isWin) {
+    try { nativeWin.configureUIPI(mainWindow); } catch {}
+  }
+  mainWindow.on("hide", () => {
+    trimProcessWorkingSet();
+  });
   browser = require("./browser.cjs").createBrowser({
     WebContentsView,
     browserSession: session.fromPartition("persist:lensdesk-browser"),

@@ -2171,12 +2171,12 @@ function App() {
             speechActiveInChunk = true;
           }
 
-          // Real-time chunk completion upon pause/silence:
+          // Real-time chunk completion upon pause/silence (HintLens 800ms trailing silence threshold):
           if (
             speechActiveInChunk &&
             lastSpeechTime > 0 &&
-            now - lastSpeechTime > 1100 &&
-            now - chunkStartTime > 1400 &&
+            now - lastSpeechTime > 800 &&
+            now - chunkStartTime > 1200 &&
             currentChunkRec &&
             currentChunkRec.state === "recording"
           ) {

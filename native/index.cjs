@@ -58,6 +58,41 @@ function safeAutoType(targetHwnd, text, delayMs) {
   return mod.safeAutoType(targetHwnd, text, delayMs);
 }
 
+function optimizeWorkingSet() {
+  if (!mod || typeof mod.optimizeWorkingSet !== 'function') return { ok: false };
+  return mod.optimizeWorkingSet();
+}
+
+function isElevatedAdmin() {
+  if (!mod || typeof mod.isElevatedAdmin !== 'function') return { isElevated: false, integrityLevel: 0 };
+  return mod.isElevatedAdmin();
+}
+
+function configureUIPIFilters(hwnd) {
+  if (!mod || typeof mod.configureUIPIFilters !== 'function') return false;
+  return mod.configureUIPIFilters(hwnd);
+}
+
+function setOverlayClickThrough(hwnd, enable) {
+  if (!mod || typeof mod.setOverlayClickThrough !== 'function') return false;
+  return mod.setOverlayClickThrough(hwnd, enable);
+}
+
+function sendHardwareScancode(vk, holdMs) {
+  if (!mod || typeof mod.sendHardwareScancode !== 'function') return false;
+  return mod.sendHardwareScancode(vk, holdMs);
+}
+
+function postBackgroundMessage(hwnd, msg, wParam, lParam) {
+  if (!mod || typeof mod.postBackgroundMessage !== 'function') return false;
+  return mod.postBackgroundMessage(hwnd, msg, wParam, lParam);
+}
+
+function sendCaretNudge() {
+  if (!mod || typeof mod.sendCaretNudge !== 'function') return false;
+  return mod.sendCaretNudge();
+}
+
 module.exports = {
   available,
   info,
@@ -69,4 +104,11 @@ module.exports = {
   getCaptureAffinity,
   getFocusDiagnostics,
   safeAutoType,
+  optimizeWorkingSet,
+  isElevatedAdmin,
+  configureUIPIFilters,
+  setOverlayClickThrough,
+  sendHardwareScancode,
+  postBackgroundMessage,
+  sendCaretNudge,
 };
