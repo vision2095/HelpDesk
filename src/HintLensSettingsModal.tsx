@@ -968,6 +968,9 @@ export function HintLensSettingsModal({
                     <option value="compact">Compact</option>
                   </select>,
                 )}
+                <p className="hintlens-help-text">
+                  Compact narrows the interview window to a single-line transcript with full-width answers. Applies to interview mode only.
+                </p>
                 <div className="color-pickers-row">
                   {(["light", "dark"] as const).map((theme) => {
                     const value = theme === "light" ? lightHex : darkHex;
