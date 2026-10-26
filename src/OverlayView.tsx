@@ -17,6 +17,7 @@ import {
   Mic,
   MicOff,
   Minus,
+  Play,
   RotateCcw,
   Sliders,
   Sparkles,
@@ -113,6 +114,12 @@ export interface OverlayViewProps {
   elapsedSeconds?: number;
   theme?: string;
   availableUpdate?: { latestVersion: string; artifact?: any } | null;
+  isInterviewMode?: boolean;
+  onToggleInterviewMode?: (enabled?: boolean) => void;
+  onClearTranscript?: () => void;
+  speechLanguage?: "en" | "multi";
+  onSetSpeechLanguage?: (lang: "en" | "multi") => void;
+  onSetInterviewLayout?: (layout: "full" | "compact") => void;
 }
 
 export function OverlayView({
@@ -185,7 +192,52 @@ export function OverlayView({
   elapsedSeconds,
   theme,
   availableUpdate,
+  isInterviewMode,
+  onToggleInterviewMode,
+  onClearTranscript,
+  speechLanguage,
+  onSetSpeechLanguage,
+  onSetInterviewLayout,
 }: OverlayViewProps) {
+  const [internalInterviewMode, setInternalInterviewMode] = useState(
+    isInterviewMode ?? false,
+  );
+  const inInterviewMode = isInterviewMode ?? internalInterviewMode;
+  const [localSpeechLanguage, setLocalSpeechLanguage] = useState<"en" | "multi">("en");
+  const speechLang = speechLanguage ?? localSpeechLanguage;
+  const activeInterviewLayout = interviewLayout || "full";
+
+  const handleToggleInterviewMode = () => {
+    const next = !inInterviewMode;
+    setInternalInterviewMode(next);
+    onToggleInterviewMode?.(next);
+  };
+
+  const handleExitInterview = () => {
+    setInternalInterviewMode(false);
+    onToggleInterviewMode?.(false);
+  };
+
+  const handleSetLayout = (layout: "full" | "compact") => {
+    if (onSetInterviewLayout) {
+      onSetInterviewLayout(layout);
+    } else if (onToggleInterviewLayout && activeInterviewLayout !== layout) {
+      onToggleInterviewLayout();
+    }
+  };
+
+  const handleAIHelp = () => {
+    const latest = (transcript || "").trim().slice(-3000);
+    const prompt = latest
+      ? `Help me answer this interview question from the live interviewer:\n\n${latest}`
+      : "Help me answer the interview question shown in the attached screenshots.";
+    void onSend(prompt, { webSearch: webSearchEnabled });
+  };
+
+  const handleClearTranscript = () => {
+    onClearTranscript?.();
+  };
+
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
   const typingRef = useRef(false);
@@ -383,6 +435,150 @@ export function OverlayView({
     }
   };
 
+  const renderInterviewSuggestions = () => {
+    const hasMessages = session && session.messages.length > 0;
+    if (!hasMessages && !busy) {
+      return (
+        <div className="iv-suggestions-empty">
+          <div className="iv-empty-sparkle">
+            <Sparkles size={28} />
+          </div>
+          <p>
+            Answers appear here automatically when the interviewer finishes a question (or press AI Help). Screenshots in the bundle are attached for coding questions.
+          </p>
+        </div>
+      );
+    }
+    return (
+      <div className="iv-messages-scroll">
+        {session?.messages.map((m) => (
+          <div key={m.id} className={`hintlens-bubble ${m.role}`}>
+            <div className="bubble-header">
+              <span className="bubble-role">
+                {m.role === "user" ? "Interviewer" : "AI"}
+              </span>
+              {m.role === "assistant" && (
+                <div className="bubble-actions">
+                  {onAutoType && (
+                    <button
+                      className="bubble-action-btn autotype"
+                      onClick={() => onAutoType(m.content)}
+                      title={`Auto-type answer into focused editor (${key("autoType")})`}
+                    >
+                      <Keyboard size={12} /> Type
+                    </button>
+                  )}
+                  <button
+                    className="bubble-action-btn copy"
+                    onClick={() => copyToClipboard(m.content, m.id)}
+                    title="Copy answer"
+                  >
+                    {copiedId === m.id ? (
+                      <span className="copied-text">
+                        <Check size={12} /> Copied
+                      </span>
+                    ) : (
+                      <Copy size={12} />
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {m.role === "assistant" && hideAnswer ? (
+              <div
+                className="bubble-hidden-mask"
+                onClick={onToggleHideAnswer}
+                title="Click to reveal answer"
+              >
+                <EyeOff size={15} />
+                <span>Answer hidden (Stealth mode)</span>
+              </div>
+            ) : (
+              <div className="bubble-markdown">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={markdownComponents}
+                >
+                  {m.content}
+                </ReactMarkdown>
+              </div>
+            )}
+          </div>
+        ))}
+
+        {busy && streamingText && (
+          <div className="hintlens-bubble assistant streaming">
+            <div className="bubble-header">
+              <span className="bubble-role">AI</span>
+              <div className="bubble-actions">
+                {onAutoType && (
+                  <button
+                    className="bubble-action-btn autotype"
+                    onClick={() => onAutoType(streamingText)}
+                  >
+                    <Keyboard size={12} /> Type
+                  </button>
+                )}
+                <button
+                  className="bubble-action-btn copy"
+                  onClick={() => copyToClipboard(streamingText, "streaming")}
+                >
+                  <Copy size={12} />
+                </button>
+              </div>
+            </div>
+            <div className="bubble-markdown">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={markdownComponents}
+              >
+                {streamingText}
+              </ReactMarkdown>
+            </div>
+          </div>
+        )}
+
+        {busy && !streamingText && (
+          <div className="iv-thinking-row">
+            <Aperture size={15} className="spin" />
+            <span>Thinking...</span>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+    );
+  };
+
+  const renderInterviewComposer = () => (
+    <div className="iv-composer-row">
+      <input
+        type="text"
+        className="iv-composer-input focus-free-input"
+        placeholder="Ask the AI a question…"
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            handleSubmit();
+          }
+        }}
+        onFocus={() => {
+          window.lens?.invoke?.("desktop.focusWindow")?.catch?.(() => {});
+        }}
+      />
+      <button
+        type="button"
+        className="iv-composer-send-btn"
+        onClick={handleSubmit}
+        disabled={!input.trim()}
+      >
+        Send
+      </button>
+    </div>
+  );
+
   const isDark =
     theme === "dark" ||
     (theme !== "light" &&
@@ -514,273 +710,253 @@ export function OverlayView({
         </div>
       </header>
 
-      {/* 2. CONTEXT DRAWER: In Interview Mode, renders the full Workshop Context Panel */}
-      {interviewLayout === "compact" ? (
-        <div className="overlay-workbench-context">
-          <div className="context-workbench-header">
-            <div className="context-workbench-tabs">
+      {/* 2. HINTLENS INTERVIEW TOP ACTION BAR */}
+      {inInterviewMode && (
+        <div className="hintlens-interview-action-bar">
+          {/* Start/Stop Session */}
+          <button
+            type="button"
+            className={`iv-session-btn ${recording ? "stop" : "start"}`}
+            onClick={onToggleRecording}
+            title={recording ? "Stop listening to interviewer" : "Start listening to interviewer"}
+          >
+            {recording ? (
+              <>
+                <Square size={12} fill="currentColor" />
+                <span>Stop Session</span>
+              </>
+            ) : (
+              <>
+                <Play size={12} fill="currentColor" />
+                <span>Start Session</span>
+              </>
+            )}
+          </button>
+
+          {/* Auto-answer switch */}
+          <label className="iv-auto-answer-toggle" title="Answers appear automatically when interviewer finishes speaking">
+            <input
+              type="checkbox"
+              checked={autoAnswer}
+              onChange={onToggleAutoAnswer}
+            />
+            <span>Auto-answer</span>
+          </label>
+
+          {/* Speech language selector */}
+          <div className="iv-speech-group" title="Speech language applies when the next session starts">
+            <span className="iv-speech-label">Speech</span>
+            <select
+              className="iv-speech-select"
+              value={speechLang}
+              onChange={(e) => {
+                const val = e.target.value as "en" | "multi";
+                setLocalSpeechLanguage(val);
+                onSetSpeechLanguage?.(val);
+              }}
+            >
+              <option value="en">English</option>
+              <option value="multi">Multilingual</option>
+            </select>
+          </div>
+
+          {/* AI Help (+) / AI Help */}
+          <button
+            type="button"
+            className="iv-ai-help-btn"
+            onClick={handleAIHelp}
+            title={images.length > 0 ? `screenshots: ${images.length}` : "Solve latest transcript with AI"}
+          >
+            <Sparkles size={12} />
+            <span>{images.length > 0 ? "AI Help (+)" : "AI Help"}</span>
+          </button>
+
+          {/* Undo Shot */}
+          <button
+            type="button"
+            className="iv-action-btn"
+            onClick={onUndoCapture}
+            disabled={images.length === 0}
+            title="Undo last captured screenshot"
+          >
+            <RotateCcw size={12} />
+            <span>Undo Shot</span>
+          </button>
+
+          {/* Clear Transcript */}
+          <button
+            type="button"
+            className="iv-action-btn"
+            onClick={handleClearTranscript}
+            disabled={!transcript}
+            title="Clear current speech transcript"
+          >
+            <Trash2 size={12} />
+            <span>Clear Transcript</span>
+          </button>
+
+          {/* Layout: Full / Compact */}
+          <div className="iv-layout-group">
+            <span className="iv-layout-label">Layout</span>
+            <div className="iv-layout-pills">
               <button
                 type="button"
-                className={`context-tab-btn ${contextTab === "transcript" ? "active" : ""}`}
-                onClick={() => setContextTab("transcript")}
+                className={`iv-layout-btn ${activeInterviewLayout === "full" ? "active" : ""}`}
+                onClick={() => handleSetLayout("full")}
+                title="Full layout: Split view with live transcript and suggestions"
               >
-                <AudioLines size={13} />
-                <span>Transcript</span>
-                {transcript ? (
-                  <span className="context-badge">
-                    {Math.ceil(transcript.length / 5)}w
-                  </span>
-                ) : null}
-                {recording && <span className="recording-pulse-dot" />}
+                Full
               </button>
               <button
                 type="button"
-                className={`context-tab-btn ${contextTab === "notes" ? "active" : ""}`}
-                onClick={() => setContextTab("notes")}
+                className={`iv-layout-btn ${activeInterviewLayout === "compact" ? "active" : ""}`}
+                onClick={() => handleSetLayout("compact")}
+                title="Compact narrows the interview window to a single-line transcript with full-width answers. Applies to interview mode only."
               >
-                <FileText size={13} />
-                <span>Notes</span>
-                {session?.notes ? (
-                  <span className="context-badge">
-                    {session.notes.length}c
-                  </span>
-                ) : null}
-              </button>
-            </div>
-
-            <div className="context-workbench-actions">
-              {/* Direct Live Mic button */}
-              {onToggleRecording && (
-                <button
-                  type="button"
-                  className={`overlay-live-mic-btn ${recording ? "active-recording" : ""}`}
-                  onClick={onToggleRecording}
-                  title={
-                    recording
-                      ? `Stop live listening (${recordSeconds}s)`
-                      : "Start live voice recognition (Mic / Bluetooth)"
-                  }
-                >
-                  {recording ? <MicOff size={12} /> : <Mic size={12} />}
-                  <span>{recording ? `Listening (${recordSeconds}s)` : "Live Mic"}</span>
-                </button>
-              )}
-
-              {/* Direct Auto-Answer button */}
-              {onToggleAutoAnswer && (
-                <button
-                  type="button"
-                  className={`overlay-auto-answer-toggle ${autoAnswer ? "enabled" : "disabled"}`}
-                  onClick={onToggleAutoAnswer}
-                  title={
-                    autoAnswer
-                      ? "Auto-Answer: ON (Automatically answers spoken questions in real time)"
-                      : "Auto-Answer: OFF (Click to turn ON real-time automatic answering)"
-                  }
-                >
-                  <Zap size={11} />
-                  <span>{autoAnswer ? "Auto: ON" : "Auto: OFF"}</span>
-                </button>
-              )}
-
-              {/* Microphone / Bluetooth device selection */}
-              {onSelectMicrophone && (
-                <select
-                  className="overlay-audio-source-select"
-                  value={microphoneId || ""}
-                  onChange={(e) => onSelectMicrophone(e.target.value)}
-                  title="Audio Input Device (Microphone / Bluetooth Headset)"
-                >
-                  <option value="">🎙️ Default Mic / Bluetooth</option>
-                  {microphones &&
-                    microphones.map((m, i) => (
-                      <option key={m.deviceId || i} value={m.deviceId}>
-                        {m.label || `Microphone ${i + 1}`}
-                      </option>
-                    ))}
-                </select>
-              )}
-
-              {/* Profile dropdown */}
-              {profiles && profiles.length > 0 && onSelectProfile && (
-                <div className="overlay-profile-pill">
-                  <UserRound size={11} />
-                  <select
-                    value={session?.profileId || ""}
-                    onChange={(e) => onSelectProfile(e.target.value)}
-                    title="Interview Profile Context"
-                  >
-                    <option value="">No Profile</option>
-                    {profiles.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* Expand / Collapse toggle */}
-              <button
-                type="button"
-                className="context-expand-btn"
-                onClick={() => setContextExpanded((v) => !v)}
-                title={contextExpanded ? "Collapse context bar" : "Expand context bar"}
-              >
-                {contextExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                Compact
               </button>
             </div>
           </div>
 
-          {contextExpanded && (
-            <div className="context-workbench-body">
-              {contextTab === "transcript" ? (
-                <div className="overlay-transcript-content">
-                  {transcript ? (
-                    <>
-                      <div className="transcript-live-box">
-                        {transcript}
-                      </div>
-                      <div className="transcript-live-footer">
-                        {recording && (
-                          <div className="transcript-recording-indicator">
-                            <span className="pulse-red" />
-                            <span>Listening live ({recordSeconds}s)...</span>
-                          </div>
-                        )}
-                        <button
-                          type="button"
-                          className="use-transcript-btn"
-                          onClick={() => {
-                            const latest = transcript.slice(-3000);
-                            onSend(`Answer this interview question from the live transcript:\n\n${latest}`);
-                          }}
-                          title="Send the latest speech transcript to AI for immediate answer"
-                        >
-                          <Sparkles size={12} />
-                          <span>Use latest transcript as question</span>
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="transcript-empty-state">
-                      <div className="transcript-empty-info">
-                        <span className={`status-dot ${recording ? "recording" : "ready"}`} />
-                        <span>
-                          {recording
-                            ? "Listening to live interview speech..."
-                            : "Live voice is idle. Click 'Live Mic' above to start speech recognition."}
-                        </span>
-                      </div>
-                      {recording && (
-                        <div className="mini-audio-bars">
-                          {[10, 18, 28, 14, 22, 30, 16, 24, 12].map((h, i) => (
-                            <span
-                              key={i}
-                              style={{
-                                height: `${Math.max(6, Math.min(26, (h * (audioLevel || 20)) / 25))}px`,
-                              }}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="overlay-notes-content">
-                  <div className="notes-action-bar">
-                    <button
-                      type="button"
-                      className="import-resume-btn"
-                      onClick={() => onImportResume?.()}
-                      title="Upload PDF, TXT or MD resume to provide complete interview background"
-                    >
-                      <Upload size={12} />
-                      <span>Upload Resume (PDF / TXT)</span>
-                    </button>
-                    {(session?.notes?.includes("RESUME") || activeProfile?.resume) && (
-                      <span className="resume-attached-badge">
-                        <Check size={11} />
-                        <span>Resume Context Active</span>
-                      </span>
-                    )}
-                  </div>
-                  <textarea
-                    className="overlay-notes-textarea"
-                    placeholder="Interview Notes & Agenda (problem statement, resume points, reminders)...&#10;&#10;Tip: Click 'Upload Resume' above to load your PDF resume directly into AI context."
-                    value={session?.notes || ""}
-                    onChange={(e) => onEditNotes?.(e.target.value)}
-                    onFocus={() => {
-                      window.lens?.invoke?.("desktop.focusWindow")?.catch?.(() => {});
-                    }}
-                    onBlur={onSaveNotes}
-                  />
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      ) : (
-        /* Standard Mode: minimal details preview */
-        <div className="overlay-context-strip">
-          <details
-            className="overlay-transcript"
-            style={{
-              background: "transparent",
-              color: "#64748b",
-              border: "none",
-              borderBottom: "1px solid rgba(255, 255, 255, 0.04)",
-              padding: "2px 14px",
-              fontSize: "11px",
-            }}
+          {/* Shots (%d) button */}
+          <button
+            type="button"
+            className={`iv-shots-btn ${images.length > 0 ? "has-shots" : ""}`}
+            onClick={onCaptureScreen}
+            title="Attached screenshots bundle. Click to capture new shot (Shift+S)."
           >
-            <summary style={{ cursor: "pointer", color: "#64748b" }}>
-              {transcript ? "Audio transcript active" : "Audio transcript (idle)"}
-              {recording && (
-                <span style={{ color: "#ef4444", marginLeft: "8px", fontWeight: 600 }}>
-                  ● Recording ({recordSeconds}s)
-                </span>
-              )}
-            </summary>
-            <p style={{ margin: "4px 0", color: "#94a3b8", fontSize: "11px" }}>
-              {transcript || "No audio transcribed yet."}
-            </p>
-          </details>
-          {session?.notes && (
-            <details
-              className="overlay-notes"
-              style={{
-                background: "transparent",
-                color: "#64748b",
-                border: "none",
-                borderBottom: "1px solid rgba(255, 255, 255, 0.04)",
-                padding: "2px 14px",
-                fontSize: "11px",
-              }}
-            >
-              <summary style={{ cursor: "pointer", color: "#64748b" }}>
-                Session Notes ({session.notes.length} chars)
-              </summary>
-              <p
-                style={{
-                  margin: "4px 0",
-                  color: "#94a3b8",
-                  fontSize: "11px",
-                  whiteSpace: "pre-wrap",
-                  maxHeight: "100px",
-                  overflowY: "auto",
-                }}
-              >
-                {session.notes}
-              </p>
-            </details>
-          )}
+            <Camera size={12} />
+            <span>Shots ({images.length})</span>
+          </button>
         </div>
       )}
 
-      {/* 2. MAIN BODY (Assistant Chat vs Embedded Browser) */}
-      {activeView === "browser" && renderBrowser ? (
+      {/* 3. MAIN BODY */}
+      {inInterviewMode && activeInterviewLayout === "compact" ? (
+        <div className="hintlens-compact-interview-body">
+          {/* ##ivcompactline */}
+          <div className="hintlens-compact-ticker-line">
+            <span className={`ticker-status-pill ${recording ? "live" : "off"}`}>
+              {recording ? "[interviewer: live]" : "[interviewer: off]"}
+            </span>
+            <div className="ticker-text-scroll">
+              {recording ? (
+                transcript ? (
+                  <span className="ticker-active-text">{transcript}</span>
+                ) : (
+                  <span className="ticker-placeholder-text">
+                    Listening... the interviewer's speech appears here.
+                  </span>
+                )
+              ) : (
+                <span className="ticker-idle-text">
+                  Start a session to transcribe the interviewer.
+                </span>
+              )}
+            </div>
+            {images.length > 0 && (
+              <span className="ticker-shots-badge" onClick={onUndoCapture} title="Click to undo latest shot">
+                {images.length} shot{images.length > 1 ? "s" : ""}
+              </span>
+            )}
+          </div>
+
+          {/* Full-width AI Suggestions Canvas (##ivsuggest) */}
+          <div className="hintlens-compact-suggestions-canvas">
+            <div className="iv-suggestions-header">
+              <span className="iv-suggestions-title">AI Suggestions</span>
+              {busy && streamingText && (
+                <span className="iv-generating-pill">Streaming answer...</span>
+              )}
+            </div>
+
+            <div className="iv-suggestions-content">
+              {renderInterviewSuggestions()}
+            </div>
+
+            {renderInterviewComposer()}
+          </div>
+        </div>
+      ) : inInterviewMode && activeInterviewLayout === "full" ? (
+        <div className="hintlens-interview-split">
+          {/* Left Column: Live Transcript (##ivtranscript) */}
+          <div className="iv-transcript-pane">
+            <div className="iv-pane-header">
+              <span className="iv-pane-title">Live Transcript</span>
+              <span className="iv-role-badge">Interviewer</span>
+              {recording && (
+                <div className="mini-audio-bars">
+                  {[10, 18, 28, 14, 22, 30, 16, 24, 12].map((h, i) => (
+                    <span
+                      key={i}
+                      style={{
+                        height: `${Math.max(6, Math.min(26, (h * (audioLevel || 20)) / 25))}px`,
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="iv-transcript-body">
+              {transcript ? (
+                <div className="iv-transcript-lines">
+                  {transcript.split("\n").filter(Boolean).map((line, idx) => (
+                    <div key={idx} className="iv-transcript-line">
+                      <span className="iv-q-prefix">Q:</span>
+                      <span className="iv-q-text">{line}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="iv-transcript-empty-text">
+                  {recording
+                    ? "Listening... the interviewer (system audio) will appear here. Your own voice is not captured."
+                    : "Start a session to transcribe the interviewer."}
+                </div>
+              )}
+            </div>
+
+            <div className="iv-transcript-footer">
+              <button
+                type="button"
+                className="iv-footer-btn ai-help"
+                onClick={handleAIHelp}
+                title="Send current transcript to AI for immediate answer"
+              >
+                <Sparkles size={12} />
+                <span>AI Help</span>
+              </button>
+              <button
+                type="button"
+                className="iv-footer-btn clear"
+                onClick={handleClearTranscript}
+                disabled={!transcript}
+                title="Clear current transcript"
+              >
+                <Trash2 size={12} />
+                <span>Clear Transcript</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Right Column: AI Suggestions (##ivsuggest) */}
+          <div className="iv-answers-pane">
+            <div className="iv-pane-header">
+              <span className="iv-pane-title">AI Suggestions</span>
+              {busy && streamingText && (
+                <span className="iv-generating-pill">Streaming answer...</span>
+              )}
+            </div>
+
+            <div className="iv-suggestions-content">
+              {renderInterviewSuggestions()}
+            </div>
+
+            {renderInterviewComposer()}
+          </div>
+        </div>
+      ) : activeView === "browser" && renderBrowser ? (
         <div className="floating-browser-container">{renderBrowser}</div>
       ) : (
         <div className="hintlens-main-split">

@@ -2011,24 +2011,56 @@ function App() {
         autoGainControl: true,
         ...(microphoneId ? { deviceId: { exact: microphoneId } } : {}),
       };
-      const mic = remember(
-        await navigator.mediaDevices.getUserMedia({
-          audio: audioConstraints,
-        }),
-      );
-      ensureCurrent();
-      mic
-        .getTracks()
-        .forEach((track) =>
-          track.addEventListener("ended", stopRecording, { once: true }),
+
+      // 1. Loopback / System Audio Capture (if audioSource is 'computer' or 'both')
+      let loopbackStream: MediaStream | null = null;
+      if (audioSource === "computer" || audioSource === "both") {
+        try {
+          if (navigator.mediaDevices.getDisplayMedia) {
+            const displayStream = await navigator.mediaDevices.getDisplayMedia({
+              video: true,
+              audio: true,
+            });
+            displayStream.getVideoTracks().forEach((track) => track.stop());
+            if (displayStream.getAudioTracks().length > 0) {
+              loopbackStream = remember(displayStream);
+              loopbackStream
+                .getTracks()
+                .forEach((track) =>
+                  track.addEventListener("ended", stopRecording, { once: true }),
+                );
+              inputs.push(loopbackStream);
+            }
+          }
+        } catch (err) {
+          console.warn("System audio loopback capture failed or not permitted, falling back to microphone:", err);
+        }
+      }
+
+      // 2. Microphone Capture (if audioSource is 'microphone' or 'both', or fallback if loopback failed)
+      if (audioSource === "microphone" || audioSource === "both" || inputs.length === 0) {
+        const mic = remember(
+          await navigator.mediaDevices.getUserMedia({
+            audio: audioConstraints,
+          }),
         );
-      setMicrophones(
-        (await navigator.mediaDevices.enumerateDevices()).filter(
-          (device) => device.kind === "audioinput",
-        ),
-      );
+        ensureCurrent();
+        mic
+          .getTracks()
+          .forEach((track) =>
+            track.addEventListener("ended", stopRecording, { once: true }),
+          );
+        inputs.push(mic);
+      }
+
+      try {
+        setMicrophones(
+          (await navigator.mediaDevices.enumerateDevices()).filter(
+            (device) => device.kind === "audioinput",
+          ),
+        );
+      } catch {}
       ensureCurrent();
-      inputs.push(mic);
       const context = new AudioContext();
       audioContext.current = context;
       await context.resume();
@@ -2450,6 +2482,19 @@ function App() {
         base.interviewLayout === "compact" ? "full" : "compact";
       setSettingsDraft({ ...base, interviewLayout: nextLayout });
       void saveSettingsPatch({ interviewLayout: nextLayout });
+    },
+    onSetInterviewLayout: (nextLayout: "full" | "compact") => {
+      const base =
+        settingsDraft || stateRef.current?.settings || state?.settings;
+      if (!base) return;
+      setSettingsDraft({ ...base, interviewLayout: nextLayout });
+      void saveSettingsPatch({ interviewLayout: nextLayout });
+    },
+    onClearTranscript: () => {
+      if (!currentRef.current) return;
+      recentSpokenWindow.current = "";
+      setDetectedQuestion(null);
+      void saveSession({ ...currentRef.current, transcript: "" });
     },
     onCycleProvider: cycleProvider,
     onCycleModel: cycleModel,
