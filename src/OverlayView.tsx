@@ -38,9 +38,11 @@ import {
   UserRound,
   Upload,
   Zap,
+  MoreVertical,
 } from "lucide-react";
 import type { Session, Provider } from "./types";
 import { shortcutLabel } from "./shortcut-label";
+import { useGamepadController } from "./useGamepadController";
 
 export interface OverlayViewProps {
   shortcuts?: Record<string, string>;
@@ -55,6 +57,7 @@ export interface OverlayViewProps {
   audioLevel?: number;
   transcript?: string;
   interviewLayout?: "full" | "compact";
+  chatLayout?: "standard" | "minimal";
   opacity: number;
   onOpacityChange: (opacity: number) => void;
   stealth: boolean;
@@ -135,6 +138,7 @@ export function OverlayView({
   audioLevel = 0,
   transcript = "",
   interviewLayout = "full",
+  chatLayout = "standard",
   opacity,
   onOpacityChange,
   stealth,
@@ -245,6 +249,7 @@ export function OverlayView({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showSessionPicker, setShowSessionPicker] = useState(false);
   const [showKeysLegend, setShowKeysLegend] = useState(false);
+  const [showMinMore, setShowMinMore] = useState(false);
   const [selectedBundleImage, setSelectedBundleImage] = useState<string | null>(
     null,
   );
@@ -433,6 +438,279 @@ export function OverlayView({
     } else if (onAutoType) {
       onAutoType();
     }
+  };
+
+  useGamepadController(
+    {
+      onGetAnswer: handleGetAnswer,
+      onCancelAnswer: onCancel,
+      onCaptureScreenshot: onCaptureScreen,
+      onTypeAnswer: handleTypeAction,
+      onUndoShot: onUndoCapture,
+      onRegionSnip: onRegionSnip,
+      onOpacityUp: () =>
+        onOpacityChange(
+          Math.min(1, Math.round((opacity + 0.05) * 100) / 100),
+        ),
+      onOpacityDown: () =>
+        onOpacityChange(
+          Math.max(0.1, Math.round((opacity - 0.05) * 100) / 100),
+        ),
+      onToggleOverlay: onHideWindow,
+      onToggleKeys: () => setShowKeysLegend((v) => !v),
+      onToggleBrowser: () => {
+        if (onToggleView) {
+          onToggleView(activeView === "browser" ? "assistant" : "browser");
+        } else if (onToggleBrowser) {
+          onToggleBrowser();
+        }
+      },
+    },
+    true,
+  );
+
+  const renderMinimalLayout = () => {
+    return (
+      <div className="min-overlay-container">
+        {/* Minimal Chat Area */}
+        <div className="min-chat-view">
+          {(!session?.messages || session.messages.length === 0) && !streamingText ? (
+            <div className="min-empty-prompt">
+              <span>Chat</span>
+              <p>Press Capture (Shift+S) or Get Answer to begin.</p>
+            </div>
+          ) : (
+            <div className="min-messages-list">
+              {session?.messages.map((m) => (
+                <div key={m.id} className={`min-bubble ${m.role}`}>
+                  <div className="min-bubble-header">
+                    <span className="min-bubble-role">
+                      {m.role === "user" ? "You" : "AI"}
+                    </span>
+                    {m.role === "assistant" && (
+                      <button
+                        className="copy-bubble-btn"
+                        onClick={() => copyToClipboard(m.content, m.id)}
+                        title="Copy answer"
+                      >
+                        {copiedId === m.id ? (
+                          <Check size={12} />
+                        ) : (
+                          <Copy size={12} />
+                        )}
+                      </button>
+                    )}
+                  </div>
+                  <div className="min-bubble-text markdown-body">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={markdownComponents}
+                    >
+                      {m.content}
+                    </ReactMarkdown>
+                  </div>
+                </div>
+              ))}
+              {busy && streamingText && (
+                <div className="min-bubble assistant streaming">
+                  <div className="min-bubble-header">
+                    <span className="min-bubble-role">AI</span>
+                  </div>
+                  <div className="min-bubble-text markdown-body">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={markdownComponents}
+                    >
+                      {streamingText}
+                    </ReactMarkdown>
+                  </div>
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+          )}
+        </div>
+
+        {/* Minimal One-Line Status Bar */}
+        <div className="min-status-bar">
+          <div className="min-status-left">
+            <span>
+              {recording
+                ? `Recording... (${recordSeconds}s)`
+                : autoTyping
+                  ? "Typing..."
+                  : busy
+                    ? "Thinking..."
+                    : "Live"}
+            </span>
+            <span className="min-status-sep">|</span>
+            <span className="min-status-model">
+              {provider} ({model})
+            </span>
+          </div>
+          <div className="min-status-right">
+            <span>(Ctrl+Shift+M for mouse)</span>
+          </div>
+        </div>
+
+        {/* Minimal Screenshot Strip */}
+        <div className="min-strip">
+          {images.length === 0 ? (
+            <div
+              className="min-strip-empty"
+              onClick={onCaptureScreen}
+              title="Capture screen"
+            >
+              <Camera size={13} />
+              <span>No screenshots - Shift+S / Ctrl+Shift+D to capture</span>
+            </div>
+          ) : (
+            <div className="min-strip-thumbs">
+              {images.map((img, idx) => (
+                <div key={idx} className="min-thumb-item">
+                  <img src={img} alt={`Capture ${idx + 1}`} />
+                  <button
+                    className="min-thumb-del"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRemoveImage(idx);
+                    }}
+                    title="Remove this screenshot"
+                  >
+                    <X size={10} />
+                  </button>
+                </div>
+              ))}
+              <button
+                className="min-strip-add"
+                onClick={onCaptureScreen}
+                title="Add screenshot"
+              >
+                +
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Minimal 4-Button Action Bar */}
+        <div className="min-action-bar">
+          {/* 1. Answer / Stop Answer */}
+          <button
+            className={`min-btn ${busy ? "stop" : "primary"}`}
+            onClick={busy ? onCancel : handleGetAnswer}
+          >
+            {busy ? <Square size={13} /> : <Bot size={13} />}
+            <span>{busy ? "Stop Answer" : "Answer"}</span>
+          </button>
+
+          {/* 2. Type / Stop Type */}
+          <button
+            className={`min-btn ${autoTyping ? "active-type" : ""}`}
+            onClick={handleTypeAction}
+          >
+            <Keyboard size={13} />
+            <span>{autoTyping ? "Stop Type" : "Type"}</span>
+          </button>
+
+          {/* 3. Undo */}
+          <button
+            className="min-btn"
+            onClick={onUndoCapture}
+            disabled={images.length === 0}
+            title="Undo last screenshot"
+          >
+            <RotateCcw size={13} />
+            <span>Undo</span>
+          </button>
+
+          {/* 4. More Menu */}
+          <div className="min-more-wrap">
+            <button
+              className={`min-btn more ${showMinMore ? "active" : ""}`}
+              onClick={() => setShowMinMore((v) => !v)}
+              title="More options"
+            >
+              <MoreVertical size={13} />
+              <span>More</span>
+            </button>
+
+            {showMinMore && (
+              <div className="min-more-popover">
+                <button
+                  onClick={() => {
+                    setShowMinMore(false);
+                    onClearBundle?.();
+                  }}
+                >
+                  <Trash2 size={13} /> Clear screenshot bundle
+                </button>
+                <button
+                  onClick={() => {
+                    setShowMinMore(false);
+                    onNewSession?.();
+                  }}
+                >
+                  <RotateCcw size={13} /> Clear chat
+                </button>
+                <button
+                  onClick={() => {
+                    setShowMinMore(false);
+                    setShowKeysLegend((v) => !v);
+                  }}
+                >
+                  <Keyboard size={13} /> Hotkey cheat-sheet
+                </button>
+                <button
+                  onClick={() => {
+                    setShowMinMore(false);
+                    onOpenSettings?.("Model");
+                  }}
+                >
+                  <SettingsIcon size={13} /> Settings
+                </button>
+                <button
+                  onClick={() => {
+                    setShowMinMore(false);
+                    onToggleInterviewLayout?.();
+                  }}
+                >
+                  <AudioLines size={13} /> Interview mode
+                </button>
+                <button
+                  onClick={() => {
+                    setShowMinMore(false);
+                    if (onToggleView) {
+                      onToggleView(
+                        activeView === "browser" ? "assistant" : "browser",
+                      );
+                    } else if (onToggleBrowser) {
+                      onToggleBrowser();
+                    }
+                  }}
+                >
+                  <Globe size={13} /> Browser mode
+                </button>
+                <div className="min-popover-divider" />
+                <div className="min-popover-opacity">
+                  <span>Background</span>
+                  <input
+                    type="range"
+                    min="10"
+                    max="100"
+                    value={Math.round(opacity * 100)}
+                    onChange={(e) =>
+                      onOpacityChange(
+                        Math.max(0.1, Number(e.target.value) / 100),
+                      )
+                    }
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const renderInterviewSuggestions = () => {
@@ -958,6 +1236,8 @@ export function OverlayView({
         </div>
       ) : activeView === "browser" && renderBrowser ? (
         <div className="floating-browser-container">{renderBrowser}</div>
+      ) : chatLayout === "minimal" && interviewLayout !== "compact" ? (
+        renderMinimalLayout()
       ) : (
         <div className="hintlens-main-split">
           {/* Left Column: Chat Area */}

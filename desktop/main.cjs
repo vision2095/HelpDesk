@@ -25,6 +25,7 @@ const { floatingBounds } = require("./window-bounds.cjs");
 const { applyStealthFlags } = require("./stealth.cjs");
 const nativeWin = require("./native-win.cjs");
 const gkeys = require("./global-keys.cjs");
+const { getMachineGuid } = require("./machine-guid.cjs");
 
 const isMac = process.platform === "darwin";
 const isWin = process.platform === "win32";
@@ -717,6 +718,24 @@ app.whenReady().then(async () => {
   const directory = app.getPath("userData");
   desktopPreferences =
     await require("./preferences.cjs").createPreferences(directory);
+
+  app.on("certificate-error", (event, webContents, url, error, certificate, callback) => {
+    if (desktopPreferences.get()?.restrictedNetwork) {
+      event.preventDefault();
+      callback(true);
+    } else {
+      callback(false);
+    }
+  });
+  if (session.defaultSession?.setCertificateVerifyProc) {
+    session.defaultSession.setCertificateVerifyProc((request, callback) => {
+      if (desktopPreferences.get()?.restrictedNetwork) {
+        callback(0);
+      } else {
+        callback(-3);
+      }
+    });
+  }
   const encrypt = (value) => {
     if (
       !safeStorage.isEncryptionAvailable() ||
@@ -878,9 +897,40 @@ app.whenReady().then(async () => {
         deviceLabel: "LensDesk desktop",
         os: process.platform,
         appVersion: app.getVersion(),
+        deviceId: getMachineGuid(),
         takeover: payload.takeover === true,
       });
       return result;
+    }
+    if (action === "desktop.machineGuid" || action === "system.machineGuid") {
+      return { machineGuid: getMachineGuid() };
+    }
+    if (action === "danger.wipeAllData") {
+      try {
+        await subscriptionGate.logout();
+      } catch {}
+      try {
+        if (browser) await browser.dispatch("clearData", {});
+      } catch {}
+      try {
+        await session.defaultSession.clearStorageData();
+        await session.defaultSession.clearCache();
+        await session.defaultSession.clearAuthCache();
+      } catch {}
+      try {
+        const userData = app.getPath("userData");
+        const fsSync = require("node:fs");
+        if (fsSync.existsSync(userData)) {
+          const files = fsSync.readdirSync(userData);
+          for (const file of files) {
+            const fp = path.join(userData, file);
+            try {
+              fsSync.rmSync(fp, { recursive: true, force: true });
+            } catch {}
+          }
+        }
+      } catch {}
+      return { ok: true, wiped: true };
     }
     if (action === "gate.mfa") {
       return subscriptionGate.completeMfa({

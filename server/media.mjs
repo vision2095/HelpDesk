@@ -154,6 +154,40 @@ export async function measureAudio(
     };
   });
 }
+async function recognizeImageWinRT(imgBuffer) {
+  const tmpFile = path.join(os.tmpdir(), `ocr_${Date.now()}_${Math.random().toString(36).slice(2)}.png`);
+  await fs.writeFile(tmpFile, imgBuffer);
+  try {
+    const psScript = `
+      [Windows.Storage.StorageFile, Windows.Storage, ContentType = WindowsRuntime] | Out-Null
+      [Windows.Graphics.Imaging.BitmapDecoder, Windows.Graphics.Imaging, ContentType = WindowsRuntime] | Out-Null
+      [Windows.Media.Ocr.OcrEngine, Windows.Media.Ocr, ContentType = WindowsRuntime] | Out-Null
+
+      $file = [Windows.Storage.StorageFile]::GetFileFromPathAsync('${tmpFile.replace(/\\/g, "\\\\")}').GetAwaiter().GetResult()
+      $stream = $file.OpenAsync([Windows.Storage.FileAccessMode]::Read).GetAwaiter().GetResult()
+      $decoder = [Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream).GetAwaiter().GetResult()
+      $bitmap = $decoder.GetSoftwareBitmapAsync().GetAwaiter().GetResult()
+      $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
+      if (-not $engine) {
+        $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage([Windows.Globalization.Language]::new("en-US"))
+      }
+      if ($engine) {
+        $res = $engine.RecognizeAsync($bitmap).GetAwaiter().GetResult()
+        Write-Output $res.Text
+      }
+    `;
+    const { execFile } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    const execFileAsync = promisify(execFile);
+    const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", psScript], { timeout: 15000 });
+    return stdout.trim();
+  } catch {
+    return "";
+  } finally {
+    try { await fs.unlink(tmpFile); } catch {}
+  }
+}
+
 export async function recognizeImage(
   base64,
   { language = "eng", signal } = {},
@@ -164,17 +198,25 @@ export async function recognizeImage(
   if (data.length > 14000000 || !/^[A-Za-z0-9+/=]+$/.test(data))
     throw new Error("Invalid image.");
   return pool.run(async () => {
-    const text = await runMediaTool(
-      process.env.TESSERACT_PATH || "tesseract",
-      ["stdin", "stdout", "-l", language],
-      {
-        input: Buffer.from(data, "base64"),
-        timeout: 30000,
-        maxOutput: 400000,
-        signal,
-      },
-    );
-    return { text: text.toString("utf8").trim() };
+    try {
+      const text = await runMediaTool(
+        process.env.TESSERACT_PATH || "tesseract",
+        ["stdin", "stdout", "-l", language],
+        {
+          input: Buffer.from(data, "base64"),
+          timeout: 30000,
+          maxOutput: 400000,
+          signal,
+        },
+      );
+      return { text: text.toString("utf8").trim() };
+    } catch (err) {
+      if (process.platform === "win32") {
+        const winRtText = await recognizeImageWinRT(Buffer.from(data, "base64"));
+        if (winRtText) return { text: winRtText };
+      }
+      throw err;
+    }
   });
 }
 export async function recognizePdf(

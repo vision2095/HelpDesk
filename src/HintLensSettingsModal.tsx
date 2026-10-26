@@ -45,7 +45,7 @@ export const DEFAULT_HINTLENS_HOTKEYS: Record<string, string> = {
   cancelAnswer: "",
   cycleProvider: "",
   cycleModel: "",
-  browser: "",
+  browser: "CommandOrControl+Shift+G",
   mouseMode: "",
   shortcuts: "",
   moveUp: "",
@@ -207,6 +207,7 @@ export function HintLensSettingsModal({
       settings.lightTextColor || "#24384c",
     ),
     [darkHex, setDarkHex] = useState(settings.darkTextColor || "#e2eaf5");
+  const desktop = Boolean(window.lens);
   const [updateInfo, setUpdateInfo] = useState<{
     updateAvailable?: boolean;
     latestVersion?: string;
@@ -219,6 +220,17 @@ export function HintLensSettingsModal({
     percent: number;
     status: string;
   } | null>(null);
+  const [machineGuid, setMachineGuid] = useState<string>("");
+
+  useEffect(() => {
+    if (desktop) {
+      void api<{ machineGuid?: string }>("desktop.machineGuid")
+        .then((res) => {
+          if (res?.machineGuid) setMachineGuid(res.machineGuid);
+        })
+        .catch(() => {});
+    }
+  }, [desktop]);
 
   useEffect(() => {
     if (!window.lens?.on) return;
@@ -278,7 +290,6 @@ export function HintLensSettingsModal({
     }
   };
   const modelRequest = useRef(0);
-  const desktop = Boolean(window.lens);
   const nativeAvailable = desktop && Boolean(prefs);
   const mouse = {
     ...defaultMouse,
@@ -401,11 +412,26 @@ export function HintLensSettingsModal({
   }, [draft.provider, draft.localBaseUrl]);
   if (!isOpen) return null;
 
-  function patchPrefs(section: string, value: Record<string, unknown>) {
-    setPrefs((old: any) => ({
-      ...old,
-      [section]: { ...old?.[section], ...value },
-    }));
+  function patchPrefs(section: string, value: unknown) {
+    setPrefs((old: any) => {
+      if (
+        typeof value === "object" &&
+        value !== null &&
+        !Array.isArray(value)
+      ) {
+        return {
+          ...old,
+          [section]: {
+            ...old?.[section],
+            ...(value as Record<string, unknown>),
+          },
+        };
+      }
+      return {
+        ...old,
+        [section]: value,
+      };
+    });
   }
   function changeSetting(patch: Partial<Settings>) {
     setDraft((old) => ({ ...old, ...patch }));
@@ -951,6 +977,23 @@ export function HintLensSettingsModal({
                     </p>
                   </>
                 )}
+                {label(
+                  "Chat layout",
+                  <select
+                    aria-label="Chat layout"
+                    className="hintlens-select"
+                    value={prefs?.chatLayout || "standard"}
+                    onChange={(event) =>
+                      patchPrefs("chatLayout", event.target.value)
+                    }
+                  >
+                    <option value="standard">Standard</option>
+                    <option value="minimal">Minimal</option>
+                  </select>,
+                )}
+                <p className="hintlens-help-text">
+                  Minimal is a portrait layout: full-width chat, a one-line status bar, a screenshot strip and four buttons (the rest behind the More menu). Each layout remembers its own window size. Interview and browser mode are unaffected.
+                </p>
                 {label(
                   "Interview layout",
                   <select
@@ -1770,13 +1813,17 @@ export function HintLensSettingsModal({
                   )}
                 </fieldset>
                 <label className="checkbox-row">
-                  <input type="checkbox" disabled checked={false} /> Read
-                  screenshots with local OCR
+                  <input
+                    type="checkbox"
+                    checked={Boolean(prefs?.localOcr)}
+                    onChange={(event) =>
+                      patchPrefs("localOcr", event.target.checked)
+                    }
+                  />{" "}
+                  Read screenshots with local Windows OCR (WinRT)
                 </label>
                 <p className="field-hint">
-                  A verified local screenshot OCR pipeline is unavailable.
-                  Choose a vision-capable model for images. Text-only models can
-                  answer typed or pasted text.
+                  Runs on this PC with Windows OCR / WinRT, nothing is uploaded. Good for text questions and MCQs; diagrams and handwriting still need a vision model.
                 </p>
                 {!desktop && (
                   <p className="field-hint">
@@ -1947,26 +1994,52 @@ export function HintLensSettingsModal({
                 >
                   Refresh account status
                 </button>
-                <label className="checkbox-row">
-                  <input type="checkbox" disabled checked={false} /> Restricted
-                  network mode
+                {desktop && (
+                  <div className="account-info-row" style={{ marginTop: "12px", fontSize: "13px" }}>
+                    <span style={{ color: "var(--text-muted, #8b9bb4)" }}>Hardware ID (MachineGuid): </span>
+                    <code style={{ fontSize: "12px", background: "rgba(255,255,255,0.06)", padding: "2px 6px", borderRadius: "4px" }}>
+                      {machineGuid || "Retrieving..."}
+                    </code>
+                  </div>
+                )}
+                <label className="checkbox-row" style={{ marginTop: "16px" }}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(prefs?.restrictedNetwork)}
+                    onChange={(event) =>
+                      patchPrefs("restrictedNetwork", event.target.checked)
+                    }
+                  />{" "}
+                  Restricted network mode
                 </label>
                 <p className="field-hint">
-                  Certificate verification remains enabled. Use an
-                  administrator-configured system proxy and trusted CA
-                  certificates. An application-level proxy or CA settings editor
-                  is unavailable.
+                  Enable this if your network blocks LensDesk (shows 'couldn't reach server' or 'connection not secure'). Common on exam, college and corporate networks that use an SSL-intercepting proxy. When on, LensDesk routes through the network's proxy and accepts its certificate.
                 </p>
                 <div className="danger-zone-block">
                   <span className="danger-title">Danger zone</span>
-                  <button type="button" className="danger-btn" disabled>
-                    Sign out &amp; delete all local data — unavailable here
+                  <button
+                    type="button"
+                    className="danger-btn"
+                    disabled={busy}
+                    onClick={() =>
+                      run(async () => {
+                        const confirmed = window.confirm(
+                          "Delete everything and remove the app?\n\nThis permanently removes all LensDesk data from this computer - your settings, saved logins, browser data and captured screenshots - and signs you out. It cannot be undone. Your online account is left untouched."
+                        );
+                        if (!confirmed) return;
+                        try {
+                          await api("danger.wipeAllData");
+                        } catch {}
+                        localStorage.clear();
+                        sessionStorage.clear();
+                        window.location.reload();
+                      })
+                    }
+                  >
+                    Sign out &amp; Delete all data
                   </button>
                   <p className="field-hint">
-                    This reference action is a local data wipe, not deletion of
-                    your cloud account. LensDesk does not provide this combined
-                    operation. Cloud account deletion, with password
-                    confirmation, is available on the account page.
+                    Permanently erases everything on this PC - settings, saved logins, browser data and screenshots - and signs you out. This cannot be undone. Your online account is not affected.
                   </p>
                 </div>
               </div>

@@ -4,6 +4,9 @@ const defaults = {
   launchAtLogin: false,
   closeToTray: false,
   stealthDock: false,
+  chatLayout: "standard",
+  restrictedNetwork: false,
+  localOcr: false,
   captureArchive: { enabled: false, directory: "" },
   capture: { mode: "active", displayId: "" },
   mouse: {
@@ -217,6 +220,17 @@ function validate(input) {
       typeof input.stealthDock === "boolean"
         ? input.stealthDock
         : defaults.stealthDock,
+    chatLayout: ["standard", "minimal"].includes(input.chatLayout)
+      ? input.chatLayout
+      : defaults.chatLayout,
+    restrictedNetwork:
+      typeof input.restrictedNetwork === "boolean"
+        ? input.restrictedNetwork
+        : defaults.restrictedNetwork,
+    localOcr:
+      typeof input.localOcr === "boolean"
+        ? input.localOcr
+        : defaults.localOcr,
     shortcuts,
     captureArchive: { enabled: archive.enabled, directory: archive.directory },
     capture,
