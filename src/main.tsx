@@ -878,6 +878,26 @@ function App() {
           await navigate(page === "browser" ? "workspace" : "browser");
         }
       });
+    if (action === "pasteBundle")
+      run(async () => {
+        if (floatingView !== "browser" && page !== "browser") {
+          notify("Open browser mode first, then paste the bundle");
+          return;
+        }
+        if (images.length === 0 && !current?.notes) {
+          notify("No screenshots in the bundle to paste");
+          return;
+        }
+        try {
+          await api("browser.pasteBundle", {
+            images,
+            note: current?.notes || "",
+          });
+          notify("Pasted screenshot into the page");
+        } catch (err) {
+          fail(err);
+        }
+      });
     if (action === "shortcuts")
       run(async () => {
         if (floating) {
@@ -1025,6 +1045,17 @@ function App() {
       ) {
         e.preventDefault();
         shortcutHandlerRef.current("browser");
+        return;
+      }
+
+      // Dedicated paste bundle into in-overlay browser: Ctrl+Shift+B / Cmd+Shift+B
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        e.shiftKey &&
+        e.key.toLowerCase() === "b"
+      ) {
+        e.preventDefault();
+        shortcutHandlerRef.current("pasteBundle");
         return;
       }
 
@@ -2541,6 +2572,9 @@ function App() {
         onError={fail}
         onCaptureScreen={() => run(quickCaptureScreen)}
         imagesCount={images.length}
+        bundleImages={images}
+        bundleNote={current?.notes || ""}
+        onPasteSuccess={() => notify("Pasted screenshot into the page")}
       />
     ),
     onToggleInterviewLayout: () => {
@@ -2634,6 +2668,9 @@ function App() {
               onError={fail}
               onCaptureScreen={() => run(quickCaptureScreen)}
               imagesCount={images.length}
+              bundleImages={images}
+              bundleNote={current?.notes || ""}
+              onPasteSuccess={() => notify("Pasted screenshot into the page")}
             />
           }
         />
@@ -2848,6 +2885,9 @@ function App() {
             onError={fail}
             onCaptureScreen={() => run(quickCaptureScreen)}
             imagesCount={images.length}
+            bundleImages={images}
+            bundleNote={current?.notes || ""}
+            onPasteSuccess={() => notify("Pasted screenshot into the page")}
           />
         )}
         {page === "workspace" && (

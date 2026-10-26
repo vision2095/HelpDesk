@@ -504,6 +504,49 @@ function createBrowser({
         }
         return snapshot();
       }
+      if (action === "pasteBundle") {
+        const tab = tabs.get(payload.id || activeId);
+        if (!tab) throw new Error("Choose an open browser tab.");
+        const imgs = Array.isArray(payload.images) ? payload.images : [];
+        const note = typeof payload.note === "string" ? payload.note : "";
+        if (imgs.length === 0 && !note) {
+          throw new Error("No screenshots in the bundle to paste");
+        }
+        const wc = tab.view.webContents;
+        const code = `;(function(){try{
+          var imgs = ${JSON.stringify(imgs)};
+          var note = ${JSON.stringify(note)};
+          var dt = new DataTransfer();
+          for(var i=0; i<imgs.length; i++){
+            var raw = imgs[i].replace(/^data:image\\/[^;]+;base64,/, '');
+            var bs = atob(raw);
+            var arr = new Uint8Array(bs.length);
+            for(var j=0; j<bs.length; j++) arr[j] = bs.charCodeAt(j);
+            var blob = new Blob([arr], {type:'image/png'});
+            dt.items.add(new File([blob], 'screenshot-' + (i+1) + '.png', {type:'image/png'}));
+          }
+          var fi = document.querySelector('input[type=file]');
+          if(fi){
+            fi.files = dt.files;
+            fi.dispatchEvent(new Event('change', {bubbles:true}));
+          } else {
+            var el = document.activeElement || document.body;
+            el.dispatchEvent(new ClipboardEvent('paste', {bubbles:true, cancelable:true, clipboardData:dt}));
+          }
+          if(note){
+            var el2 = document.activeElement;
+            if(el2 && (el2.tagName == 'TEXTAREA' || el2.tagName == 'INPUT')){
+              var st = el2.selectionStart == null ? el2.value.length : el2.selectionStart;
+              el2.value = el2.value.slice(0, st) + note + el2.value.slice(st);
+              el2.dispatchEvent(new Event('input', {bubbles:true}));
+            } else if(el2 && el2.isContentEditable){
+              document.execCommand('insertText', false, note);
+            }
+          }
+          return 'ok';
+        } catch(e){ return 'error: ' + e.message; }})();`;
+        return wc.executeJavaScript(code).then((result) => ({ ok: true, result }));
+      }
       const tab = tabs.get(payload.id || activeId);
       if (!tab) throw new Error("Choose an open browser tab.");
       if (action === "select") {
