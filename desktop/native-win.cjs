@@ -60,6 +60,9 @@ function load() {
     F.GetUserObjectInformationW = U.func('__stdcall', 'GetUserObjectInformationW', 'bool',
       ['intptr_t', 'int', 'void *', 'uint', 'uint *']);
     F.ShowWindow = U.func('__stdcall', 'ShowWindow', 'bool', ['intptr_t', 'int']);
+    F.GetAsyncKeyState = U.func('__stdcall', 'GetAsyncKeyState', 'short', ['int']);
+    F.SendInput = U.func('__stdcall', 'SendInput', 'uint', ['uint', 'void *', 'int']);
+    F.MapVirtualKeyW = U.func('__stdcall', 'MapVirtualKeyW', 'uint', ['uint', 'uint']);
 
     ready = true;
     return true;
@@ -287,6 +290,74 @@ function captureAffinity(win) {
   } catch { return null; }
 }
 
+function isAnyModifierDown() {
+  if (!load() || !F.GetAsyncKeyState) return false;
+  // VK_SHIFT = 0x10, VK_CONTROL = 0x11, VK_MENU = 0x12, VK_LWIN = 0x5B, VK_RWIN = 0x5C
+  const modifiers = [0x10, 0x11, 0x12, 0x5B, 0x5C];
+  for (const vk of modifiers) {
+    try {
+      const state = F.GetAsyncKeyState(vk);
+      if ((state & 0x8000) !== 0) return true;
+    } catch {}
+  }
+  return false;
+}
+
+function sendUnicodeChar(char, holdMs = 20) {
+  if (!load() || !F.SendInput) return false;
+  const code = typeof char === 'string' ? char.charCodeAt(0) : char;
+
+  const bufDown = Buffer.alloc(40);
+  bufDown.writeUInt32LE(1, 0); // INPUT_KEYBOARD = 1
+  bufDown.writeUInt16LE(0, 8); // wVk = 0
+  bufDown.writeUInt16LE(code, 10); // wScan = code
+  bufDown.writeUInt32LE(0x0004, 12); // KEYEVENTF_UNICODE = 0x0004
+
+  const bufUp = Buffer.alloc(40);
+  bufUp.writeUInt32LE(1, 0); // INPUT_KEYBOARD = 1
+  bufUp.writeUInt16LE(0, 8); // wVk = 0
+  bufUp.writeUInt16LE(code, 10); // wScan = code
+  bufUp.writeUInt32LE(0x0004 | 0x0002, 12); // KEYEVENTF_UNICODE | KEYEVENTF_KEYUP = 0x0006
+
+  F.SendInput(1, bufDown, 40);
+  if (holdMs > 0) {
+    const end = Date.now() + holdMs;
+    while (Date.now() < end) {}
+  }
+  F.SendInput(1, bufUp, 40);
+  return true;
+}
+
+function sendVirtualKey(vk, holdMs = 20) {
+  if (!load() || !F.SendInput) return false;
+  const scan = F.MapVirtualKeyW ? F.MapVirtualKeyW(vk, 0) : 0;
+
+  const bufDown = Buffer.alloc(40);
+  bufDown.writeUInt32LE(1, 0); // INPUT_KEYBOARD
+  bufDown.writeUInt16LE(vk, 8); // wVk
+  bufDown.writeUInt16LE(scan, 10); // wScan
+  bufDown.writeUInt32LE(0, 12); // dwFlags = 0 (KeyDown)
+
+  const bufUp = Buffer.alloc(40);
+  bufUp.writeUInt32LE(1, 0); // INPUT_KEYBOARD
+  bufUp.writeUInt16LE(vk, 8); // wVk
+  bufUp.writeUInt16LE(scan, 10); // wScan
+  bufUp.writeUInt32LE(0x0002, 12); // dwFlags = KEYEVENTF_KEYUP (0x0002)
+
+  F.SendInput(1, bufDown, 40);
+  if (holdMs > 0) {
+    const end = Date.now() + holdMs;
+    while (Date.now() < end) {}
+  }
+  F.SendInput(1, bufUp, 40);
+  return true;
+}
+
+function sendCaretNudge() {
+  sendVirtualKey(0x25, 10); // VK_LEFT
+  sendVirtualKey(0x27, 10); // VK_RIGHT
+}
+
 module.exports = {
   load,
   hwndOf,
@@ -302,4 +373,8 @@ module.exports = {
   captureAffinity,
   activate,
   isFocused,
+  isAnyModifierDown,
+  sendUnicodeChar,
+  sendVirtualKey,
+  sendCaretNudge,
 };

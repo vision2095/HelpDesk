@@ -70,6 +70,10 @@ const actions = new Set([
   "desktop.hide",
   "desktop.clickThrough",
   "desktop.clickThroughState",
+  "desktop.cursorPos",
+  "desktop.radial.open",
+  "desktop.updater.check",
+  "desktop.updater.downloadAndInstall",
   "gate.login",
   "gate.mfa",
   "gate.state",
@@ -129,9 +133,29 @@ contextBridge.exposeInMainWorld("lens", {
     ipcRenderer.on("lens:clickThrough", fn);
     return () => ipcRenderer.removeListener("lens:clickThrough", fn);
   },
+  onOpacityChanged: (listener) => {
+    const fn = (_event, opacity) => listener(opacity);
+    ipcRenderer.on("lens:opacity-changed", fn);
+    return () => ipcRenderer.removeListener("lens:opacity-changed", fn);
+  },
   onGlobalKey: (cb) => {
     const h = (_e, p) => cb(p);
     ipcRenderer.on('gkey', h);
     return () => ipcRenderer.off('gkey', h);
+  },
+  onUpdaterProgress: (listener) => {
+    const fn = (_event, progress) => listener(progress);
+    ipcRenderer.on("desktop.updater.progress", fn);
+    return () => ipcRenderer.removeListener("desktop.updater.progress", fn);
+  },
+  onUpdaterAvailable: (listener) => {
+    const fn = (_event, info) => listener(info);
+    ipcRenderer.on("desktop.updater.available", fn);
+    return () => ipcRenderer.removeListener("desktop.updater.available", fn);
+  },
+  on: (channel, listener) => {
+    const fn = (_event, ...args) => listener(...args);
+    ipcRenderer.on(channel, fn);
+    return () => ipcRenderer.removeListener(channel, fn);
   },
 });

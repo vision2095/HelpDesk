@@ -56,8 +56,8 @@ export const DEFAULT_HINTLENS_HOTKEYS: Record<string, string> = {
   scrollDown: "",
   stealth: "",
   theme: "",
-  opacityUp: "",
-  opacityDown: "",
+  opacityUp: "Shift+I",
+  opacityDown: "Shift+J",
   restart: "",
   quit: "",
   clearLastCapture: "",
@@ -150,6 +150,7 @@ const editableKeys: (keyof Settings)[] = [
   "theme",
   "opacity",
   "captureProtection",
+  "cloudScreenshotSync",
   "interviewLayout",
   "lightTextColor",
   "darkTextColor",
@@ -206,6 +207,76 @@ export function HintLensSettingsModal({
       settings.lightTextColor || "#24384c",
     ),
     [darkHex, setDarkHex] = useState(settings.darkTextColor || "#e2eaf5");
+  const [updateInfo, setUpdateInfo] = useState<{
+    updateAvailable?: boolean;
+    latestVersion?: string;
+    artifact?: any;
+    error?: string;
+    checked?: boolean;
+  } | null>(null);
+  const [updateChecking, setUpdateChecking] = useState(false);
+  const [updateProgress, setUpdateProgress] = useState<{
+    percent: number;
+    status: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!window.lens?.on) return;
+    const offProgress = window.lens.on?.(
+      "desktop.updater.progress",
+      (data: any) => {
+        setUpdateProgress(data);
+      },
+    );
+    const offAvailable = window.lens.on?.(
+      "desktop.updater.available",
+      (data: any) => {
+        setUpdateInfo({ ...data, checked: true });
+      },
+    );
+    return () => {
+      offProgress?.();
+      offAvailable?.();
+    };
+  }, []);
+
+  const handleCheckUpdate = async () => {
+    if (!window.lens) {
+      setUpdateInfo({
+        updateAvailable: false,
+        error: "Auto-updater is active in the desktop application.",
+        checked: true,
+      });
+      return;
+    }
+    setUpdateChecking(true);
+    setUpdateInfo(null);
+    try {
+      const res = await window.lens.invoke("desktop.updater.check");
+      setUpdateInfo({ ...res, checked: true });
+    } catch (err: any) {
+      setUpdateInfo({
+        updateAvailable: false,
+        error: err.message || "Failed to check for updates.",
+        checked: true,
+      });
+    } finally {
+      setUpdateChecking(false);
+    }
+  };
+
+  const handleInstallUpdate = async () => {
+    if (!window.lens || !updateInfo?.artifact) return;
+    try {
+      setUpdateProgress({ percent: 1, status: "Starting download..." });
+      await window.lens.invoke("desktop.updater.downloadAndInstall", {
+        artifact: updateInfo.artifact,
+      });
+    } catch (err: any) {
+      setUpdateProgress(null);
+      setNotice("Update failed: " + (err.message || String(err)));
+    }
+  };
   const modelRequest = useRef(0);
   const desktop = Boolean(window.lens);
   const nativeAvailable = desktop && Boolean(prefs);
@@ -372,6 +443,7 @@ export function HintLensSettingsModal({
         );
       const next = {
         ...draft,
+        opacity: Math.max(0.1, Math.min(1, draft.opacity ?? 0.5)),
         lightTextColor: lightHex,
         darkTextColor: darkHex,
       };
@@ -380,6 +452,9 @@ export function HintLensSettingsModal({
           .filter((key) => next[key] !== settingsBase[key])
           .map((key) => [key, next[key]]),
       ) as Partial<Settings>;
+      if (patch.opacity !== undefined) {
+        patch.opacity = Math.max(0.1, Math.min(1, patch.opacity));
+      }
       // Save native preferences first; registration errors reject without showing success.
       if (desktop && prefs && !same(prefs, baseline)) {
         if (onSaveDesktopPreferences) await onSaveDesktopPreferences(prefs);
@@ -392,10 +467,12 @@ export function HintLensSettingsModal({
       setDraft(next);
       setSettingsBase(next);
       setNotice("Settings saved.");
-      if (desktop)
+      if (desktop) {
+        await api("desktop.appearance").catch(() => {});
         setArchive(
           await api("desktop.captureArchive.status").catch(() => null),
         );
+      }
     });
   }
   function record(action: string, event: React.KeyboardEvent) {
@@ -809,16 +886,20 @@ export function HintLensSettingsModal({
                   </select>,
                 )}
                 {label(
-                  `Background opacity: ${Math.round(draft.opacity * 100)}%`,
+                  `Background opacity: ${Math.max(10, Math.round((draft.opacity ?? 0.5) * 100))}%`,
                   <input
                     aria-label="Background opacity"
                     type="range"
-                    min={0}
+                    min={10}
                     max={100}
-                    value={Math.round(draft.opacity * 100)}
+                    step={1}
+                    value={Math.max(10, Math.round((draft.opacity ?? 0.5) * 100))}
                     onChange={(event) =>
                       changeSetting({
-                        opacity: Number(event.target.value) / 100,
+                        opacity: Math.max(
+                          0.1,
+                          Math.min(1, Number(event.target.value) / 100),
+                        ),
                       })
                     }
                   />,
@@ -831,8 +912,7 @@ export function HintLensSettingsModal({
                   Restore 100% opacity
                 </button>
                 <p className="field-hint">
-                  Zero opacity makes the window invisible. Use your saved
-                  show/hide shortcut or tray menu to restore it.
+                  Minimum opacity is 10%. Press Shift+I to increase or Shift+J to decrease.
                 </p>
                 <label className="checkbox-row">
                   <input
@@ -1048,6 +1128,23 @@ export function HintLensSettingsModal({
                     Saved PNG files remain in your chosen folder when this
                     option is turned off. Limit: 200 MB of LensDesk captures.
                   </p>
+                  <label className="checkbox-row" style={{ marginTop: 14 }}>
+                    <input
+                      aria-label="Save answer history"
+                      type="checkbox"
+                      checked={draft.cloudScreenshotSync ?? true}
+                      onChange={(event) =>
+                        setDraft((prev) => ({
+                          ...prev,
+                          cloudScreenshotSync: event.target.checked,
+                        }))
+                      }
+                    />{" "}
+                    Save answer history (Cloud Screenshot Sync)
+                  </label>
+                  <p className="field-hint">
+                    Image plus AI answer stored to account per session in PostgreSQL cloud database. Web access and sign-in required.
+                  </p>
                   <button
                     type="button"
                     className="hintlens-btn secondary"
@@ -1099,8 +1196,7 @@ export function HintLensSettingsModal({
               <div className="hintlens-pane">
                 <h3 className="pane-heading">Typing</h3>
                 <p className="field-hint">
-                  Types selected answer text into your chosen app after
-                  confirmation. Press the same typing shortcut again to stop.
+                  How the Type hotkey enters an answer into the focused app. Pick a preset, or fine-tune the pace and how human the typing looks. Changes apply to the next Type.
                 </p>
                 <fieldset disabled={!nativeAvailable || busy}>
                   <legend>Auto-typer</legend>
@@ -1123,23 +1219,49 @@ export function HintLensSettingsModal({
                     ))}
                   </div>
                   {range(
-                    "Typing speed",
+                    "Speed",
                     autoType.wpm,
                     10,
                     250,
                     (wpm) => patchPrefs("autoType", { wpm }),
                     " WPM",
                   )}
+                  <p className="field-hint" style={{ fontSize: "11px", margin: "-4px 0 8px 0", opacity: 0.8 }}>
+                    Typing pace in words per minute. The real speed varies a little around this so it never looks mechanical.
+                  </p>
                   {range(
-                    "Timing variation",
+                    "Jitter",
                     autoType.jitter,
                     0,
                     100,
                     (jitter) => patchPrefs("autoType", { jitter }),
+                    "%",
                   )}
-                  {range("Pauses", autoType.pauses, 0, 100, (pauses) =>
-                    patchPrefs("autoType", { pauses }),
+                  <p className="field-hint" style={{ fontSize: "11px", margin: "-4px 0 8px 0", opacity: 0.8 }}>
+                    Keystroke-to-keystroke timing variation (log-normal, like real typing). 0% is metronome-steady; higher makes the rhythm more uneven.
+                  </p>
+                  {range(
+                    "Mistakes",
+                    autoType.mistakes ?? 0,
+                    0,
+                    100,
+                    (mistakes) => patchPrefs("autoType", { mistakes }),
+                    "%",
                   )}
+                  <p className="field-hint" style={{ fontSize: "11px", margin: "-4px 0 8px 0", opacity: 0.8 }}>
+                    How often it makes and fixes human-like typos/slips. 0% types flawlessly; higher adds more slips and corrections.
+                  </p>
+                  {range(
+                    "Pauses",
+                    autoType.pauses,
+                    0,
+                    100,
+                    (pauses) => patchPrefs("autoType", { pauses }),
+                    "%",
+                  )}
+                  <p className="field-hint" style={{ fontSize: "11px", margin: "-4px 0 8px 0", opacity: 0.8 }}>
+                    Thinking pauses at words, punctuation and new lines. 0% types straight through; higher adds more hesitation.
+                  </p>
                   {label(
                     "Start delay (seconds)",
                     <input
@@ -1170,22 +1292,6 @@ export function HintLensSettingsModal({
                     Type code blocks only when present
                   </label>
                 </fieldset>
-                <label className="slider-control-group">
-                  Simulated mistakes
-                  <input
-                    aria-label="Simulated mistakes unavailable"
-                    type="range"
-                    disabled
-                    min={0}
-                    max={100}
-                    value={0}
-                    readOnly
-                  />
-                </label>
-                <p className="field-hint">
-                  Simulated typos and corrections intended to disguise
-                  automation are not supported.
-                </p>
                 {!nativeAvailable && (
                   <p className="field-hint">
                     Typing into other applications requires the desktop app and
@@ -1718,6 +1824,112 @@ export function HintLensSettingsModal({
                   <p className="account-version">
                     Version: {appInfo?.version || "Unavailable"}
                   </p>
+                </div>
+
+                <div
+                  className="update-manager-box"
+                  style={{
+                    margin: "14px 0",
+                    padding: "14px 16px",
+                    borderRadius: 8,
+                    background: "rgba(255, 255, 255, 0.04)",
+                    border: "1px solid rgba(255, 255, 255, 0.1)",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      marginBottom: 8,
+                    }}
+                  >
+                    <strong style={{ fontSize: "13px" }}>Software Updates (OTA)</strong>
+                    <span style={{ fontSize: "11px", color: "#94a3b8" }}>
+                      Installed: v{appInfo?.version || "2.0.0"}
+                    </span>
+                  </div>
+                  {updateProgress ? (
+                    <div style={{ margin: "8px 0" }}>
+                      <p style={{ fontSize: "12px", color: "#38bdf8", margin: "0 0 6px 0" }}>
+                        {updateProgress.status}
+                      </p>
+                      <div
+                        style={{
+                          width: "100%",
+                          height: 6,
+                          background: "rgba(255, 255, 255, 0.1)",
+                          borderRadius: 3,
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: `${updateProgress.percent}%`,
+                            height: "100%",
+                            background: "#0284c7",
+                            transition: "width 0.2s",
+                          }}
+                        />
+                      </div>
+                      <small style={{ color: "#94a3b8", fontSize: "10px" }}>
+                        {updateProgress.percent}% complete
+                      </small>
+                    </div>
+                  ) : updateInfo?.updateAvailable ? (
+                    <div style={{ margin: "8px 0" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "8px 12px",
+                          borderRadius: 6,
+                          background: "rgba(16, 185, 129, 0.15)",
+                          border: "1px solid rgba(16, 185, 129, 0.3)",
+                          color: "#34d399",
+                          fontSize: "12px",
+                          marginBottom: 10,
+                        }}
+                      >
+                        <span>
+                          🚀 New version available: <strong>v{updateInfo.latestVersion}</strong>{" "}
+                          ({updateInfo.artifact?.size
+                            ? (updateInfo.artifact.size / 1048576).toFixed(1) + " MB"
+                            : "Native C++ PE build"})
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        className="hintlens-btn primary"
+                        style={{ width: "100%", padding: "8px 12px" }}
+                        onClick={handleInstallUpdate}
+                      >
+                        Download &amp; Install Update Now
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      {updateInfo?.checked && !updateInfo.updateAvailable && (
+                        <p style={{ fontSize: "12px", color: "#34d399", margin: "4px 0 8px 0" }}>
+                          ✓ Your LensDesk application is completely up to date!
+                        </p>
+                      )}
+                      {updateInfo?.error && (
+                        <p style={{ fontSize: "12px", color: "#f87171", margin: "4px 0 8px 0" }}>
+                          ⚠️ {updateInfo.error}
+                        </p>
+                      )}
+                      <button
+                        type="button"
+                        className="hintlens-btn secondary"
+                        disabled={updateChecking}
+                        onClick={handleCheckUpdate}
+                      >
+                        {updateChecking ? "Checking for updates..." : "Check for updates now"}
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <button
                   type="button"

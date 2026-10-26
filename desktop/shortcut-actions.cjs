@@ -10,6 +10,8 @@ function createShortcutActions({
   stopTyping,
   getWorkArea,
   onQuit,
+  onOpacityUp,
+  onOpacityDown,
 }) {
   const safeSend = (ch, data) => {
     try {
@@ -51,8 +53,6 @@ function createShortcutActions({
       [
         "browser",
         "theme",
-        "opacityUp",
-        "opacityDown",
         "clearLastCapture",
         "clearCaptures",
         "undo",
@@ -81,6 +81,18 @@ function createShortcutActions({
         },
       ]),
     ),
+    opacityUp: () => {
+      try {
+        if (typeof onOpacityUp === "function") onOpacityUp();
+      } catch {}
+      safeSend("opacityUp");
+    },
+    opacityDown: () => {
+      try {
+        if (typeof onOpacityDown === "function") onOpacityDown();
+      } catch {}
+      safeSend("opacityDown");
+    },
     moveUp: () => move(0, -40),
     moveDown: () => move(0, 40),
     moveLeft: () => move(-40, 0),
@@ -114,6 +126,15 @@ function createShortcutActions({
     // click-through on/off
     mouseMode: () => {
       toggleClickThrough?.();
+    },
+    // Global mouse radial action wheel
+    "overlay.radial": () => {
+      showWindow?.();
+      safeSend("shortcut", "overlay.radial");
+    },
+    radialWheel: () => {
+      showWindow?.();
+      safeSend("shortcut", "overlay.radial");
     },
     // dobara dabaya to typing STOP, warna start
     toggleTyping: () => {

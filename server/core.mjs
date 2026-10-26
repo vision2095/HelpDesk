@@ -282,12 +282,17 @@ export function createService({
         const p = payload?.provider || "openai";
         const normalized = {
           ...payload,
+          opacity:
+            payload?.opacity !== undefined
+              ? Math.max(0.1, Math.min(1, Number(payload.opacity) ?? 0.5))
+              : undefined,
           model: normalizeModel(
             p,
             (typeof payload?.model === "string" && payload.model.trim()) ||
               providers[p]?.model,
           ),
         };
+        if (normalized.opacity === undefined) delete normalized.opacity;
         const settings = settingsSchema.parse(normalized);
         store.save(
           "settings",

@@ -1644,21 +1644,24 @@ function App() {
         .find((m) => m.role === "assistant")?.content ||
       streamingText;
     if (!text) {
-      notify("No solution text available to auto-type.");
+      notify("No AI answer to type yet.");
       return;
     }
     if (window.lens) {
       try {
         setAutoTyping(true);
+        const isCode = text.includes("```");
         notify(
-          "Confirm typing into your editor. Use your saved typing shortcut again to stop.",
+          isCode
+            ? "[CODE] Typing... | Press Stop or hotkey to cancel."
+            : "[TEXT] Typing... | Press Stop or hotkey to cancel.",
         );
         const result = await window.lens.invoke("desktop.autoType", {
           text,
           skipConfirm: true,
         });
         notify(
-          result?.canceled ? "Auto-typing stopped." : "Auto-typing complete.",
+          result?.canceled ? "Typing cancelled." : "Typing complete.",
         );
       } catch (err: any) {
         fail(err);

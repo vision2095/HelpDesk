@@ -113,9 +113,17 @@ export const settingsSchema = z.object({
   systemPrompt: z.string().max(20000),
   transcriptionProvider: z.enum(["openai", "groq", "gemini"]),
   transcriptionModel: z.string().min(1).max(100),
-  opacity: z.number().min(0).max(1),
+  opacity: z.preprocess(
+    (val) => {
+      const num = Number(val);
+      if (Number.isNaN(num)) return 0.5;
+      return Math.max(0.1, Math.min(1, num));
+    },
+    z.number().min(0.1).max(1).default(0.5),
+  ),
   alwaysOnTop: z.boolean(),
   captureProtection: z.boolean().default(true),
+  cloudScreenshotSync: z.boolean().default(true),
   contextTokens: z.number().int().min(8000).max(64000).default(24000),
   version: z.number().int().nonnegative().optional(),
 });
@@ -135,5 +143,6 @@ export const initial = () => ({
     opacity: 1,
     alwaysOnTop: true,
     captureProtection: true,
+    cloudScreenshotSync: true,
   },
 });

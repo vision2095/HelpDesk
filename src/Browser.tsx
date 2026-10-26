@@ -10,6 +10,7 @@ import {
   Download,
   ExternalLink,
   House,
+  Camera,
 } from "lucide-react";
 import { api } from "./api";
 type BrowserTab = {
@@ -35,8 +36,12 @@ type BrowserState = {
 };
 export function WorkspaceBrowser({
   onError,
+  onCaptureScreen,
+  imagesCount = 0,
 }: {
   onError: (error: unknown) => void;
+  onCaptureScreen?: () => void;
+  imagesCount?: number;
 }) {
   const [state, setState] = useState<BrowserState>({
       activeId: null,
@@ -237,6 +242,36 @@ export function WorkspaceBrowser({
         >
           <Download size={17} />
         </button>
+        {onCaptureScreen && (
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="Capture screen for assistant"
+            onClick={onCaptureScreen}
+            title="Capture screenshot (Shift+S) for assistant"
+            style={{ position: "relative" }}
+          >
+            <Camera size={17} />
+            {imagesCount > 0 && (
+              <span
+                style={{
+                  position: "absolute",
+                  top: "-2px",
+                  right: "-2px",
+                  background: "#38bdf8",
+                  color: "#0f172a",
+                  borderRadius: "10px",
+                  fontSize: "9px",
+                  fontWeight: "bold",
+                  padding: "1px 4px",
+                  lineHeight: "1",
+                }}
+              >
+                {imagesCount}
+              </span>
+            )}
+          </button>
+        )}
       </form>
       {showFind && (
         <form
