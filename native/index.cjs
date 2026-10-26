@@ -93,6 +93,36 @@ function sendCaretNudge() {
   return mod.sendCaretNudge();
 }
 
+function getInputDesktopInfo() {
+  if (!mod || typeof mod.getInputDesktopInfo !== 'function') return { ok: true, desktop: 'Default', isDefault: true };
+  return mod.getInputDesktopInfo();
+}
+
+function isWindowFullscreen(hwnd) {
+  if (!mod || typeof mod.isWindowFullscreen !== 'function') return { ok: true, isFullscreen: false };
+  return mod.isWindowFullscreen(hwnd);
+}
+
+function initDpiAwareness() {
+  if (!mod || typeof mod.initDpiAwareness !== 'function') return false;
+  return mod.initDpiAwareness();
+}
+
+function startForegroundHook() {
+  if (!mod || typeof mod.startForegroundHook !== 'function') return false;
+  return mod.startForegroundHook();
+}
+
+function stopForegroundHook() {
+  if (!mod || typeof mod.stopForegroundHook !== 'function') return false;
+  return mod.stopForegroundHook();
+}
+
+function getLastForegroundHwnd() {
+  if (!mod || typeof mod.getLastForegroundHwnd !== 'function') return '0';
+  return mod.getLastForegroundHwnd();
+}
+
 module.exports = {
   available,
   info,
@@ -111,4 +141,10 @@ module.exports = {
   sendHardwareScancode,
   postBackgroundMessage,
   sendCaretNudge,
+  getInputDesktopInfo,
+  isWindowFullscreen,
+  initDpiAwareness,
+  startForegroundHook,
+  stopForegroundHook,
+  getLastForegroundHwnd,
 };

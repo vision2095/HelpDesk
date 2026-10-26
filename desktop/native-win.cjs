@@ -453,6 +453,64 @@ function synchronizeFocus(targetHwnd) {
   } catch { return false; }
 }
 
+function isDefaultDesktopActive() {
+  if (nativeAddon?.available) {
+    const info = nativeAddon.getInputDesktopInfo();
+    return Boolean(info?.isDefault);
+  }
+  const probe = desktopProbe();
+  return probe ? probe.input === 'Default' : true;
+}
+
+function getInputDesktopInfo() {
+  if (nativeAddon?.available) {
+    return nativeAddon.getInputDesktopInfo();
+  }
+  const probe = desktopProbe();
+  return { ok: !!probe, desktop: probe?.input || 'Default', isDefault: (probe?.input === 'Default') };
+}
+
+function isWindowFullscreen(winOrHwnd) {
+  const h = (typeof winOrHwnd === 'object' && winOrHwnd && typeof winOrHwnd.getNativeWindowHandle === 'function')
+    ? hwndOf(winOrHwnd)
+    : winOrHwnd;
+  if (!h) return false;
+  if (nativeAddon?.available) {
+    const res = nativeAddon.isWindowFullscreen(h.toString());
+    return Boolean(res?.isFullscreen);
+  }
+  return false;
+}
+
+function initDpiAwareness() {
+  if (nativeAddon?.available) {
+    return nativeAddon.initDpiAwareness();
+  }
+  return false;
+}
+
+function startForegroundHook() {
+  if (nativeAddon?.available) {
+    return nativeAddon.startForegroundHook();
+  }
+  return false;
+}
+
+function stopForegroundHook() {
+  if (nativeAddon?.available) {
+    return nativeAddon.stopForegroundHook();
+  }
+  return false;
+}
+
+function lastForegroundWindow() {
+  if (nativeAddon?.available) {
+    const hStr = nativeAddon.getLastForegroundHwnd();
+    return hStr && hStr !== '0' ? BigInt(hStr) : foregroundWindow();
+  }
+  return foregroundWindow();
+}
+
 module.exports = {
   load,
   hwndOf,
@@ -480,4 +538,11 @@ module.exports = {
   postBackgroundChar,
   postBackgroundKey,
   synchronizeFocus,
+  isDefaultDesktopActive,
+  getInputDesktopInfo,
+  isWindowFullscreen,
+  initDpiAwareness,
+  startForegroundHook,
+  stopForegroundHook,
+  lastForegroundWindow,
 };

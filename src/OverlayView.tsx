@@ -1189,7 +1189,7 @@ export function OverlayView({
                 )
               ) : (
                 <span className="ticker-idle-text">
-                  Start a session to transcribe the interviewer.
+                  Start a session to begin live transcription of the interviewer's audio.
                 </span>
               )}
             </div>
@@ -1250,8 +1250,8 @@ export function OverlayView({
               ) : (
                 <div className="iv-transcript-empty-text">
                   {recording
-                    ? "Listening... the interviewer (system audio) will appear here. Your own voice is not captured."
-                    : "Start a session to transcribe the interviewer."}
+                    ? "Listening... the interviewer's speech appears here. (System audio loopback)"
+                    : "Start a session to begin live transcription of the interviewer's audio."}
                 </div>
               )}
             </div>

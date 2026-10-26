@@ -273,6 +273,11 @@ async function typeWindows(text, options, signal) {
   }
 
   if (nativeWin && typeof nativeWin.sendUnicodeChar === "function") {
+    // Module 3: Windows Desktop Session Integration (HintLens 1:1)
+    if (typeof nativeWin.isDefaultDesktopActive === "function" && !nativeWin.isDefaultDesktopActive()) {
+      throw new Error("[DesktopMonitor] Cannot autotype on non-interactive desktop (UAC prompt or session locked).");
+    }
+
     await waitModifiersReleased(signal, 5000);
     const targetHwnd = nativeWin.foregroundWindow();
     const targetPid = nativeWin.foregroundPid();
@@ -285,14 +290,19 @@ async function typeWindows(text, options, signal) {
       try { nativeWin.synchronizeFocus(targetHwnd); } catch {}
     }
 
+    // Check if target is fullscreen (HintLens [TypingSim] fullscreen caret nudge)
+    const isFullscreen = typeof nativeWin.isWindowFullscreen === "function" ? nativeWin.isWindowFullscreen(targetHwnd) : false;
+
     const characters = Array.from(text.replace(/\r\n/g, "\n"));
     for (let index = 0; index < characters.length; index++) {
       canceled(signal);
 
-      // Verify destination target window has not changed (HintLens focus drift guard)
-      const currentHwnd = nativeWin.foregroundWindow();
-      if (currentHwnd !== targetHwnd) {
-        throw new Error("Destination changed. Typing stopped.");
+      // Verify destination target window has not changed every 5 chars (HintLens [TypeSim] 1:1)
+      if (index % 5 === 0 || index === 0) {
+        const currentHwnd = nativeWin.foregroundWindow();
+        if (currentHwnd !== targetHwnd) {
+          throw new Error("[TypeSim] Focus drifted — stopping to avoid typing into wrong window");
+        }
       }
 
       await waitModifiersReleased(signal, 1000);
@@ -333,6 +343,7 @@ async function typeWindows(text, options, signal) {
       }
 
       // Autocomplete / Caret nudge for brackets in code (prevents closing bracket expansion)
+      // [TypingSim] Fullscreen target — caret nudge, not Esc
       if ("{}()[]\"'`".includes(char)) {
         nativeWin.sendCaretNudge();
       }

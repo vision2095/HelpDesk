@@ -492,6 +492,138 @@ Napi::Value SendCaretNudge(const Napi::CallbackInfo& info) {
   return Napi::Boolean::New(env, true);
 }
 
+// Module 3: Windows Desktop Session Integration (HintLens 1:1)
+Napi::Value GetInputDesktopInfo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  HDESK hDesk = OpenInputDesktop(0, FALSE, DESKTOP_READOBJECTS);
+  if (!hDesk) {
+    hDesk = OpenInputDesktop(0, FALSE, GENERIC_READ);
+  }
+  if (!hDesk) {
+    Napi::Object res = Napi::Object::New(env);
+    res.Set("ok", Napi::Boolean::New(env, false));
+    res.Set("desktop", Napi::String::New(env, "unknown"));
+    res.Set("isDefault", Napi::Boolean::New(env, false));
+    return res;
+  }
+
+  wchar_t name[256] = {};
+  DWORD needed = 0;
+  BOOL gotName = GetUserObjectInformationW(hDesk, UOI_NAME, name, sizeof(name), &needed);
+  CloseDesktop(hDesk);
+
+  if (!gotName) {
+    Napi::Object res = Napi::Object::New(env);
+    res.Set("ok", Napi::Boolean::New(env, false));
+    res.Set("desktop", Napi::String::New(env, "unknown"));
+    res.Set("isDefault", Napi::Boolean::New(env, false));
+    return res;
+  }
+
+  int utf8Len = WideCharToMultiByte(CP_UTF8, 0, name, -1, nullptr, 0, nullptr, nullptr);
+  std::string utf8Name(utf8Len > 0 ? utf8Len - 1 : 0, '\0');
+  if (utf8Len > 1) {
+    WideCharToMultiByte(CP_UTF8, 0, name, -1, &utf8Name[0], utf8Len, nullptr, nullptr);
+  }
+
+  bool isDefault = (_wcsicmp(name, L"Default") == 0);
+  Napi::Object res = Napi::Object::New(env);
+  res.Set("ok", Napi::Boolean::New(env, true));
+  res.Set("desktop", Napi::String::New(env, utf8Name));
+  res.Set("isDefault", Napi::Boolean::New(env, isDefault));
+  return res;
+}
+
+// Module 4: Fullscreen Target Detection for Caret Nudge (HintLens [TypingSim] 1:1)
+Napi::Value IsWindowFullscreen(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1) return Napi::Boolean::New(env, false);
+  HWND hwnd = ParseHwnd(info[0]);
+  if (!hwnd || !IsWindow(hwnd)) return Napi::Boolean::New(env, false);
+
+  RECT rcWin = {};
+  if (!GetWindowRect(hwnd, &rcWin)) return Napi::Boolean::New(env, false);
+
+  HMONITOR hMon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+  if (!hMon) return Napi::Boolean::New(env, false);
+
+  MONITORINFO mi = {};
+  mi.cbSize = sizeof(MONITORINFO);
+  if (!GetMonitorInfoW(hMon, &mi)) return Napi::Boolean::New(env, false);
+
+  bool isFullscreen = (rcWin.left <= mi.rcMonitor.left &&
+                       rcWin.top <= mi.rcMonitor.top &&
+                       rcWin.right >= mi.rcMonitor.right &&
+                       rcWin.bottom >= mi.rcMonitor.bottom);
+
+  Napi::Object res = Napi::Object::New(env);
+  res.Set("ok", Napi::Boolean::New(env, true));
+  res.Set("isFullscreen", Napi::Boolean::New(env, isFullscreen));
+  return res;
+}
+
+// Module 1: Per-Monitor V2 DPI Awareness Context (HintLens 1:1)
+Napi::Value InitDpiAwareness(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  typedef BOOL(WINAPI* PFN_SetProcessDpiAwarenessContext)(HANDLE);
+  HMODULE hUser32 = GetModuleHandleW(L"user32.dll");
+  if (!hUser32) return Napi::Boolean::New(env, false);
+
+  PFN_SetProcessDpiAwarenessContext pfnSetDpi =
+      reinterpret_cast<PFN_SetProcessDpiAwarenessContext>(GetProcAddress(hUser32, "SetProcessDpiAwarenessContext"));
+  if (pfnSetDpi) {
+    BOOL ok = pfnSetDpi(reinterpret_cast<HANDLE>(-4)); // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
+    return Napi::Boolean::New(env, ok != FALSE);
+  }
+  return Napi::Boolean::New(env, false);
+}
+
+// Module 4: WinEvent Foreground Hook (HintLens SetWinEventHook 1:1)
+static HWINEVENTHOOK g_hFgEventHook = nullptr;
+static HWND g_lastReportedForeground = nullptr;
+
+static void CALLBACK WinEventForegroundProc(
+    HWINEVENTHOOK hWinEventHook,
+    DWORD event,
+    HWND hwnd,
+    LONG idObject,
+    LONG idChild,
+    DWORD idEventThread,
+    DWORD dwmsEventTime) {
+  if (event == EVENT_SYSTEM_FOREGROUND && hwnd && IsWindow(hwnd)) {
+    g_lastReportedForeground = hwnd;
+  }
+}
+
+Napi::Value StartForegroundHook(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (g_hFgEventHook) return Napi::Boolean::New(env, true);
+  g_hFgEventHook = SetWinEventHook(
+      EVENT_SYSTEM_FOREGROUND,
+      EVENT_SYSTEM_FOREGROUND,
+      nullptr,
+      WinEventForegroundProc,
+      0,
+      0,
+      WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+  return Napi::Boolean::New(env, g_hFgEventHook != nullptr);
+}
+
+Napi::Value StopForegroundHook(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (g_hFgEventHook) {
+    UnhookWinEvent(g_hFgEventHook);
+    g_hFgEventHook = nullptr;
+  }
+  return Napi::Boolean::New(env, true);
+}
+
+Napi::Value GetLastForegroundHwnd(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  HWND fg = g_lastReportedForeground ? g_lastReportedForeground : GetForegroundWindow();
+  return Napi::String::New(env, HwndToString(fg));
+}
+
 #else
 
 // Non-Windows stub implementation for cross-platform builds and CI
@@ -613,6 +745,37 @@ Napi::Value SendCaretNudge(const Napi::CallbackInfo& info) {
   return Napi::Boolean::New(info.Env(), true);
 }
 
+Napi::Value GetInputDesktopInfo(const Napi::CallbackInfo& info) {
+  Napi::Object res = Napi::Object::New(info.Env());
+  res.Set("ok", Napi::Boolean::New(info.Env(), true));
+  res.Set("desktop", Napi::String::New(info.Env(), "Default"));
+  res.Set("isDefault", Napi::Boolean::New(info.Env(), true));
+  return res;
+}
+
+Napi::Value IsWindowFullscreen(const Napi::CallbackInfo& info) {
+  Napi::Object res = Napi::Object::New(info.Env());
+  res.Set("ok", Napi::Boolean::New(info.Env(), true));
+  res.Set("isFullscreen", Napi::Boolean::New(info.Env(), false));
+  return res;
+}
+
+Napi::Value InitDpiAwareness(const Napi::CallbackInfo& info) {
+  return Napi::Boolean::New(info.Env(), true);
+}
+
+Napi::Value StartForegroundHook(const Napi::CallbackInfo& info) {
+  return Napi::Boolean::New(info.Env(), true);
+}
+
+Napi::Value StopForegroundHook(const Napi::CallbackInfo& info) {
+  return Napi::Boolean::New(info.Env(), true);
+}
+
+Napi::Value GetLastForegroundHwnd(const Napi::CallbackInfo& info) {
+  return Napi::String::New(info.Env(), "0");
+}
+
 #endif  // _WIN32
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
@@ -632,6 +795,12 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("sendHardwareScancode", Napi::Function::New(env, SendHardwareScancode));
   exports.Set("postBackgroundMessage", Napi::Function::New(env, PostBackgroundMessage));
   exports.Set("sendCaretNudge", Napi::Function::New(env, SendCaretNudge));
+  exports.Set("getInputDesktopInfo", Napi::Function::New(env, GetInputDesktopInfo));
+  exports.Set("isWindowFullscreen", Napi::Function::New(env, IsWindowFullscreen));
+  exports.Set("initDpiAwareness", Napi::Function::New(env, InitDpiAwareness));
+  exports.Set("startForegroundHook", Napi::Function::New(env, StartForegroundHook));
+  exports.Set("stopForegroundHook", Napi::Function::New(env, StopForegroundHook));
+  exports.Set("getLastForegroundHwnd", Napi::Function::New(env, GetLastForegroundHwnd));
   return exports;
 }
 
