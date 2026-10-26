@@ -25,9 +25,8 @@ export interface HintLensSettingsModalProps {
   onRefresh?: () => unknown;
 }
 
-// These are LensDesk's defaults, not the customized prompt in the reference photo.
 export const DEFAULT_HINTLENS_SYSTEM_PROMPT =
-  "Give clear, practical answers. Explain your reasoning, state assumptions, and ask for clarification when needed.";
+  "Analyse the provided screenshot(s) or question and provide the correct answer. For MCQs, give the correct option with a brief explanation if helpful. For coding/debugging, return the complete correct code. For descriptive questions, provide a clear and accurate answer.";
 export const DEFAULT_HINTLENS_HOTKEYS: Record<string, string> = {
   toggle: "CommandOrControl+Shift+L",
   hide: "Shift+H",

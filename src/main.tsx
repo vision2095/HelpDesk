@@ -115,7 +115,7 @@ const blankState: State = {
     localBaseUrl: "http://127.0.0.1:11434/v1",
     language: "English",
     systemPrompt:
-      "Give clear, practical answers. Explain your reasoning, state assumptions, and ask for clarification when needed.",
+      "Analyse the provided screenshot(s) or question and provide the correct answer. For MCQs, give the correct option with a brief explanation if helpful. For coding/debugging, return the complete correct code. For descriptive questions, provide a clear and accurate answer.",
     transcriptionProvider: "openai",
     transcriptionModel: "whisper-1",
     opacity: 1,
@@ -332,6 +332,7 @@ function App() {
     [authModalOpen, setAuthModalOpen] = useState(false),
     [radialWheelOpen, setRadialWheelOpen] = useState(false),
     [regionImage, setRegionImage] = useState<string | null>(null),
+    [snipCorner1, setSnipCorner1] = useState<{ x: number; y: number } | null>(null),
     [radialMousePos, setRadialMousePos] = useState<{
       x: number;
       y: number;
@@ -1429,6 +1430,29 @@ function App() {
     if (res && typeof res.floating === "boolean") setFloating(res.floating);
     setHintlensSettingsOpen(false);
   }
+  async function cropImage(
+    dataUrl: string,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+  ): Promise<string> {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, width);
+        canvas.height = Math.max(1, height);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return resolve(dataUrl);
+        ctx.drawImage(img, x, y, width, height, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/png"));
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+  }
+
   async function captureRegion() {
     if (regionImage) return;
     if (!currentRef.current) {
@@ -1440,6 +1464,40 @@ function App() {
       throw new Error(
         "The bundle holds five screenshots. Remove a capture before adding another.",
       );
+
+    if (desktop) {
+      try {
+        const curPos = await api<{ x: number; y: number }>("desktop.cursorPos");
+        if (curPos && typeof curPos.x === "number") {
+          if (!snipCorner1) {
+            setSnipCorner1(curPos);
+            notify("Corner 1 marked - press region hotkey again at opposite corner");
+            return;
+          } else {
+            const p1 = snipCorner1;
+            setSnipCorner1(null);
+            const left = Math.min(p1.x, curPos.x);
+            const top = Math.min(p1.y, curPos.y);
+            const width = Math.abs(curPos.x - p1.x);
+            const height = Math.abs(curPos.y - p1.y);
+            if (width >= 20 && height >= 20) {
+              const fullImg = (
+                await api<{ image: string }>("desktop.capture", {
+                  mode: "active",
+                  silent: true,
+                  deferArchive: true,
+                })
+              ).image;
+              const cropped = await cropImage(fullImg, left, top, width, height);
+              await attachRegion(cropped);
+              notify(`Region captured (${width}x${height})`);
+              return;
+            }
+          }
+        }
+      } catch {}
+    }
+
     const image = desktop
       ? (
           await api<{ image: string }>("desktop.capture", {
