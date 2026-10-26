@@ -122,9 +122,9 @@ export function Home({ navigate }: HomeProps) {
       variant: "Setup Installer (Recommended)",
       detail: "Windows 10 & 11 · 64-bit EXE",
       artifact: {
-        url: "https://github.com/VivekGitNinja/LensDesk2.0/releases/download/v2.0.0/LensDesk-2.0.0-Setup.exe",
+        url: "/downloads/windows",
         version: "2.0.0",
-        size: 1155422,
+        size: 1574800,
       },
     },
     {
@@ -133,9 +133,9 @@ export function Home({ navigate }: HomeProps) {
       variant: "Portable Archive",
       detail: "Windows 10 & 11 · 64-bit ZIP",
       artifact: {
-        url: "https://github.com/VivekGitNinja/LensDesk2.0/releases/download/v2.0.0/LensDesk-2.0.0-Windows-x64.zip",
+        url: "/downloads/windows",
         version: "2.0.0",
-        size: 1063786,
+        size: 1574800,
       },
     },
     {
@@ -339,20 +339,30 @@ export function Home({ navigate }: HomeProps) {
                 moving. No dashboard to manage while the moment is happening.
               </p>
               <div className="site-hero-actions">
+                <a
+                  className="site-button site-button-primary"
+                  href="/downloads/windows"
+                  download="LensDesk-2.0.0-Windows-x64.zip"
+                >
+                  <Download size={16} />
+                  Download for Windows
+                </a>
+                <a
+                  className="site-button site-button-primary"
+                  style={{ background: "#1868db", color: "#fff" }}
+                  href="/downloads/mac-arm64"
+                  download="LensDesk-2.0.0-macOS-Apple-Silicon-arm64.dmg"
+                >
+                  <Download size={16} />
+                  Download for MacOS
+                </a>
                 <button
                   type="button"
-                  className="site-button site-button-primary"
-                  onClick={() => jump("download")}
-                >
-                  Get LensDesk
-                  <ArrowRight size={16} />
-                </button>
-                <a
                   className="site-button site-button-quiet"
-                  href="#workflow"
+                  onClick={() => navigate("downloads")}
                 >
-                  See the workflow
-                </a>
+                  All Downloads &amp; Guide
+                </button>
               </div>
               <ul className="site-hero-facts">
                 <li>
