@@ -84,6 +84,7 @@ import {
   DEFAULT_HINTLENS_HOTKEYS,
 } from "./HintLensSettingsModal";
 import { HintLensAuthModal } from "./HintLensAuthModal";
+import { HintLensDownloadsSection } from "./HintLensDownloadsSection";
 import { RadialActionWheel } from "./RadialActionWheel";
 import { RegionCapture } from "./RegionCapture";
 import { installMouseGestures } from "./mouse-gestures.mjs";
@@ -335,6 +336,7 @@ function App() {
       x: number;
       y: number;
     } | null>(null),
+    [availableUpdate, setAvailableUpdate] = useState<any>(null),
     [gate, setGate] = useState<any>(null),
     [floatingView, setFloatingView] = useState<"assistant" | "browser">(
       "assistant",
@@ -482,6 +484,12 @@ function App() {
     );
   }
   function saveSettingsPatch(patch: Partial<Settings>) {
+    if (patch.opacity !== undefined) {
+      patch.opacity = Math.max(0.1, Math.min(1, patch.opacity));
+    }
+    if (patch.theme) {
+      applyTheme(patch.theme, document, stateRef.current?.settings);
+    }
     if (!settingsWriter.current)
       settingsWriter.current = createSettingsWriter({
         getBase: () => stateRef.current!.settings,
@@ -888,18 +896,16 @@ function App() {
         }),
       );
     if (action === "opacityUp" || action === "opacityDown")
-      run(() =>
-        saveSettingsPatch({
-          opacity: Math.max(
-            0.15,
-            Math.min(
-              1,
-              (stateRef.current?.settings.opacity ?? 1) +
-                (action === "opacityUp" ? 0.1 : -0.1),
-            ),
-          ),
-        }),
-      );
+      run(async () => {
+        const current = stateRef.current?.settings.opacity ?? 0.5;
+        const delta = action === "opacityUp" ? 0.1 : -0.1;
+        const nextOpacity = Math.max(
+          0.1,
+          Math.min(1, Math.round((current + delta) * 10) / 10),
+        );
+        await saveSettingsPatch({ opacity: nextOpacity });
+        if (window.lens) await api("desktop.appearance").catch(() => {});
+      });
     if (action === "clearLastCapture" || action === "undo")
       setImages((old) => old.slice(0, -1));
     if (action === "clearCaptures" || action === "clearBundle") setImages([]);
@@ -923,6 +929,37 @@ function App() {
       if (window.lens) run(() => api("desktop.quit"));
       else window.close();
     }
+    if (
+      action === "overlay.radial" ||
+      action === "radial" ||
+      action === "radialWheel"
+    ) {
+      if (window.lens) {
+        api<{ x: number; y: number }>("desktop.cursorPos")
+          .then((pos) => {
+            if (pos && typeof pos.x === "number") setRadialMousePos(pos);
+            else
+              setRadialMousePos({
+                x: window.innerWidth / 2,
+                y: window.innerHeight / 2,
+              });
+            setRadialWheelOpen((prev) => !prev);
+          })
+          .catch(() => {
+            setRadialMousePos({
+              x: window.innerWidth / 2,
+              y: window.innerHeight / 2,
+            });
+            setRadialWheelOpen((prev) => !prev);
+          });
+      } else {
+        setRadialMousePos({
+          x: window.innerWidth / 2,
+          y: window.innerHeight / 2,
+        });
+        setRadialWheelOpen((prev) => !prev);
+      }
+    }
     if (action === "scrollUp" || action === "scrollDown") {
       const target = pipWindowRef.current?.document || document;
       target
@@ -937,11 +974,18 @@ function App() {
         });
     }
   };
-  useEffect(
-    () =>
-      window.lens?.onShortcut((action) => shortcutHandlerRef.current(action)),
-    [],
-  );
+  useEffect(() => {
+    const unsub = window.lens?.onShortcut((action) =>
+      shortcutHandlerRef.current(action),
+    );
+    const offOpacity = window.lens?.onOpacityChanged?.((op: number) => {
+      setSettingsDraft((old) => (old ? { ...old, opacity: op } : old));
+    });
+    return () => {
+      unsub?.();
+      offOpacity?.();
+    };
+  }, []);
   useEffect(() => {
     const listener = (e: KeyboardEvent) => {
       if (e.key === "Escape") setModal(null);
@@ -1014,6 +1058,48 @@ function App() {
         return;
       }
 
+      // Plain Shift+I: Opacity Up if not typing in an input field
+      if (
+        !isInput &&
+        e.shiftKey &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.altKey &&
+        e.key.toLowerCase() === "i"
+      ) {
+        e.preventDefault();
+        shortcutHandlerRef.current("opacityUp");
+        return;
+      }
+
+      // Plain Shift+J: Opacity Down if not typing in an input field
+      if (
+        !isInput &&
+        e.shiftKey &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.altKey &&
+        e.key.toLowerCase() === "j"
+      ) {
+        e.preventDefault();
+        shortcutHandlerRef.current("opacityDown");
+        return;
+      }
+
+      // Plain Shift+M: Click-Through / Mouse Mode toggle if not typing in an input field
+      if (
+        !isInput &&
+        e.shiftKey &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.altKey &&
+        e.key.toLowerCase() === "m"
+      ) {
+        e.preventDefault();
+        shortcutHandlerRef.current("clickThrough");
+        return;
+      }
+
       // If focused inside an input or textarea, let normal typing occur without triggering global hotkeys
       if (isInput) return;
       const activeHotkeys = {
@@ -1032,6 +1118,42 @@ function App() {
     window.addEventListener("keydown", listener);
     return () => window.removeEventListener("keydown", listener);
   }, [pipActive, desktop, desktopPreferences, settingsDraft]);
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      if (e.clipboardData?.items) {
+        for (const item of Array.from(e.clipboardData.items)) {
+          if (item.type.startsWith("image/")) {
+            const file = item.getAsFile();
+            if (file) {
+              e.preventDefault();
+              const reader = new FileReader();
+              reader.onload = () => {
+                if (typeof reader.result === "string") {
+                  setImages((old) => [...old, reader.result as string].slice(0, 5));
+                  notify("Screenshot / image pasted and added to bundle!");
+                }
+              };
+              reader.readAsDataURL(file);
+              return;
+            }
+          }
+        }
+      }
+    };
+    window.addEventListener("paste", handlePaste);
+    return () => window.removeEventListener("paste", handlePaste);
+  }, []);
+  useEffect(() => {
+    if (!window.lens?.on) return;
+    return window.lens.on("desktop.updater.available", (data: any) => {
+      if (data?.updateAvailable) {
+        setAvailableUpdate(data);
+        notify(
+          `New LensDesk update available: v${data.latestVersion}. Open Settings to install.`,
+        );
+      }
+    });
+  }, []);
   useEffect(() => {
     if (!desktopPreferences?.mouse?.enabled) {
       setRadialWheelOpen(false);
@@ -1488,7 +1610,7 @@ function App() {
   function handleOpacityChange(op: number) {
     const base = settingsDraft || stateRef.current?.settings || state?.settings;
     if (!base) return;
-    const opacity = Math.max(0.15, Math.min(1, op));
+    const opacity = Math.max(0.1, Math.min(1, op));
     const next = { ...base, opacity };
     setSettingsDraft(next);
     if (opacityTimer.current) clearTimeout(opacityTimer.current);
@@ -2310,7 +2432,13 @@ function App() {
     },
     activeView: floatingView,
     onToggleView: (v: "assistant" | "browser") => setFloatingView(v),
-    renderBrowser: <WorkspaceBrowser onError={fail} />,
+    renderBrowser: (
+      <WorkspaceBrowser
+        onError={fail}
+        onCaptureScreen={() => run(quickCaptureScreen)}
+        imagesCount={images.length}
+      />
+    ),
     onToggleInterviewLayout: () => {
       const base =
         settingsDraft || stateRef.current?.settings || state?.settings;
@@ -2352,6 +2480,8 @@ function App() {
     audioSource,
     onSetAudioSource: setAudioSource,
     elapsedSeconds: current?.activeSeconds ?? elapsed,
+    theme: state.settings.theme,
+    availableUpdate,
   };
   const handleSaveDesktopPreferences = async (prefs: any) => {
     try {
@@ -2381,7 +2511,13 @@ function App() {
           activeView={floatingView}
           onToggleView={setFloatingView}
           singleWindow
-          renderBrowser={<WorkspaceBrowser onError={fail} />}
+          renderBrowser={
+            <WorkspaceBrowser
+              onError={fail}
+              onCaptureScreen={() => run(quickCaptureScreen)}
+              imagesCount={images.length}
+            />
+          }
         />
         {hintlensSettingsOpen && (
           <HintLensSettingsModal
@@ -2590,7 +2726,11 @@ function App() {
           </div>
         )}
         {page === "browser" && desktop && !floating && !modal && (
-          <WorkspaceBrowser onError={fail} />
+          <WorkspaceBrowser
+            onError={fail}
+            onCaptureScreen={() => run(quickCaptureScreen)}
+            imagesCount={images.length}
+          />
         )}
         {page === "workspace" && (
           <div className="workspace-page">
@@ -4394,20 +4534,20 @@ function App() {
                   Window opacity{" "}
                   {!desktop && <span className="desktop-tag-pill">Desktop App Only</span>}
                   <span className="muted">
-                    {Math.max(15, Math.round(settingsDraft.opacity * 100))}%
+                    {Math.max(10, Math.round((settingsDraft.opacity ?? 0.5) * 100))}%
                   </span>
                   <input
                     type="range"
-                    min="15"
+                    min="10"
                     max="100"
                     step="1"
                     disabled={!desktop}
-                    value={Math.max(15, Math.round(settingsDraft.opacity * 100))}
+                    value={Math.max(10, Math.round((settingsDraft.opacity ?? 0.5) * 100))}
                     onChange={(e) =>
                       setSettingsDraft({
                         ...settingsDraft,
                         opacity: Math.max(
-                          0.15,
+                          0.1,
                           Math.min(1, Number(e.target.value) / 100),
                         ),
                       })
@@ -4427,8 +4567,12 @@ function App() {
                 onClick={() =>
                   run(async () => {
                     if (!settingsDraft) return;
+                    const cleanDraft = {
+                      ...settingsDraft,
+                      opacity: Math.max(0.1, Math.min(1, settingsDraft.opacity ?? 0.5)),
+                    };
                     const patch = Object.fromEntries(
-                      Object.entries(settingsDraft).filter(
+                      Object.entries(cleanDraft).filter(
                         ([key, value]) =>
                           key !== "version" &&
                           value !==
@@ -4488,137 +4632,9 @@ function App() {
         )}
         {page === "downloads" && (
           <div className="content-page">
-            <PageNav current="downloads" onNavigate={navigate} isDesktop={desktop} />
-            <div className="page-heading">
-              <div>
-                <div className="site-kicker">
-                  <span />
-                  NATIVE DESKTOP APPLICATIONS
-                </div>
-                <h1>Direct Desktop Downloads<span>.</span></h1>
-                <p>
-                  Experience the true OS-level floating overlay, global hotkeys,
-                  and stealth click-through with our native Windows and macOS applications.
-                </p>
-              </div>
-              <Monitor size={44} strokeWidth={1} />
-            </div>
+            <HintLensDownloadsSection isDesktop={desktop} onNavigate={navigate} />
 
-            <div className="download-grid-cards">
-              <article className="download-card-featured">
-                <span className="download-card-badge">RECOMMENDED</span>
-                <div>
-                  <div className="download-card-title">
-                    <Laptop size={24} style={{ color: "var(--site-accent, #d8f56b)" }} />
-                    <h3>Windows Installer</h3>
-                  </div>
-                  <p className="download-card-desc">
-                    Complete native x64 Windows installer with Start menu integration,
-                    desktop shortcut, and automatic WebView2 bootstrapping.
-                  </p>
-                  <div className="download-card-meta">
-                    <span>Windows 10 & 11 (64-bit)</span>
-                    <span>·</span>
-                    <span>1.15 MB Setup.exe</span>
-                  </div>
-                </div>
-                <a
-                  className="download-action-btn primary"
-                  href="https://github.com/VivekGitNinja/LensDesk2.0/releases/download/v2.0.0/LensDesk-2.0.0-Setup.exe"
-                  download="LensDesk-2.0.0-Setup.exe"
-                >
-                  <Download size={16} />
-                  Download Installer (.exe)
-                </a>
-              </article>
-
-              <article className="download-card-featured">
-                <span className="download-card-badge" style={{ background: "rgba(255,255,255,0.08)", color: "#e5ede3" }}>
-                  PORTABLE
-                </span>
-                <div>
-                  <div className="download-card-title">
-                    <FolderOpen size={24} style={{ color: "#9aa698" }} />
-                    <h3>Windows Portable</h3>
-                  </div>
-                  <p className="download-card-desc">
-                    Standalone archive that requires no installation or administrator rights.
-                    Extract anywhere or run directly from a USB drive.
-                  </p>
-                  <div className="download-card-meta">
-                    <span>Windows 10 & 11 (64-bit)</span>
-                    <span>·</span>
-                    <span>1.06 MB ZIP</span>
-                  </div>
-                </div>
-                <a
-                  className="download-action-btn secondary"
-                  href="https://github.com/VivekGitNinja/LensDesk2.0/releases/download/v2.0.0/LensDesk-2.0.0-Windows-x64.zip"
-                  download="LensDesk-2.0.0-Windows-x64.zip"
-                >
-                  <Download size={16} />
-                  Download Portable (.zip)
-                </a>
-              </article>
-
-              <article className="download-card-featured">
-                <span className="download-card-badge" style={{ background: "rgba(216,245,107,0.15)", color: "var(--site-accent, #d8f56b)" }}>
-                  MACOS (APPLE SILICON)
-                </span>
-                <div>
-                  <div className="download-card-title">
-                    <Aperture size={24} style={{ color: "var(--site-accent, #d8f56b)" }} />
-                    <h3>macOS Apple Silicon</h3>
-                  </div>
-                  <p className="download-card-desc">
-                    Native Apple Silicon DMG package optimized for M1, M2, M3, and M4 Macs with native ARM64 performance, floating overlay, and global shortcuts.
-                  </p>
-                  <div className="download-card-meta">
-                    <span>macOS 12+ (Apple Silicon M1/M2/M3/M4)</span>
-                    <span>·</span>
-                    <span>136 MB DMG</span>
-                  </div>
-                </div>
-                <a
-                  className="download-action-btn primary"
-                  href="/downloads/mac-arm64"
-                  download="LensDesk-2.0.0-macOS-Apple-Silicon-arm64.dmg"
-                >
-                  <Download size={16} />
-                  Download Apple Silicon (.dmg)
-                </a>
-              </article>
-
-              <article className="download-card-featured">
-                <span className="download-card-badge" style={{ background: "rgba(255,255,255,0.08)", color: "#e5ede3" }}>
-                  MACOS (INTEL)
-                </span>
-                <div>
-                  <div className="download-card-title">
-                    <Laptop size={24} style={{ color: "#9aa698" }} />
-                    <h3>macOS Intel</h3>
-                  </div>
-                  <p className="download-card-desc">
-                    Native Intel 64-bit DMG package for Intel Core i5, i7, and i9 Mac computers.
-                  </p>
-                  <div className="download-card-meta">
-                    <span>macOS 12+ (Intel 64-bit)</span>
-                    <span>·</span>
-                    <span>140 MB DMG</span>
-                  </div>
-                </div>
-                <a
-                  className="download-action-btn secondary"
-                  href="/downloads/mac-x64"
-                  download="LensDesk-2.0.0-macOS-Intel-x64.dmg"
-                >
-                  <Download size={16} />
-                  Download Intel (.dmg)
-                </a>
-              </article>
-            </div>
-
-            <section className="form-card" style={{ marginBottom: "30px" }}>
+            <section className="form-card" style={{ marginBottom: "30px", marginTop: "30px" }}>
               <div className="form-heading">
                 <h2>
                   <Sparkles size={18} />
