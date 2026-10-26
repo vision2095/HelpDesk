@@ -137,7 +137,7 @@ export const initial = () => ({
     localBaseUrl: "http://127.0.0.1:11434/v1",
     language: "English",
     systemPrompt:
-      "Give clear, practical answers. Explain your reasoning, state assumptions, and ask for clarification when needed.",
+      "Analyse the provided screenshot(s) or question and provide the correct answer. For MCQs, give the correct option with a brief explanation if helpful. For coding/debugging, return the complete correct code. For descriptive questions, provide a clear and accurate answer.",
     transcriptionProvider: "openai",
     transcriptionModel: "whisper-1",
     opacity: 1,

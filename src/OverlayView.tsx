@@ -44,6 +44,43 @@ import type { Session, Provider } from "./types";
 import { shortcutLabel } from "./shortcut-label";
 import { useGamepadController } from "./useGamepadController";
 
+export const HINTLENS_SPEECH_LANGUAGES = [
+  { id: "en", label: "English" },
+  { id: "multi", label: "Auto / Multilingual" },
+  { id: "hi", label: "Hindi" },
+  { id: "es", label: "Spanish" },
+  { id: "fr", label: "French" },
+  { id: "de", label: "German" },
+  { id: "pt", label: "Portuguese" },
+  { id: "it", label: "Italian" },
+  { id: "nl", label: "Dutch" },
+  { id: "ru", label: "Russian" },
+  { id: "ja", label: "Japanese" },
+  { id: "ko", label: "Korean" },
+  { id: "zh", label: "Chinese" },
+  { id: "zh-TW", label: "Chinese (Taiwan)" },
+  { id: "tr", label: "Turkish" },
+  { id: "id", label: "Indonesian" },
+  { id: "vi", label: "Vietnamese" },
+  { id: "ms", label: "Malay" },
+  { id: "pl", label: "Polish" },
+  { id: "uk", label: "Ukrainian" },
+  { id: "el", label: "Greek" },
+  { id: "cs", label: "Czech" },
+  { id: "sk", label: "Slovak" },
+  { id: "ro", label: "Romanian" },
+  { id: "hu", label: "Hungarian" },
+  { id: "bg", label: "Bulgarian" },
+  { id: "sv", label: "Swedish" },
+  { id: "da", label: "Danish" },
+  { id: "no", label: "Norwegian" },
+  { id: "fi", label: "Finnish" },
+  { id: "et", label: "Estonian" },
+  { id: "lv", label: "Latvian" },
+  { id: "lt", label: "Lithuanian" },
+  { id: "ca", label: "Catalan" },
+];
+
 export interface OverlayViewProps {
   shortcuts?: Record<string, string>;
   session?: Session;
@@ -120,8 +157,8 @@ export interface OverlayViewProps {
   isInterviewMode?: boolean;
   onToggleInterviewMode?: (enabled?: boolean) => void;
   onClearTranscript?: () => void;
-  speechLanguage?: "en" | "multi";
-  onSetSpeechLanguage?: (lang: "en" | "multi") => void;
+  speechLanguage?: string;
+  onSetSpeechLanguage?: (lang: string) => void;
   onSetInterviewLayout?: (layout: "full" | "compact") => void;
 }
 
@@ -207,7 +244,7 @@ export function OverlayView({
     isInterviewMode ?? false,
   );
   const inInterviewMode = isInterviewMode ?? internalInterviewMode;
-  const [localSpeechLanguage, setLocalSpeechLanguage] = useState<"en" | "multi">("en");
+  const [localSpeechLanguage, setLocalSpeechLanguage] = useState<string>("en");
   const speechLang = speechLanguage ?? localSpeechLanguage;
   const activeInterviewLayout = interviewLayout || "full";
 
@@ -249,6 +286,8 @@ export function OverlayView({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showSessionPicker, setShowSessionPicker] = useState(false);
   const [showKeysLegend, setShowKeysLegend] = useState(false);
+  const [showCheatSheetModal, setShowCheatSheetModal] = useState(false);
+  const [cheatSheetFilter, setCheatSheetFilter] = useState("");
   const [showMinMore, setShowMinMore] = useState(false);
   const [selectedBundleImage, setSelectedBundleImage] = useState<string | null>(
     null,
@@ -611,6 +650,25 @@ export function OverlayView({
             <Keyboard size={13} />
             <span>{autoTyping ? "Stop Type" : "Type"}</span>
           </button>
+
+          {/* 2b. Restart */}
+          {(autoTyping || Boolean(latestAssistantMessage)) && (
+            <button
+              className="min-btn"
+              onClick={() => {
+                onStopTyping?.();
+                setTimeout(() => {
+                  if (latestAssistantMessage && onAutoType) {
+                    onAutoType(latestAssistantMessage);
+                  }
+                }, 120);
+              }}
+              title="Type this answer again from the beginning"
+            >
+              <RotateCcw size={12} />
+              <span>Restart</span>
+            </button>
+          )}
 
           {/* 3. Undo */}
           <button
@@ -1028,13 +1086,16 @@ export function OverlayView({
               className="iv-speech-select"
               value={speechLang}
               onChange={(e) => {
-                const val = e.target.value as "en" | "multi";
+                const val = e.target.value;
                 setLocalSpeechLanguage(val);
                 onSetSpeechLanguage?.(val);
               }}
             >
-              <option value="en">English</option>
-              <option value="multi">Multilingual</option>
+              {HINTLENS_SPEECH_LANGUAGES.map((lang) => (
+                <option key={lang.id} value={lang.id}>
+                  {lang.label}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -1697,6 +1758,25 @@ export function OverlayView({
             <span>{autoTyping ? "Stop Typing" : "Type"}</span>
           </button>
 
+          {/* 3b. Restart Typing from beginning */}
+          {(autoTyping || Boolean(latestAssistantMessage)) && (
+            <button
+              className="toolbar-btn secondary restart-type"
+              onClick={() => {
+                onStopTyping?.();
+                setTimeout(() => {
+                  if (latestAssistantMessage && onAutoType) {
+                    onAutoType(latestAssistantMessage);
+                  }
+                }, 120);
+              }}
+              title="Type this answer again from the beginning"
+            >
+              <RotateCcw size={13} />
+              <span>Restart</span>
+            </button>
+          )}
+
           {/* 4. Undo */}
           <button
             className="toolbar-btn secondary"
@@ -1908,14 +1988,114 @@ export function OverlayView({
             </div>
             <div
               className="legend-pill"
-              onClick={() => onOpenSettings?.("Hotkeys")}
-              title={`Open Hotkeys & Settings (${keyLabel("shortcuts", "Ctrl + Shift + J")})`}
+              onClick={() => setShowCheatSheetModal(true)}
+              title={`Open Hotkey Cheat-Sheet (${keyLabel("shortcuts", "Ctrl + Shift + J")})`}
               style={{ cursor: "pointer" }}
             >
               <span className="pill-name">Cheat-Sheet</span>
               <kbd className="pill-key">
                 {keyLabel("shortcuts", "Ctrl + Shift + J")}
               </kbd>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hotkeys Cheat-Sheet Modal Window */}
+      {showCheatSheetModal && (
+        <div
+          className="cheatsheet-modal-overlay"
+          onClick={() => setShowCheatSheetModal(false)}
+        >
+          <div
+            className="cheatsheet-modal-card"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="cheatsheet-modal-header">
+              <span className="cheatsheet-title">Hotkeys Cheat-Sheet</span>
+              <button
+                type="button"
+                className="cheatsheet-close-btn"
+                onClick={() => setShowCheatSheetModal(false)}
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="cheatsheet-search-bar">
+              <input
+                type="text"
+                placeholder="Filter actions or shortcuts..."
+                value={cheatSheetFilter}
+                onChange={(e) => setCheatSheetFilter(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="cheatsheet-modal-content">
+              {[
+                {
+                  category: "Core Actions",
+                  items: [
+                    { name: "Get Answer / Analyze", key: keyLabel("getAnswer", "Shift + A") },
+                    { name: "Capture Screenshot", key: keyLabel("capture", "Shift + S") },
+                    { name: "Mark Region Point (Snip)", key: keyLabel("regionSnip", "Ctrl + Shift + C") },
+                    { name: "Clear Last Screenshot", key: keyLabel("undo", "Shift + U") },
+                    { name: "Clear Screenshot Bundle", key: keyLabel("clearBundle", "Ctrl + Shift + X") },
+                    { name: "Clear Chat / Responses", key: keyLabel("clearChat", "Ctrl + Shift + N") },
+                    { name: "Stop / Cancel Answer", key: keyLabel("cancelAnswer", "Escape") },
+                    { name: "Type / Auto-type Answer", key: keyLabel("autoType", "Shift + T") },
+                    { name: "Cycle AI Provider", key: keyLabel("cycleProvider", "Shift + P") },
+                    { name: "Cycle AI Model", key: keyLabel("cycleModel", "Ctrl + Shift + R") },
+                    { name: "Open / Close Browser", key: keyLabel("browser", "Ctrl + Shift + G") },
+                  ],
+                },
+                {
+                  category: "Window Management",
+                  items: [
+                    { name: "Toggle Overlay Visibility", key: keyLabel("toggle", "Ctrl + Shift + L") },
+                    { name: "Hide / Reveal Window", key: keyLabel("hide", "Shift + H") },
+                    { name: "Toggle Mouse Mode", key: keyLabel("mouseMode", keyLabel("clickThrough", "Shift + M")) },
+                    { name: "Move Window Up", key: keyLabel("moveUp", "Ctrl + Shift + Up") },
+                    { name: "Move Window Down", key: keyLabel("moveDown", "Ctrl + Shift + Down") },
+                    { name: "Move Window Left", key: keyLabel("moveLeft", "Ctrl + Shift + Left") },
+                    { name: "Move Window Right", key: keyLabel("moveRight", "Ctrl + Shift + Right") },
+                    { name: "Scroll Answer Up", key: keyLabel("scrollUp", "Page Up") },
+                    { name: "Scroll Answer Down", key: keyLabel("scrollDown", "Page Down") },
+                    { name: "Toggle Stealth Mode", key: keyLabel("stealth", "Shift + R") },
+                    { name: "Toggle Light / Dark Theme", key: keyLabel("theme", "Ctrl + Shift + T") },
+                    { name: "Increase Background Opacity", key: keyLabel("opacityUp", "Shift + I") },
+                    { name: "Decrease Background Opacity", key: keyLabel("opacityDown", "Shift + J") },
+                  ],
+                },
+                {
+                  category: "Application",
+                  items: [
+                    { name: "Show Hotkey Cheat-Sheet", key: keyLabel("shortcuts", "Ctrl + Shift + J") },
+                    { name: "Restart Application", key: keyLabel("restart", "Ctrl + Shift + F5") },
+                    { name: "Quit Application", key: keyLabel("quit", "Ctrl + Shift + Q") },
+                  ],
+                },
+              ].map((section) => {
+                const filtered = section.items.filter(
+                  (item) =>
+                    !cheatSheetFilter ||
+                    item.name.toLowerCase().includes(cheatSheetFilter.toLowerCase()) ||
+                    item.key.toLowerCase().includes(cheatSheetFilter.toLowerCase())
+                );
+                if (filtered.length === 0) return null;
+                return (
+                  <div key={section.category} className="cheatsheet-section">
+                    <h4 className="cheatsheet-section-title">{section.category}</h4>
+                    <div className="cheatsheet-table">
+                      {filtered.map((item) => (
+                        <div key={item.name} className="cheatsheet-row">
+                          <span className="cheatsheet-action-name">{item.name}</span>
+                          <kbd className="cheatsheet-key-badge">{item.key}</kbd>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
