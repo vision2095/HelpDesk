@@ -225,7 +225,7 @@ function createSubscriptionGate({
     }
   }
 
-  async function login({ email, password, deviceLabel, os, appVersion, takeover }) {
+  async function login({ email, password, deviceLabel, os, appVersion, deviceId, takeover }) {
     commit({ phase: "signed_out", reason: "" });
     try {
       const data = await cloud.request("desktop.login", {
@@ -234,6 +234,7 @@ function createSubscriptionGate({
         deviceLabel,
         os,
         appVersion,
+        ...(deviceId ? { deviceId } : {}),
         ...(takeover !== undefined ? { takeover } : {}),
       });
       if (data.mfaRequired) {

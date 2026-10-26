@@ -1016,6 +1016,17 @@ function App() {
         return;
       }
 
+      // Dedicated in-overlay browser toggle: Ctrl+Shift+G / Cmd+Shift+G
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        e.shiftKey &&
+        e.key.toLowerCase() === "g"
+      ) {
+        e.preventDefault();
+        shortcutHandlerRef.current("browser");
+        return;
+      }
+
       // Plain Shift+H: hides if not typing in an input field (so capital H can be typed in fields)
       if (
         !isInput &&
@@ -2558,6 +2569,7 @@ function App() {
           {...overlayProps}
           activeView={floatingView}
           onToggleView={setFloatingView}
+          chatLayout={desktopPreferences?.chatLayout || "standard"}
           singleWindow
           renderBrowser={
             <WorkspaceBrowser

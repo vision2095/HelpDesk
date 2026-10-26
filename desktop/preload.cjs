@@ -80,6 +80,9 @@ const actions = new Set([
   "gate.validate",
   "gate.logout",
   "gate.purchase",
+  "desktop.machineGuid",
+  "system.machineGuid",
+  "danger.wipeAllData",
 ]);
 contextBridge.exposeInMainWorld("lens", {
   onGate: (listener) => {
