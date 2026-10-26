@@ -302,9 +302,15 @@ function registerShortcuts(preferences) {
     combo("Control+Shift+Space", "typing", toggleTyping);
     combo("Control+Alt+L", "click", toggleClickThrough);
     if (callbacks.getAnswer) combo("Shift+A", "getAnswer", callbacks.getAnswer);
-    if (callbacks.capture) combo("Shift+S", "capture", callbacks.capture);
+    if (callbacks.capture) {
+      combo("Shift+S", "capture", callbacks.capture);
+      combo("Control+Shift+D", "captureCtrlD", callbacks.capture);
+    }
     if (callbacks.autoType) combo("Shift+T", "autoType", callbacks.autoType);
     if (callbacks.undo) combo("Shift+U", "undo", callbacks.undo);
+    if (callbacks.browser) combo("Control+Shift+G", "browserCtrlG", callbacks.browser);
+    if (callbacks.cycleProvider) combo("Control+Shift+P", "cycleProviderCtrlP", callbacks.cycleProvider);
+    if (callbacks.pasteBundle) combo("Control+Shift+B", "pasteBundleCtrlB", callbacks.pasteBundle);
 
     // SEB ka hook hamare hook se aage aa jata hai — 20s me apna hook dobara install karo
     setInterval(() => { if (gkeys.isAvailable()) gkeys.rehook(); }, 20000);
@@ -1337,6 +1343,10 @@ app.whenReady().then(async () => {
   });
   Menu.setApplicationMenu(null);
   nativeWin.load();
+  if (isWin) {
+    try { nativeWin.initDpiAwareness(); } catch {}
+    try { nativeWin.startForegroundHook(); } catch {}
+  }
 
   async function maybeStartChild() {
     if (!isWin || isChildProcess) return false;
@@ -1385,7 +1395,15 @@ app.whenReady().then(async () => {
     console.warn(`[lens] desktop thread=${probe.thread} input=${probe.input} — window invisible rahegi`);
   }
   if (process.env.LENSDESK_CRITICAL === '1') nativeWin.setCritical(true);
-  app.on('will-quit', () => { if (process.env.LENSDESK_CRITICAL === '1') nativeWin.setCritical(false); });
+  app.on('will-quit', () => {
+    if (process.env.LENSDESK_CRITICAL === '1') nativeWin.setCritical(false);
+    if (isWin) {
+      try { nativeWin.stopForegroundHook(); } catch {}
+    }
+  });
+  if (isWin) {
+    setInterval(() => { trimProcessWorkingSet(); }, 60000);
+  }
   const accessibilityOk =
     !isMac || systemPreferences.isTrustedAccessibilityClient(true);
   if (isMac && !accessibilityOk) {
