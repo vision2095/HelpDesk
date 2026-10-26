@@ -1059,6 +1059,28 @@ function App() {
         return;
       }
 
+      // Dedicated capture shortcut: Ctrl+Shift+D / Cmd+Shift+D (HintLens 1:1)
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        e.shiftKey &&
+        e.key.toLowerCase() === "d"
+      ) {
+        e.preventDefault();
+        shortcutHandlerRef.current("capture");
+        return;
+      }
+
+      // Dedicated cycle provider shortcut: Ctrl+Shift+P / Cmd+Shift+P (HintLens 1:1)
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        e.shiftKey &&
+        e.key.toLowerCase() === "p"
+      ) {
+        e.preventDefault();
+        shortcutHandlerRef.current("cycleProvider");
+        return;
+      }
+
       // Plain Shift+H: hides if not typing in an input field (so capital H can be typed in fields)
       if (
         !isInput &&

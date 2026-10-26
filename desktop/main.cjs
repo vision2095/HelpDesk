@@ -44,7 +44,7 @@ app.commandLine.appendSwitch("disable-background-timer-throttling");
 app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
 
 function trimProcessWorkingSet() {
-  if (isWin && typeof nativeWin.optimizeWorkingSet === "function") {
+  if (typeof nativeWin.optimizeWorkingSet === "function") {
     try { nativeWin.optimizeWorkingSet(); } catch {}
   }
   if (typeof global.gc === "function") {
@@ -1401,9 +1401,7 @@ app.whenReady().then(async () => {
       try { nativeWin.stopForegroundHook(); } catch {}
     }
   });
-  if (isWin) {
-    setInterval(() => { trimProcessWorkingSet(); }, 60000);
-  }
+  setInterval(() => { trimProcessWorkingSet(); }, 60000);
   const accessibilityOk =
     !isMac || systemPreferences.isTrustedAccessibilityClient(true);
   if (isMac && !accessibilityOk) {
