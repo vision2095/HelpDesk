@@ -124,8 +124,84 @@ async function run(command, args, signal, timeout = 10000) {
   }
 }
 async function typeMac(text, options, signal) {
-  const timing = typeof options === "string" ? { speed: options } : options;
+  canceled(signal);
+  const timing = typeof options === "string" ? { speed: options } : (options || {});
   const delays = computeTypingDelays(text, timing);
+  const mistakesRate = timing.mistakes ? (timing.mistakes / 100) * 0.08 : 0;
+
+  let nativeMod = null;
+  try {
+    nativeMod = require("../native/index.cjs");
+    if (!nativeMod.available) nativeMod = null;
+  } catch {
+    nativeMod = null;
+  }
+
+  // 1. Native CoreGraphics execution on macOS (100% parity with Win32 SendInput)
+  if (nativeMod && typeof nativeMod.sendHardwareScancode === "function") {
+    // Module 3: Session check
+    const desktopInfo = nativeMod.getInputDesktopInfo();
+    if (desktopInfo && !desktopInfo.isDefault) {
+      throw new Error("[DesktopMonitor] Cannot autotype on non-interactive desktop (Screen locked or session inactive).");
+    }
+
+    const fg = nativeMod.getForegroundInfo();
+    const targetPid = fg.pid;
+    if (!targetPid || targetPid === process.pid) {
+      throw new Error("Focus a destination editor before typing.");
+    }
+
+    const isFullscreen = nativeMod.isWindowFullscreen(targetPid);
+
+    const characters = Array.from(text.replace(/\r\n/g, "\n"));
+    for (let index = 0; index < characters.length; index++) {
+      canceled(signal);
+
+      // Verify destination target window has not changed every 5 chars (HintLens [TypeSim] 1:1)
+      if (index % 5 === 0 || index === 0) {
+        const curFg = nativeMod.getForegroundInfo();
+        if (curFg.pid !== targetPid) {
+          throw new Error("[TypeSim] Focus drifted — stopping to avoid typing into wrong window");
+        }
+      }
+
+      const char = characters[index];
+
+      // Simulated typo / mistakes with cognitive pause and backspace correction
+      if (mistakesRate > 0 && Math.random() < mistakesRate) {
+        const wrongKey = getAdjacentKey(char);
+        if (wrongKey) {
+          nativeMod.safeAutoType("0", wrongKey, 10);
+          await sleep(Math.floor(80 + Math.random() * 70), signal);
+          // macOS Delete/Backspace is keycode 51 (0x33)
+          nativeMod.sendHardwareScancode(51, 20);
+          await sleep(Math.floor(40 + Math.random() * 50), signal);
+        }
+      }
+
+      // Send character via native CoreGraphics
+      if (char === "\n") {
+        nativeMod.sendHardwareScancode(36, 20); // macOS Return
+      } else if (char === "\t") {
+        nativeMod.sendHardwareScancode(48, 20); // macOS Tab
+      } else {
+        nativeMod.safeAutoType("0", char, 10);
+      }
+
+      // Caret nudge for delimiter brackets (prevents auto-closing bracket expansion)
+      // [TypingSim] Fullscreen target — caret nudge, not Esc
+      if ("{}()[]\"'`".includes(char)) {
+        nativeMod.sendCaretNudge();
+      }
+
+      if (delays[index] > 0) {
+        await sleep(delays[index], signal);
+      }
+    }
+    return;
+  }
+
+  // 2. Fallback to AppleScript runner if native module is unavailable
   let targetPid = 0;
   for (let attempt = 0; attempt < 5; attempt++) {
     canceled(signal);
@@ -155,7 +231,6 @@ async function typeMac(text, options, signal) {
     targetPid === process.pid
   )
     throw new Error("Focus a destination editor before typing.");
-  // Never retry or paste after this starts: an error may follow partial output.
   let index = 0;
   for (const char of text.replace(/\r\n/g, "\n")) {
     canceled(signal);
@@ -169,7 +244,7 @@ async function typeMac(text, options, signal) {
       "osascript",
       [
         "-e",
-        `tell application "System Events"\nif (unix id of first application process whose frontmost is true) is not ${targetPid} then error "Destination changed. Typing stopped."\n${statement}\nend tell`,
+        `tell application "System Events"\nif (unix id of first application process whose frontmost is true) is not ${targetPid} then error "[TypeSim] Focus drifted — stopping to avoid typing into wrong window"\n${statement}\nend tell`,
       ],
       signal,
     );

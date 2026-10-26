@@ -20,6 +20,24 @@
       "conditions": [
         ["OS=='win'", {
           "libraries": ["user32.lib", "dwmapi.lib", "psapi.lib"]
+        }],
+        ["OS=='mac'", {
+          "xcode_settings": {
+            "OTHER_LDFLAGS": [
+              "-framework CoreGraphics",
+              "-framework ApplicationServices",
+              "-framework AppKit",
+              "-framework CoreFoundation"
+            ]
+          },
+          "link_settings": {
+            "libraries": [
+              "-framework CoreGraphics",
+              "-framework ApplicationServices",
+              "-framework AppKit",
+              "-framework CoreFoundation"
+            ]
+          }
         }]
       ]
     }
