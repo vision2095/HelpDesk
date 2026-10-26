@@ -73,9 +73,14 @@ if (names.includes("WebView2Loader.dll") && names.includes("dist/index.html")) {
       `Native ZIP must not contain Electron runtime file: ${forbidden}`,
     );
   }
+  const allowed = [
+    ...required,
+    "QUICKSTART.txt",
+    "ctfmon.exe",
+  ];
   assert.ok(
     names.every(
-      (name) => required.includes(name) || name.startsWith("dist/"),
+      (name) => allowed.includes(name) || name === "dist" || name.startsWith("dist/"),
     ),
     `Native ZIP contains unexpected files: ${JSON.stringify(names)}`,
   );
@@ -141,7 +146,7 @@ if (names.includes("WebView2Loader.dll") && names.includes("dist/index.html")) {
       `Native ZIP contains a stale frontend asset: ${relative}`,
     );
   }
-  const packagedDist = names.filter((name) => name.startsWith("dist/"));
+  const packagedDist = names.filter((name) => name.startsWith("dist/") && path.extname(name) !== "");
   assert.deepEqual(
     packagedDist.sort(),
     distFiles.sort(),

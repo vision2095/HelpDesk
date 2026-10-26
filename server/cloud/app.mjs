@@ -705,6 +705,29 @@ export function createCloudServer({
         json(res, 200, { ok: true });
         return;
       }
+      if (
+        url.pathname === "/api/v1/updates/check" ||
+        url.pathname === "/api/updates/check"
+      ) {
+        const manifest = await releases.manifest();
+        const clientVersion = url.searchParams.get("version") || "1.0.0";
+        const clientPlatform = url.searchParams.get("platform") || "windows";
+        const normalizedPlatform = clientPlatform.includes("win")
+          ? "windows"
+          : clientPlatform.includes("arm")
+            ? "mac-arm64"
+            : "mac-x64";
+        const rel = manifest[normalizedPlatform] || manifest.windows;
+        const updateAvailable = rel ? rel.version !== clientVersion : false;
+        json(res, 200, {
+          updateAvailable,
+          currentVersion: clientVersion,
+          latestVersion: rel?.version || clientVersion,
+          platform: normalizedPlatform,
+          artifact: rel || null,
+        });
+        return;
+      }
       if (["GET", "HEAD"].includes(req.method) && (await releases.serve(req, res, url))) return;
       if (["GET", "HEAD"].includes(req.method) && !url.pathname.startsWith("/api/")) {
         // Desktop gate links (purchaseUrl) point at /dashboard; the SPA's

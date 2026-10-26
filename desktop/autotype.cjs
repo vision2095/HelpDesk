@@ -31,11 +31,11 @@ function sleep(ms, signal) {
     signal?.addEventListener("abort", abort, { once: true });
   });
 }
-function timingOptions({ speed = "human", wpm, jitter, pauses } = {}) {
+function timingOptions({ speed = "human", wpm, jitter, pauses, mistakes } = {}) {
   const defaults = {
-    human: { wpm: 65, jitter: 20, pauses: 25 },
-    fast: { wpm: 140, jitter: 0, pauses: 0 },
-    turbo: { wpm: 250, jitter: 0, pauses: 0 },
+    human: { wpm: 65, jitter: 20, pauses: 25, mistakes: 0 },
+    fast: { wpm: 140, jitter: 0, pauses: 0, mistakes: 0 },
+    turbo: { wpm: 250, jitter: 0, pauses: 0, mistakes: 0 },
   };
   if (!Object.hasOwn(defaults, speed))
     throw new Error("Invalid auto-typing options.");
@@ -43,6 +43,7 @@ function timingOptions({ speed = "human", wpm, jitter, pauses } = {}) {
     wpm: wpm === undefined ? defaults[speed].wpm : wpm,
     jitter: jitter === undefined ? defaults[speed].jitter : jitter,
     pauses: pauses === undefined ? defaults[speed].pauses : pauses,
+    mistakes: mistakes === undefined ? defaults[speed].mistakes : mistakes,
   };
   for (const [name, value] of Object.entries(options)) {
     const [minimum, maximum] = name === "wpm" ? [10, 250] : [0, 100];
@@ -51,6 +52,31 @@ function timingOptions({ speed = "human", wpm, jitter, pauses } = {}) {
   }
   return options;
 }
+
+// Adjacent QWERTY keys for human typing mistakes / slips simulation (HintLens 1:1)
+const QWERTY_ADJACENT = {
+  a: "qwsz", b: "vghn", c: "xdfv", d: "serfcx", e: "wsdr",
+  f: "drtgvc", g: "ftyhbv", h: "gyujnb", i: "ujko", j: "huikmn",
+  k: "jiolm", l: "kop", m: "njk", n: "bhjm", o: "iklp",
+  p: "ol", q: "wa", r: "edft", s: "awedxz", t: "rfgy",
+  u: "yhji", v: "cfgb", w: "qase", x: "zsdc", y: "tghu",
+  z: "asx",
+  A: "QWSZ", B: "VGHN", C: "XDFV", D: "SERFCX", E: "WSDR",
+  F: "DRTGVC", G: "FTYHBV", H: "GYUJNB", I: "UJKO", J: "HUIKMN",
+  K: "JIOLM", L: "KOP", M: "NJK", N: "BHJM", O: "IKLP",
+  P: "OL", Q: "WA", R: "EDFT", S: "AWEDXZ", T: "RFGY",
+  U: "YHJI", V: "CFGB", W: "QASE", X: "ZSDC", Y: "TGHU",
+  Z: "ASX",
+  "1": "2q", "2": "13qw", "3": "24we", "4": "35er", "5": "46rt",
+  "6": "57ty", "7": "68yu", "8": "79ui", "9": "80io", "0": "9op",
+};
+
+function getAdjacentKey(char) {
+  const adj = QWERTY_ADJACENT[char];
+  if (!adj || adj.length === 0) return null;
+  return adj[Math.floor(Math.random() * adj.length)];
+}
+
 // WPM uses five characters per word. Timing variation never changes the text.
 // Both native engines consume this same plan; individual waits are capped at 5s.
 function computeTypingDelays(text, options = {}, random = Math.random) {
@@ -216,12 +242,92 @@ async function paste(text, signal) {
     }
   }
 }
+async function waitModifiersReleased(signal, timeoutMs = 8000) {
+  canceled(signal);
+  if (process.platform !== "win32") return;
+  try {
+    const nativeWin = require("./native-win.cjs");
+    if (!nativeWin.load?.()) return;
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      canceled(signal);
+      if (!nativeWin.isAnyModifierDown()) break;
+      await sleep(15, signal);
+    }
+  } catch {}
+}
+
 async function typeWindows(text, options, signal) {
   canceled(signal);
-  const timing = typeof options === "string" ? { speed: options } : options;
+  const timing = typeof options === "string" ? { speed: options } : (options || {});
   const delays = computeTypingDelays(text, timing);
-  // A file payload avoids Windows command-line limits for long answers and keeps
-  // the answer out of the process arguments. Only this invocation's files are removed.
+  const mistakesRate = timing.mistakes ? (timing.mistakes / 100) * 0.08 : 0;
+
+  // 1. Try 100% Native Win32 SendInput first (HintLens 1:1 parity without powershell)
+  let nativeWin = null;
+  try {
+    nativeWin = require("./native-win.cjs");
+    if (!nativeWin.load()) nativeWin = null;
+  } catch {
+    nativeWin = null;
+  }
+
+  if (nativeWin && typeof nativeWin.sendUnicodeChar === "function") {
+    await waitModifiersReleased(signal, 5000);
+    const targetHwnd = nativeWin.foregroundWindow();
+    const targetPid = nativeWin.foregroundPid();
+    if (!targetHwnd || targetPid === process.pid) {
+      throw new Error("Focus a destination editor before typing.");
+    }
+
+    const characters = Array.from(text.replace(/\r\n/g, "\n"));
+    for (let index = 0; index < characters.length; index++) {
+      canceled(signal);
+
+      // Verify destination target window has not changed (HintLens focus drift guard)
+      const currentHwnd = nativeWin.foregroundWindow();
+      if (currentHwnd !== targetHwnd) {
+        throw new Error("Destination changed. Typing stopped.");
+      }
+
+      await waitModifiersReleased(signal, 1000);
+
+      const char = characters[index];
+
+      // Simulated typo / mistakes with cognitive pause and backspace correction
+      if (mistakesRate > 0 && Math.random() < mistakesRate) {
+        const wrongKey = getAdjacentKey(char);
+        if (wrongKey) {
+          nativeWin.sendUnicodeChar(wrongKey, 20);
+          await sleep(Math.floor(80 + Math.random() * 70), signal);
+          // Send Backspace (VK 0x08)
+          nativeWin.sendVirtualKey(0x08, 20);
+          await sleep(Math.floor(40 + Math.random() * 50), signal);
+        }
+      }
+
+      // Send the character
+      if (char === "\n") {
+        nativeWin.sendVirtualKey(0x0D, 20); // VK_RETURN
+      } else if (char === "\t") {
+        nativeWin.sendVirtualKey(0x09, 20); // VK_TAB
+      } else {
+        nativeWin.sendUnicodeChar(char, 20);
+      }
+
+      // Autocomplete / Caret nudge for brackets in code (prevents closing bracket expansion)
+      if ("{}()[]\"'`".includes(char)) {
+        nativeWin.sendCaretNudge();
+      }
+
+      if (delays[index] > 0) {
+        await sleep(delays[index], signal);
+      }
+    }
+    return;
+  }
+
+  // 2. Fallback to PowerShell runner when native FFI is unavailable
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "lensdesk-typing-"));
   const payloadFile = path.join(directory, "payload.json");
   try {
@@ -272,7 +378,6 @@ for ($index = 0; $index -lt $payload.characters.Count; $index++) {
       ),
     );
   } finally {
-    // Never paste after an error: SendKeys may already have entered part of the answer.
     fs.rmSync(directory, { recursive: true, force: true });
   }
 }
@@ -285,6 +390,7 @@ async function autoType({
   wpm,
   jitter,
   pauses,
+  mistakes,
   signal,
 } = {}) {
   if (typeof text !== "string" || !text.trim() || text.length > 20000)
@@ -297,7 +403,7 @@ async function autoType({
     delaySeconds > 10
   )
     throw new Error("Invalid auto-typing options.");
-  const timing = timingOptions({ speed, wpm, jitter, pauses });
+  const timing = timingOptions({ speed, wpm, jitter, pauses, mistakes });
   if (!["darwin", "win32"].includes(process.platform))
     throw new Error("Direct typing is available on macOS and Windows.");
   canceled(signal);

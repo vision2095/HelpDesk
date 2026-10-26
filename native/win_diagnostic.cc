@@ -262,6 +262,17 @@ Napi::Value SafeAutoType(const Napi::CallbackInfo& info) {
   std::vector<wchar_t> wideStr(wideLen);
   MultiByteToWideChar(CP_UTF8, 0, utf8Text.c_str(), -1, wideStr.data(), wideLen);
 
+  // Wait for modifier keys to be released
+  const int modKeys[] = { VK_SHIFT, VK_CONTROL, VK_MENU, VK_LWIN, VK_RWIN };
+  for (int w = 0; w < 250; ++w) {
+    bool anyMod = false;
+    for (int vk : modKeys) {
+      if ((GetAsyncKeyState(vk) & 0x8000) != 0) { anyMod = true; break; }
+    }
+    if (!anyMod) break;
+    Sleep(20);
+  }
+
   int typedCount = 0;
   for (size_t i = 0; i < wideStr.size() - 1; ++i) {
     wchar_t ch = wideStr[i];
@@ -271,22 +282,45 @@ Napi::Value SafeAutoType(const Napi::CallbackInfo& info) {
       break;
     }
 
-    INPUT inputs[2]{};
-    inputs[0].type = INPUT_KEYBOARD;
-    inputs[0].ki.wScan = ch;
-    inputs[0].ki.dwFlags = KEYEVENTF_UNICODE;
+    if (ch == L'\r') continue;
 
-    inputs[1].type = INPUT_KEYBOARD;
-    inputs[1].ki.wScan = ch;
-    inputs[1].ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
+    if (ch == L'\n') {
+      INPUT down{}; down.type = INPUT_KEYBOARD; down.ki.wVk = VK_RETURN; down.ki.dwFlags = 0;
+      INPUT up{}; up.type = INPUT_KEYBOARD; up.ki.wVk = VK_RETURN; up.ki.dwFlags = KEYEVENTF_KEYUP;
+      SendInput(1, &down, sizeof(INPUT));
+      Sleep(18);
+      SendInput(1, &up, sizeof(INPUT));
+    } else if (ch == L'\t') {
+      INPUT down{}; down.type = INPUT_KEYBOARD; down.ki.wVk = VK_TAB; down.ki.dwFlags = 0;
+      INPUT up{}; up.type = INPUT_KEYBOARD; up.ki.wVk = VK_TAB; up.ki.dwFlags = KEYEVENTF_KEYUP;
+      SendInput(1, &down, sizeof(INPUT));
+      Sleep(18);
+      SendInput(1, &up, sizeof(INPUT));
+    } else {
+      INPUT down{};
+      down.type = INPUT_KEYBOARD;
+      down.ki.wScan = ch;
+      down.ki.dwFlags = KEYEVENTF_UNICODE;
+      SendInput(1, &down, sizeof(INPUT));
 
-    UINT sent = SendInput(2, inputs, sizeof(INPUT));
-    if (sent == 2) {
-      typedCount++;
+      Sleep(18);
+
+      INPUT up{};
+      up.type = INPUT_KEYBOARD;
+      up.ki.wScan = ch;
+      up.ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
+      SendInput(1, &up, sizeof(INPUT));
     }
 
+    typedCount++;
+
     if (delayMs > 0) {
-      Sleep(delayMs);
+      int remaining = delayMs;
+      while (remaining > 0) {
+        int step = (remaining > 10) ? 10 : remaining;
+        Sleep(step);
+        remaining -= step;
+      }
     }
   }
 

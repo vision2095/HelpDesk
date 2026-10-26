@@ -111,6 +111,8 @@ export interface OverlayViewProps {
   microphoneId?: string;
   onSelectMicrophone?: (deviceId: string) => void;
   elapsedSeconds?: number;
+  theme?: string;
+  availableUpdate?: { latestVersion: string; artifact?: any } | null;
 }
 
 export function OverlayView({
@@ -181,6 +183,8 @@ export function OverlayView({
   microphoneId,
   onSelectMicrophone,
   elapsedSeconds,
+  theme,
+  availableUpdate,
 }: OverlayViewProps) {
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
@@ -202,6 +206,52 @@ export function OverlayView({
     const m = Math.floor(secs / 60);
     const s = Math.floor(secs % 60);
     return `${m}:${s.toString().padStart(2, "0")}`;
+  };
+
+  const renderCleanText = (text: string) => {
+    if (!text || !text.includes("$")) return text;
+    const parts = text.split(/(\$[^$\n]+\$)/g);
+    return parts.map((part, idx) => {
+      if (part.startsWith("$") && part.endsWith("$") && part.length > 2) {
+        return (
+          <span key={idx} className="bubble-math-inline">
+            {part.slice(1, -1)}
+          </span>
+        );
+      }
+      return part;
+    });
+  };
+
+  const markdownComponents = {
+    a: ({ href, children }: any) => (
+      <a href={href} target="_blank" rel="noreferrer">
+        {children}
+      </a>
+    ),
+    hr: () => <hr className="bubble-hr" />,
+    p: ({ children }: any) => (
+      <p>
+        {Array.isArray(children)
+          ? children.map((c, i) =>
+              typeof c === "string" ? renderCleanText(c) : c,
+            )
+          : typeof children === "string"
+            ? renderCleanText(children)
+            : children}
+      </p>
+    ),
+    li: ({ children }: any) => (
+      <li>
+        {Array.isArray(children)
+          ? children.map((c, i) =>
+              typeof c === "string" ? renderCleanText(c) : c,
+            )
+          : typeof children === "string"
+            ? renderCleanText(children)
+            : children}
+      </li>
+    ),
   };
 
   useEffect(() => {
@@ -333,11 +383,21 @@ export function OverlayView({
     }
   };
 
+  const isDark =
+    theme === "dark" ||
+    (theme !== "light" &&
+      typeof document !== "undefined" &&
+      (document.documentElement.dataset.theme === "dark" ||
+        (document.documentElement.dataset.theme !== "light" &&
+          window.matchMedia?.("(prefers-color-scheme: dark)").matches)));
+
   return (
     <div
       className={`hintlens-overlay-shell ${opacity <= 0.2 ? "ghost-mode" : ""} ${interviewLayout === "compact" ? "compact-interview-mode" : ""}`}
       style={{
-        backgroundColor: `rgba(15, 23, 42, ${Math.max(0.15, opacity)})`,
+        backgroundColor: isDark
+          ? `rgba(15, 23, 42, ${Math.max(0.1, opacity)})`
+          : `rgba(255, 255, 255, ${Math.max(0.1, opacity)})`,
       }}
       onMouseDownCapture={() => {
         window.lens?.invoke?.("desktop.focusWindow")?.catch?.(() => {});
@@ -347,6 +407,29 @@ export function OverlayView({
       <header className="hintlens-titlebar">
         <div className="titlebar-left">
           <span className="app-title">LensDesk</span>
+          {availableUpdate && (
+            <button
+              type="button"
+              onClick={() => onOpenSettings?.("Account")}
+              style={{
+                marginLeft: 8,
+                padding: "2px 8px",
+                fontSize: "11px",
+                borderRadius: "12px",
+                border: "1px solid rgba(16, 185, 129, 0.4)",
+                background: "rgba(16, 185, 129, 0.2)",
+                color: "#34d399",
+                fontWeight: 600,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+              }}
+              title="New update available! Click to open update manager."
+            >
+              <span>🚀 Update v{availableUpdate.latestVersion}</span>
+            </button>
+          )}
           {interviewLayout === "compact" && (
             <div
               style={{
@@ -801,7 +884,22 @@ export function OverlayView({
                   {m.images && m.images.length > 0 && (
                     <div className="bubble-images">
                       {m.images.map((img, i) => (
-                        <img key={i} src={img} alt={`Attached ${i + 1}`} />
+                        <div
+                          key={i}
+                          className="bubble-image-thumb-card"
+                          onClick={() => setSelectedBundleImage(img)}
+                          title="Click to expand full screenshot"
+                        >
+                          <img
+                            src={img}
+                            alt={`Attached screenshot ${i + 1}`}
+                            className="bubble-thumb-img"
+                          />
+                          <div className="bubble-thumb-overlay">
+                            <Maximize2 size={11} />
+                            <span>Capture #{i + 1}</span>
+                          </div>
+                        </div>
                       ))}
                     </div>
                   )}
@@ -820,13 +918,7 @@ export function OverlayView({
                     <div className="bubble-markdown">
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
-                        components={{
-                          a: ({ href, children }) => (
-                            <a href={href} target="_blank" rel="noreferrer">
-                              {children}
-                            </a>
-                          ),
-                        }}
+                        components={markdownComponents}
                       >
                         {m.content}
                       </ReactMarkdown>
@@ -870,7 +962,10 @@ export function OverlayView({
                     </div>
                   ) : (
                     <div className="bubble-markdown">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={markdownComponents}
+                      >
                         {streamingText}
                       </ReactMarkdown>
                     </div>
@@ -926,6 +1021,42 @@ export function OverlayView({
 
               <div ref={messagesEndRef} />
             </div>
+
+            {/* Attached Screenshots Preview Strip */}
+            {images.length > 0 && (
+              <div className="composer-attached-strip">
+                <span className="composer-attached-label">
+                  <Camera size={12} />
+                  <span>Screenshots ({images.length}/5)</span>
+                </span>
+                <div className="composer-chips-row">
+                  {images.map((img, idx) => (
+                    <div
+                      key={idx}
+                      className="composer-screenshot-chip"
+                      onClick={() => setSelectedBundleImage(img)}
+                      title="Click to preview screenshot"
+                    >
+                      <img src={img} alt={`Capture ${idx + 1}`} />
+                      <span className="chip-name">Shot #{idx + 1}</span>
+                      {onRemoveImage && (
+                        <button
+                          type="button"
+                          className="chip-remove-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onRemoveImage(idx);
+                          }}
+                          title="Remove capture"
+                        >
+                          <X size={11} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Inline Chat Composer */}
             <div className="hintlens-composer">
@@ -1103,11 +1234,11 @@ export function OverlayView({
             title={
               autoTyping
                 ? `Stop typing (${keyLabel("autoType", "Shift+T")})`
-                : `Auto-type answer (${keyLabel("autoType", "Shift+T")})`
+                : `Type answer into focused app (${keyLabel("autoType", "Shift+T")})`
             }
           >
             <Keyboard size={14} />
-            <span>{autoTyping ? "Stop" : "Type"}</span>
+            <span>{autoTyping ? "Stop Typing" : "Type"}</span>
           </button>
 
           {/* 4. Undo */}
@@ -1171,7 +1302,7 @@ export function OverlayView({
           <div className="bg-opacity-control">
             <span className="bg-label">BG</span>
             <div className="opacity-preset-pills">
-              {[100, 80, 60, 40, 20].map((val) => (
+              {[100, 80, 60, 40, 20, 10].map((val) => (
                 <button
                   key={val}
                   type="button"
@@ -1183,16 +1314,16 @@ export function OverlayView({
                 </button>
               ))}
             </div>
-            <span className="bg-val-text">{Math.max(15, Math.round(opacity * 100))}%</span>
+            <span className="bg-val-text">{Math.max(10, Math.round(opacity * 100))}%</span>
             <input
               type="range"
-              min={15}
+              min={10}
               max={100}
               step={1}
-              value={Math.max(15, Math.round(opacity * 100))}
-              onChange={(e) => onOpacityChange(Number(e.target.value) / 100)}
+              value={Math.max(10, Math.round(opacity * 100))}
+              onChange={(e) => onOpacityChange(Math.max(0.1, Number(e.target.value) / 100))}
               className="bg-slider-track"
-              title="Continuous cursor opacity (15% - 100%)"
+              title="Continuous cursor opacity (10% - 100%)"
             />
           </div>
 

@@ -59,6 +59,7 @@ export interface Settings {
   opacity: number;
   alwaysOnTop: boolean;
   captureProtection: boolean;
+  cloudScreenshotSync?: boolean;
 }
 export interface State {
   accountId?: string;
@@ -99,6 +100,12 @@ export interface DesktopBridge {
   onClickThrough?: (
     listener: (data: { clickThrough: boolean }) => void,
   ) => () => void;
+  onOpacityChanged?: (listener: (opacity: number) => void) => () => void;
+  onUpdaterProgress?: (
+    listener: (progress: { percent: number; transferred: number; total: number }) => void,
+  ) => () => void;
+  onUpdaterAvailable?: (listener: (info: any) => void) => () => void;
+  on?: (channel: string, listener: (...args: any[]) => void) => () => void;
   platform: string;
 }
 declare global {

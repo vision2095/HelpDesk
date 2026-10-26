@@ -27,6 +27,10 @@ public:
 
     LRESULT HandleHotkey(WPARAM wParam, LPARAM lParam);
 
+    // Global mouse hook for radial flick gesture
+    bool InstallMouseHook(bool enable, const std::string& trigger = "middle");
+    void UninstallMouseHook();
+
     // Destination-verified auto-typing
     bool StartAutoType(const std::string& text, int delayMs = 15);
     void StopAutoType();

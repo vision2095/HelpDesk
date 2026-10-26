@@ -134,6 +134,7 @@ void InputManager::UpdateShortcuts(const json& shortcuts) {
 }
 
 void InputManager::Shutdown() {
+    UninstallMouseHook();
     StopAutoType();
     UnregisterAllHotkeys();
     m_hwnd = nullptr;
@@ -193,6 +194,47 @@ void InputManager::StopAutoType() {
     m_isAutoTyping = false;
 }
 
+static bool IsAnyModifierDown() {
+#ifdef _WIN32
+    const int modifiers[] = { VK_SHIFT, VK_CONTROL, VK_MENU, VK_LWIN, VK_RWIN };
+    for (int vk : modifiers) {
+        if ((GetAsyncKeyState(vk) & 0x8000) != 0) {
+            return true;
+        }
+    }
+#endif
+    return false;
+}
+
+static void SendVirtualKeyNative(WORD vk, int holdMs = 20) {
+#ifdef _WIN32
+    INPUT inputDown{};
+    inputDown.type = INPUT_KEYBOARD;
+    inputDown.ki.wVk = vk;
+    inputDown.ki.wScan = static_cast<WORD>(MapVirtualKeyW(vk, 0));
+    inputDown.ki.dwFlags = 0;
+    SendInput(1, &inputDown, sizeof(INPUT));
+
+    if (holdMs > 0) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(holdMs));
+    }
+
+    INPUT inputUp{};
+    inputUp.type = INPUT_KEYBOARD;
+    inputUp.ki.wVk = vk;
+    inputUp.ki.wScan = static_cast<WORD>(MapVirtualKeyW(vk, 0));
+    inputUp.ki.dwFlags = KEYEVENTF_KEYUP;
+    SendInput(1, &inputUp, sizeof(INPUT));
+#endif
+}
+
+static void SendCaretNudgeNative() {
+#ifdef _WIN32
+    SendVirtualKeyNative(VK_LEFT, 10);
+    SendVirtualKeyNative(VK_RIGHT, 10);
+#endif
+}
+
 void InputManager::AutoTypeWorker(std::wstring wideText, int delayMs) {
     // 1. Initial short delay to allow target window activation
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -201,39 +243,105 @@ void InputManager::AutoTypeWorker(std::wstring wideText, int delayMs) {
     HWND targetHwnd = GetForegroundWindow();
 
     // 3. Safety validation: never type into LensDesk itself
-    if (targetHwnd == m_hwnd) {
+    if (!targetHwnd || targetHwnd == m_hwnd) {
         m_isAutoTyping = false;
         return;
     }
 
-    // 4. Send unicode keystrokes
+    // 4. Wait for user to release any modifier keys (Shift, Ctrl, Alt, Win)
+    for (int wait = 0; wait < 250 && !m_stopAutoTyping; ++wait) {
+        if (!IsAnyModifierDown()) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+
+    // 5. Send unicode keystrokes with realistic hold and interruptible slicing
     for (wchar_t ch : wideText) {
         if (m_stopAutoTyping) break;
 
-        // Verify target foreground window is still active
+        // Verify target foreground window is still active (HintLens focus drift guard)
         if (GetForegroundWindow() != targetHwnd) {
-            // Target window lost focus, abort to prevent accidental typing
+            // [TypeSim] Focus drifted stopping to avoid typing into wrong window
             break;
         }
 
-        INPUT inputs[2]{};
+        // Wait if modifier key is pressed mid-typing
+        while (IsAnyModifierDown() && !m_stopAutoTyping) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(15));
+        }
+        if (m_stopAutoTyping) break;
 
-        // Key Down
-        inputs[0].type = INPUT_KEYBOARD;
-        inputs[0].ki.wScan = ch;
-        inputs[0].ki.dwFlags = KEYEVENTF_UNICODE;
+        if (ch == L'\r') {
+            continue; // Skip CR in CRLF
+        } else if (ch == L'\n') {
+            SendVirtualKeyNative(VK_RETURN, 20);
+        } else if (ch == L'\t') {
+            SendVirtualKeyNative(VK_TAB, 20);
+        } else {
+            // Key Down with KEYEVENTF_UNICODE
+            INPUT inputDown{};
+            inputDown.type = INPUT_KEYBOARD;
+            inputDown.ki.wScan = ch;
+            inputDown.ki.dwFlags = KEYEVENTF_UNICODE;
+            SendInput(1, &inputDown, sizeof(INPUT));
 
-        // Key Up
-        inputs[1].type = INPUT_KEYBOARD;
-        inputs[1].ki.wScan = ch;
-        inputs[1].ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
+            // Human key-hold contact duration (18ms)
+            std::this_thread::sleep_for(std::chrono::milliseconds(18));
 
-        SendInput(2, inputs, sizeof(INPUT));
+            // Key Up with KEYEVENTF_UNICODE | KEYEVENTF_KEYUP
+            INPUT inputUp{};
+            inputUp.type = INPUT_KEYBOARD;
+            inputUp.ki.wScan = ch;
+            inputUp.ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
+            SendInput(1, &inputUp, sizeof(INPUT));
+        }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(delayMs));
+        // Caret nudge for delimiter characters (prevents autocomplete bracket double expansion)
+        if (ch == L'{' || ch == L'}' || ch == L'(' || ch == L')' ||
+            ch == L'[' || ch == L']' || ch == L'"' || ch == L'\'') {
+            SendCaretNudgeNative();
+        }
+
+        // Interruptible delay in 10ms slices
+        int remaining = delayMs;
+        while (remaining > 0 && !m_stopAutoTyping) {
+            int step = std::min(10, remaining);
+            std::this_thread::sleep_for(std::chrono::milliseconds(step));
+            remaining -= step;
+        }
     }
 
     m_isAutoTyping = false;
+}
+
+static HHOOK s_globalMouseHook = nullptr;
+static InputManager* s_inputManagerInstance = nullptr;
+
+static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
+    if (nCode >= 0 && s_inputManagerInstance) {
+        if (wParam == WM_MBUTTONDOWN || wParam == WM_RBUTTONDOWN) {
+            // Trigger global radial action wheel overlay
+            s_inputManagerInstance->HandleHotkey(109, 0);
+        }
+    }
+    return CallNextHookEx(s_globalMouseHook, nCode, wParam, lParam);
+}
+
+bool InputManager::InstallMouseHook(bool enable, const std::string& trigger) {
+    s_inputManagerInstance = this;
+    if (!enable) {
+        UninstallMouseHook();
+        return true;
+    }
+    if (s_globalMouseHook) return true;
+    s_globalMouseHook = SetWindowsHookExW(WH_MOUSE_LL, LowLevelMouseProc, GetModuleHandle(nullptr), 0);
+    return s_globalMouseHook != nullptr;
+}
+
+void InputManager::UninstallMouseHook() {
+    if (s_globalMouseHook) {
+        UnhookWindowsHookEx(s_globalMouseHook);
+        s_globalMouseHook = nullptr;
+    }
 }
 
 } // namespace LensDesk

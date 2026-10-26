@@ -65,6 +65,11 @@ let browser = null;
 const captureArchive = require("./capture-archive.cjs").createCaptureArchive({
   getPreferences: () => desktopPreferences.get(),
 });
+const { createUpdater } = require("./updater.cjs");
+const updater = createUpdater({
+  getMainWindow: () => mainWindow,
+  getServerUrl: () => (subscriptionGate ? subscriptionGate.view().serverUrl : serverUrl),
+});
 function stopTyping() {
   typingController?.abort();
   typing = false; // option: keep auto-type controller, also clear global typing state
@@ -124,6 +129,27 @@ function showWindow(options = {}) {
   }
   if (isWin) reassert();
 }
+
+let currentOpacity = 0.5;
+const adjustOpacity = async (delta) => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  try {
+    const cur = typeof mainWindow.getOpacity === "function" ? mainWindow.getOpacity() : currentOpacity;
+    const next = Math.max(0.1, Math.min(1.0, Math.round((cur + delta) * 10) / 10));
+    currentOpacity = next;
+    mainWindow.setOpacity(next);
+    if (mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
+      mainWindow.webContents.send("lens:opacity-changed", next);
+      mainWindow.webContents.send("lens:shortcut", delta > 0 ? "opacityUp" : "opacityDown");
+    }
+    if (service) {
+      await service.dispatch("settings.save", { opacity: next }).catch(() => {});
+    }
+  } catch (err) {
+    console.error("[desktop] adjustOpacity error:", err?.message || err);
+  }
+};
+
 function registerShortcuts(preferences) {
   globalShortcut.unregisterAll();
   gkeys.clearCombos();
@@ -136,6 +162,8 @@ function registerShortcuts(preferences) {
     toggleClickThrough,
     isTyping: () => Boolean(typingController),
     stopTyping,
+    onOpacityUp: () => adjustOpacity(0.1),
+    onOpacityDown: () => adjustOpacity(-0.1),
     getWorkArea: (bounds) => {
       try {
         if (bounds && Number.isFinite(bounds.x) && Number.isFinite(bounds.y)) {
@@ -208,6 +236,11 @@ function registerShortcuts(preferences) {
       gkeys.registerCombo("Shift+H", toggleHide);          // hook swallow nahi karta, capital H bhi type hota hai
       gkeys.registerCombo("CommandOrControl+Shift+H", toggleHide);
       gkeys.registerCombo("Shift+M", toggleClickThrough);
+      gkeys.registerCombo("CommandOrControl+Shift+M", toggleClickThrough);
+      gkeys.registerCombo("Shift+I", () => adjustOpacity(0.1));
+      gkeys.registerCombo("CommandOrControl+Shift+I", () => adjustOpacity(0.1));
+      gkeys.registerCombo("Shift+J", () => adjustOpacity(-0.1));
+      gkeys.registerCombo("CommandOrControl+Shift+J", () => adjustOpacity(-0.1));
       gkeys.registerCombo("Control+Shift+Space", toggleTyping);
       if (callbacks.getAnswer) gkeys.registerCombo("Shift+A", callbacks.getAnswer);
       if (callbacks.capture) gkeys.registerCombo("Shift+S", callbacks.capture);
@@ -226,6 +259,10 @@ function registerShortcuts(preferences) {
       }
       if (!globalShortcut.register("Control+Shift+Space", toggleTyping)) errors.push("typing: Control+Shift+Space");
     }
+    try { globalShortcut.register("CommandOrControl+Shift+I", () => adjustOpacity(0.1)); } catch {}
+    try { globalShortcut.register("CommandOrControl+Shift+J", () => adjustOpacity(-0.1)); } catch {}
+    try { globalShortcut.register("CommandOrControl+Shift+H", toggleHide); } catch {}
+    try { globalShortcut.register("CommandOrControl+Shift+M", toggleClickThrough); } catch {}
   }
 
   if (isWin) {
@@ -243,6 +280,14 @@ function registerShortcuts(preferences) {
       try { globalShortcut.register(accel, wrapped); } catch {}
     };
 
+    combo("Shift+H", "hide", toggleHide);
+    combo("Control+Shift+H", "hideCtrl", toggleHide);
+    combo("Shift+M", "clickThrough", toggleClickThrough);
+    combo("Control+Shift+M", "clickThroughCtrl", toggleClickThrough);
+    combo("Shift+I", "opacityUp", () => adjustOpacity(0.1));
+    combo("Control+Shift+I", "opacityUpCtrl", () => adjustOpacity(0.1));
+    combo("Shift+J", "opacityDown", () => adjustOpacity(-0.1));
+    combo("Control+Shift+J", "opacityDownCtrl", () => adjustOpacity(-0.1));
     combo("Control+Shift+Space", "typing", toggleTyping);
     combo("Control+Alt+L", "click", toggleClickThrough);
     if (callbacks.getAnswer) combo("Shift+A", "getAnswer", callbacks.getAnswer);
@@ -344,9 +389,8 @@ async function toggleOverlay() {
 
 let clickThrough = false;
 function setClickThrough(enable) {
-  // Sign-in must always be clickable. Protected operations never run through a
-  // pass-through window.
-  clickThrough = Boolean(enable) && !requiresAuthentication;
+  // Sign-in defaults to clickable, but hotkey Shift+M allows toggling mouse pass-through
+  clickThrough = Boolean(enable);
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.setIgnoreMouseEvents(clickThrough, { forward: true });
     if (isWin) mainWindow.setSkipTaskbar(true);
@@ -408,8 +452,17 @@ function reassert() {
 function toggleHide() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   userHidden = !userHidden;
-  if (userHidden) mainWindow.hide();
-  else { mainWindow.showInactive(); reassert(); }
+  if (userHidden) {
+    mainWindow.hide();
+  } else {
+    if (requiresAuthentication) {
+      mainWindow.show();
+      mainWindow.focus();
+    } else {
+      mainWindow.showInactive();
+    }
+    reassert();
+  }
 }
 function applyStealthDock(enable) {
   if (isMac) {
@@ -521,9 +574,27 @@ async function createWindow() {
     browser?.handleInput(event, input);
     if (input.type === "keyDown" && input.key) {
       const k = input.key.toLowerCase();
-      if (k === "h" && input.shift && (input.meta || input.control || input.alt)) {
-        event.preventDefault();
-        toggleHide();
+      if (input.shift && !input.alt) {
+        if (k === "i" && (input.meta || input.control)) {
+          event.preventDefault();
+          void adjustOpacity(0.1);
+          return;
+        }
+        if (k === "j" && (input.meta || input.control)) {
+          event.preventDefault();
+          void adjustOpacity(-0.1);
+          return;
+        }
+        if (k === "h" && (input.meta || input.control)) {
+          event.preventDefault();
+          toggleHide();
+          return;
+        }
+        if (k === "m" && (input.meta || input.control)) {
+          event.preventDefault();
+          toggleClickThrough();
+          return;
+        }
       }
     }
   });
@@ -616,12 +687,13 @@ async function createWindow() {
   const state = await service.dispatch("state");
   applyAlwaysOnTop(mainWindow, floating || state.settings.alwaysOnTop);
   const initialOpacity = Math.max(
-    0.2,
-    Math.min(1, Number(state?.settings?.opacity) ?? 1),
+    0.1,
+    Math.min(1, Number(state?.settings?.opacity) ?? 0.5),
   );
   mainWindow.setOpacity(initialOpacity);
-  if (typeof state?.settings?.opacity === "number" && state.settings.opacity < 0.2) {
-    void service.dispatch("settings.save", { opacity: 0.95 }).catch(() => {});
+  currentOpacity = initialOpacity;
+  if (typeof state?.settings?.opacity !== "number" || state.settings.opacity < 0.1) {
+    void service.dispatch("settings.save", { opacity: 0.5 }).catch(() => {});
   }
   applyCaptureProtection(
     mainWindow,
@@ -967,10 +1039,11 @@ app.whenReady().then(async () => {
     if (action === "desktop.appearance") {
       const s = await service.dispatch("state");
       const targetOpacity = Math.max(
-        0.2,
-        Math.min(1, Number(s?.settings?.opacity) ?? 1),
+        0.1,
+        Math.min(1, Number(s?.settings?.opacity) ?? 0.5),
       );
       mainWindow.setOpacity(targetOpacity);
+      currentOpacity = targetOpacity;
       applyCaptureProtection(mainWindow, s?.settings?.captureProtection);
       applyAlwaysOnTop(mainWindow, floating || s?.settings?.alwaysOnTop);
       return { ok: true };
@@ -1070,9 +1143,10 @@ app.whenReady().then(async () => {
           speed,
           codeOnly,
           delaySeconds,
-          wpm: prefs.autoType.wpm,
-          jitter: prefs.autoType.jitter,
-          pauses: prefs.autoType.pauses,
+          wpm: payload.wpm ?? prefs.autoType?.wpm,
+          jitter: payload.jitter ?? prefs.autoType?.jitter,
+          pauses: payload.pauses ?? prefs.autoType?.pauses,
+          mistakes: payload.mistakes ?? prefs.autoType?.mistakes,
           method,
           signal: controller.signal,
         });
@@ -1093,6 +1167,11 @@ app.whenReady().then(async () => {
       }
     }
     if (action === "desktop.autoType.stop") return stopTyping();
+    if (action === "desktop.autoType.restart") {
+      stopTyping();
+      await new Promise((r) => setTimeout(r, 120));
+      return dispatch("desktop.autoType", payload);
+    }
     if (action === "desktop.clickThrough") {
       const enable =
         typeof payload?.enable === "boolean" ? payload.enable : !clickThrough;
@@ -1100,6 +1179,29 @@ app.whenReady().then(async () => {
     }
     if (action === "desktop.clickThroughState") {
       return { clickThrough };
+    }
+    if (action === "desktop.cursorPos") {
+      try {
+        const pt = screen.getCursorScreenPoint();
+        return { x: pt.x, y: pt.y };
+      } catch {
+        return { x: 0, y: 0 };
+      }
+    }
+    if (action === "desktop.radial.open") {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.show();
+        mainWindow.webContents.send("shortcut", "overlay.radial");
+      }
+      return { ok: true };
+    }
+    if (action === "desktop.updater.check") {
+      const url = subscriptionGate?.view?.()?.serverUrl || serverUrl;
+      return updater.check(url);
+    }
+    if (action === "desktop.updater.downloadAndInstall") {
+      const url = subscriptionGate?.view?.()?.serverUrl || serverUrl;
+      return updater.downloadAndInstall({ artifact: payload?.artifact, serverUrl: url });
     }
     if (action === "desktop.openExternal") {
       const wellKnown =
@@ -1150,6 +1252,17 @@ app.whenReady().then(async () => {
     if (action === "desktop.export") {
       subscriptionGate.assertAccess();
       return exportSession(payload);
+    }
+    if (action === "settings.save") {
+      if (typeof payload?.opacity === "number") {
+        payload.opacity = Math.max(0.1, Math.min(1, payload.opacity));
+      }
+      const res = await gatedDispatch(action, payload);
+      if (mainWindow && !mainWindow.isDestroyed() && typeof payload?.opacity === "number") {
+        mainWindow.setOpacity(payload.opacity);
+        currentOpacity = payload.opacity;
+      }
+      return res;
     }
     return gatedDispatch(action, payload);
   });
@@ -1286,6 +1399,17 @@ app.whenReady().then(async () => {
     console.error("System tray unavailable:", error.message);
   }
   app.on("activate", showWindow);
+
+  // Background check for updates after launch
+  setTimeout(async () => {
+    try {
+      const url = subscriptionGate ? subscriptionGate.view().serverUrl : serverUrl;
+      const res = await updater.check(url);
+      if (res && res.updateAvailable && mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("desktop.updater.available", res);
+      }
+    } catch {}
+  }, 5000);
 }).catch(async (error) => {
   const logPath = path.join(app.getPath("userData"), "startup-error.log");
   let detail = error?.stack || String(error);

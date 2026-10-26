@@ -269,10 +269,50 @@ function createBrowser({
     return snapshot();
   }
   function handleInput(event, input) {
-    if (!visible || input.type !== "keyDown" || !(input.control || input.meta))
-      return;
+    if (!visible || input.type !== "keyDown") return;
     const key = input.key.toLowerCase(),
       tab = tabs.get(activeId);
+
+    // Forward global shortcuts from embedded browser
+    if (input.shift) {
+      if (key === "s") {
+        event.preventDefault();
+        getWindow()?.webContents.send("lens:shortcut", "capture");
+        return;
+      }
+      if (key === "a") {
+        event.preventDefault();
+        getWindow()?.webContents.send("lens:shortcut", "getAnswer");
+        return;
+      }
+      if (key === "b") {
+        event.preventDefault();
+        getWindow()?.webContents.send("lens:shortcut", "browser");
+        return;
+      }
+      if (key === "i") {
+        event.preventDefault();
+        getWindow()?.webContents.send("lens:shortcut", "opacityUp");
+        return;
+      }
+      if (key === "j") {
+        event.preventDefault();
+        getWindow()?.webContents.send("lens:shortcut", "opacityDown");
+        return;
+      }
+      if (key === "h") {
+        event.preventDefault();
+        getWindow()?.webContents.send("lens:shortcut", "hide");
+        return;
+      }
+      if (key === "m") {
+        event.preventDefault();
+        getWindow()?.webContents.send("lens:shortcut", "clickThrough");
+        return;
+      }
+    }
+
+    if (!(input.control || input.meta)) return;
     if (!["l", "t", "w", "r", "f"].includes(key)) return;
     event.preventDefault();
     if (key === "l" || key === "f") {
