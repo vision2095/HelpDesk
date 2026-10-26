@@ -280,6 +280,11 @@ async function typeWindows(text, options, signal) {
       throw new Error("Focus a destination editor before typing.");
     }
 
+    // Module 4: Active Window Focus Synchronization
+    if (typeof nativeWin.synchronizeFocus === "function") {
+      try { nativeWin.synchronizeFocus(targetHwnd); } catch {}
+    }
+
     const characters = Array.from(text.replace(/\r\n/g, "\n"));
     for (let index = 0; index < characters.length; index++) {
       canceled(signal);
@@ -301,16 +306,28 @@ async function typeWindows(text, options, signal) {
           nativeWin.sendUnicodeChar(wrongKey, 20);
           await sleep(Math.floor(80 + Math.random() * 70), signal);
           // Send Backspace (VK 0x08)
-          nativeWin.sendVirtualKey(0x08, 20);
+          if (typeof nativeWin.sendHardwareScancode === "function") {
+            nativeWin.sendHardwareScancode(0x08, 20);
+          } else {
+            nativeWin.sendVirtualKey(0x08, 20);
+          }
           await sleep(Math.floor(40 + Math.random() * 50), signal);
         }
       }
 
-      // Send the character
+      // Send the character (Tier 1 Hardware Scancodes for special keys, Tier 3 Unicode for characters)
       if (char === "\n") {
-        nativeWin.sendVirtualKey(0x0D, 20); // VK_RETURN
+        if (typeof nativeWin.sendHardwareScancode === "function") {
+          nativeWin.sendHardwareScancode(0x0D, 20); // VK_RETURN
+        } else {
+          nativeWin.sendVirtualKey(0x0D, 20);
+        }
       } else if (char === "\t") {
-        nativeWin.sendVirtualKey(0x09, 20); // VK_TAB
+        if (typeof nativeWin.sendHardwareScancode === "function") {
+          nativeWin.sendHardwareScancode(0x09, 20); // VK_TAB
+        } else {
+          nativeWin.sendVirtualKey(0x09, 20);
+        }
       } else {
         nativeWin.sendUnicodeChar(char, 20);
       }

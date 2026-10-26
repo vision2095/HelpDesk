@@ -10,6 +10,7 @@ try {
 } catch {}
 
 const GWL_EXSTYLE = -20;
+const WS_EX_TRANSPARENT = 0x00000020n;
 const WS_EX_TOOLWINDOW = 0x00000080n;
 const WS_EX_NOACTIVATE = 0x08000000n;
 const WS_EX_TOPMOST    = 0x00000008n;
@@ -354,8 +355,102 @@ function sendVirtualKey(vk, holdMs = 20) {
 }
 
 function sendCaretNudge() {
+  if (nativeAddon?.available && typeof nativeAddon.sendCaretNudge === 'function') {
+    return nativeAddon.sendCaretNudge();
+  }
   sendVirtualKey(0x25, 10); // VK_LEFT
   sendVirtualKey(0x27, 10); // VK_RIGHT
+}
+
+function setClickThrough(win, enable) {
+  if (!win || win.isDestroyed()) return false;
+  const h = hwndOf(win);
+  if (nativeAddon?.available && typeof nativeAddon.setOverlayClickThrough === 'function') {
+    return nativeAddon.setOverlayClickThrough(h.toString(), Boolean(enable));
+  }
+  if (!load()) return false;
+  try {
+    const ex = BigInt(F.GetWindowLongPtrW(h, GWL_EXSTYLE));
+    const want = enable ? (ex | WS_EX_TRANSPARENT) : (ex & ~WS_EX_TRANSPARENT);
+    if (want !== ex) {
+      F.SetWindowLongPtrW(h, GWL_EXSTYLE, want);
+      F.SetWindowPos(h, 0n, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE);
+    }
+    return true;
+  } catch { return false; }
+}
+
+function optimizeWorkingSet() {
+  if (nativeAddon?.available && typeof nativeAddon.optimizeWorkingSet === 'function') {
+    return nativeAddon.optimizeWorkingSet();
+  }
+  return { ok: true };
+}
+
+function isElevatedAdmin() {
+  if (nativeAddon?.available && typeof nativeAddon.isElevatedAdmin === 'function') {
+    return nativeAddon.isElevatedAdmin();
+  }
+  return { isElevated: false, integrityLevel: 0 };
+}
+
+function configureUIPI(win) {
+  if (!win || win.isDestroyed()) return false;
+  const h = hwndOf(win);
+  if (nativeAddon?.available && typeof nativeAddon.configureUIPIFilters === 'function') {
+    return nativeAddon.configureUIPIFilters(h.toString());
+  }
+  return true;
+}
+
+function sendHardwareScancode(vk, holdMs = 20) {
+  if (nativeAddon?.available && typeof nativeAddon.sendHardwareScancode === 'function') {
+    return nativeAddon.sendHardwareScancode(vk, holdMs);
+  }
+  return sendVirtualKey(vk, holdMs);
+}
+
+function postBackgroundChar(hwnd, char) {
+  if (!hwnd) return false;
+  const code = typeof char === 'string' ? char.charCodeAt(0) : char;
+  if (nativeAddon?.available && typeof nativeAddon.postBackgroundMessage === 'function') {
+    const hStr = typeof hwnd === 'bigint' ? hwnd.toString() : String(hwnd);
+    return nativeAddon.postBackgroundMessage(hStr, 0x0102 /* WM_CHAR */, code, 1);
+  }
+  return false;
+}
+
+function postBackgroundKey(hwnd, vk) {
+  if (!hwnd) return false;
+  if (nativeAddon?.available && typeof nativeAddon.postBackgroundMessage === 'function') {
+    const hStr = typeof hwnd === 'bigint' ? hwnd.toString() : String(hwnd);
+    nativeAddon.postBackgroundMessage(hStr, 0x0100 /* WM_KEYDOWN */, vk, 1);
+    nativeAddon.postBackgroundMessage(hStr, 0x0101 /* WM_KEYUP */, vk, 1);
+    return true;
+  }
+  return false;
+}
+
+function synchronizeFocus(targetHwnd) {
+  if (!targetHwnd) return false;
+  if (!load()) return false;
+  try {
+    const curThread = F.GetCurrentThreadId();
+    const outPid = [0];
+    const targetThread = F.GetWindowThreadProcessId(targetHwnd, outPid);
+    if (targetThread && targetThread !== curThread) {
+      try { F.AttachThreadInput(curThread, targetThread, true); } catch {}
+    }
+    F.SetWindowPos(targetHwnd, 0n, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+    F.BringWindowToTop(targetHwnd);
+    F.SetForegroundWindow(targetHwnd);
+    F.SetActiveWindow(targetHwnd);
+    F.SetFocus(targetHwnd);
+    if (targetThread && targetThread !== curThread) {
+      try { F.AttachThreadInput(curThread, targetThread, false); } catch {}
+    }
+    return true;
+  } catch { return false; }
 }
 
 module.exports = {
@@ -377,4 +472,12 @@ module.exports = {
   sendUnicodeChar,
   sendVirtualKey,
   sendCaretNudge,
+  setClickThrough,
+  optimizeWorkingSet,
+  isElevatedAdmin,
+  configureUIPI,
+  sendHardwareScancode,
+  postBackgroundChar,
+  postBackgroundKey,
+  synchronizeFocus,
 };
