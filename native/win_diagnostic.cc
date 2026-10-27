@@ -909,12 +909,22 @@ Napi::Value SafeAutoType(const Napi::CallbackInfo& info) {
   return Napi::Number::New(env, typedCount);
 }
 
-// Module 1 & 7: Mach VM / Malloc Zone Memory Pressure Relief (macOS 1:1)
+// Module 1 & 7: Mach VM Memory Diagnostics & Optimization (macOS 1:1)
 Napi::Value OptimizeWorkingSet(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  malloc_zone_pressure_relief(malloc_default_zone(), 0);
+  // Safe memory optimization on macOS:
+  // In Electron/Chromium, PartitionAlloc overrides malloc zones and does not support
+  // malloc_zone_pressure_relief (calling it dereferences a null pointer causing SIGSEGV).
+  // Native Mach task memory diagnostics are safely queried here.
+  mach_msg_type_number_t count = TASK_VM_INFO_COUNT;
+  task_vm_info_data_t vmInfo;
+  kern_return_t kr = task_info(mach_task_self(), TASK_VM_INFO, (task_info_t)&vmInfo, &count);
   Napi::Object res = Napi::Object::New(env);
-  res.Set("ok", Napi::Boolean::New(env, true));
+  res.Set("ok", Napi::Boolean::New(env, kr == KERN_SUCCESS));
+  if (kr == KERN_SUCCESS) {
+    res.Set("residentBytes", Napi::Number::New(env, static_cast<double>(vmInfo.resident_size)));
+    res.Set("physFootprintBytes", Napi::Number::New(env, static_cast<double>(vmInfo.phys_footprint)));
+  }
   return res;
 }
 
