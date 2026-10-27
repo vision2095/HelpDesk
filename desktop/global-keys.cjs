@@ -109,8 +109,38 @@ function rehook() {
 const setTyping = (v) => { enabled = !!v; shift = false; emit({ type: 'mode', typing: enabled }); };
 const isTyping = () => enabled;
 const isAvailable = () => started;
-const registerCombo = (accel, fn) => combos.set(normalizeAccel(accel), fn);
-const hasCombo = (accel) => combos.has(normalizeAccel(accel));
+const registerCombo = (accel, fn) => {
+  const norm = normalizeAccel(accel);
+  combos.set(norm, fn);
+
+  // Cross-order matching: if contains S and M, ensure both SM and MS are mapped
+  if (norm.startsWith('MS+')) combos.set('SM+' + norm.slice(3), fn);
+  else if (norm.startsWith('SM+')) combos.set('MS+' + norm.slice(3), fn);
+  else if (norm.startsWith('CS+')) combos.set('SC+' + norm.slice(3), fn);
+  else if (norm.startsWith('SC+')) combos.set('CS+' + norm.slice(3), fn);
+
+  // On macOS, CommandOrControl alias should match both M (Command) and C (Control)
+  if (process.platform === 'darwin' && /commandorcontrol|cmdorctrl/i.test(accel)) {
+    const metaAccel = accel.replace(/commandorcontrol|cmdorctrl/gi, 'Command');
+    const mNorm = normalizeAccel(metaAccel);
+    combos.set(mNorm, fn);
+    if (mNorm.startsWith('MS+')) combos.set('SM+' + mNorm.slice(3), fn);
+    else if (mNorm.startsWith('SM+')) combos.set('MS+' + mNorm.slice(3), fn);
+  }
+};
+const hasCombo = (accel) => {
+  const norm = normalizeAccel(accel);
+  if (combos.has(norm)) return true;
+  if (norm.startsWith('MS+') && combos.has('SM+' + norm.slice(3))) return true;
+  if (norm.startsWith('SM+') && combos.has('MS+' + norm.slice(3))) return true;
+  if (norm.startsWith('CS+') && combos.has('SC+' + norm.slice(3))) return true;
+  if (norm.startsWith('SC+') && combos.has('CS+' + norm.slice(3))) return true;
+  if (process.platform === 'darwin' && /commandorcontrol|cmdorctrl/i.test(accel)) {
+    const metaAccel = accel.replace(/commandorcontrol|cmdorctrl/gi, 'Command');
+    return hasCombo(metaAccel);
+  }
+  return false;
+};
 const clearCombos = () => combos.clear();
 
 module.exports = { start, stop, rehook, setTyping, isTyping, isAvailable, registerCombo, hasCombo, clearCombos, normalizeAccel };

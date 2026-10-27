@@ -624,6 +624,27 @@ Napi::Value GetLastForegroundHwnd(const Napi::CallbackInfo& info) {
   return Napi::String::New(env, HwndToString(fg));
 }
 
+Napi::Value SendNativePaste(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  INPUT in[4] = {};
+  in[0].type = INPUT_KEYBOARD; in[0].ki.wVk = VK_CONTROL;
+  in[1].type = INPUT_KEYBOARD; in[1].ki.wVk = 'V';
+  in[2].type = INPUT_KEYBOARD; in[2].ki.wVk = 'V'; in[2].ki.dwFlags = KEYEVENTF_KEYUP;
+  in[3].type = INPUT_KEYBOARD; in[3].ki.wVk = VK_CONTROL; in[3].ki.dwFlags = KEYEVENTF_KEYUP;
+  UINT sent = SendInput(4, in, sizeof(INPUT));
+  return Napi::Boolean::New(env, sent == 4);
+}
+
+Napi::Value IsAnyModifierDown(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  bool down = ((GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0) ||
+              ((GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0) ||
+              ((GetAsyncKeyState(VK_MENU) & 0x8000) != 0) ||
+              ((GetAsyncKeyState(VK_LWIN) & 0x8000) != 0) ||
+              ((GetAsyncKeyState(VK_RWIN) & 0x8000) != 0);
+  return Napi::Boolean::New(env, down);
+}
+
 #elif defined(__APPLE__)
 
 #include <CoreGraphics/CoreGraphics.h>
@@ -632,6 +653,9 @@ Napi::Value GetLastForegroundHwnd(const Napi::CallbackInfo& info) {
 #include <malloc/malloc.h>
 #include <mach/mach.h>
 #include <unistd.h>
+#include <objc/objc.h>
+#include <objc/runtime.h>
+#include <objc/message.h>
 
 namespace {
 static uint32_t g_lastReportedFrontPid = 0;
@@ -695,7 +719,62 @@ Napi::Value GetForegroundInfo(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value ActivateWindow(const Napi::CallbackInfo& info) {
-  return Napi::Boolean::New(info.Env(), true);
+  Napi::Env env = info.Env();
+  uint32_t targetVal = 0;
+  if (info.Length() > 0) {
+    if (info[0].IsNumber()) targetVal = info[0].As<Napi::Number>().Uint32Value();
+    else if (info[0].IsString()) {
+      std::string s = info[0].As<Napi::String>().Utf8Value();
+      if (!s.empty()) {
+        try { targetVal = std::stoul(s); } catch (...) {}
+      }
+    }
+  }
+
+  pid_t targetPid = static_cast<pid_t>(targetVal);
+  if (targetPid == 0) {
+    targetPid = getpid();
+  }
+
+  CFArrayRef windowList = CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, kCGNullWindowID);
+  if (windowList) {
+    CFIndex count = CFArrayGetCount(windowList);
+    for (CFIndex i = 0; i < count; i++) {
+      CFDictionaryRef dict = (CFDictionaryRef)CFArrayGetValueAtIndex(windowList, i);
+      CFNumberRef idNum = (CFNumberRef)CFDictionaryGetValue(dict, kCGWindowNumber);
+      uint32_t wid = 0;
+      if (idNum) CFNumberGetValue(idNum, kCFNumberIntType, &wid);
+      if (wid == targetVal) {
+        CFNumberRef pidNum = (CFNumberRef)CFDictionaryGetValue(dict, kCGWindowOwnerPID);
+        if (pidNum) {
+          int p = 0;
+          CFNumberGetValue(pidNum, kCFNumberIntType, &p);
+          if (p > 0) targetPid = static_cast<pid_t>(p);
+        }
+        break;
+      }
+    }
+    CFRelease(windowList);
+  }
+
+  Class runningAppClass = objc_getClass("NSRunningApplication");
+  if (!runningAppClass) return Napi::Boolean::New(env, false);
+
+  SEL runningWithPidSel = sel_registerName("runningApplicationWithProcessIdentifier:");
+  typedef id (*RunningWithPidFn)(id, SEL, pid_t);
+  RunningWithPidFn getApp = (RunningWithPidFn)objc_msgSend;
+  id app = getApp((id)runningAppClass, runningWithPidSel, targetPid);
+
+  if (app) {
+    SEL activateSel = sel_registerName("activateWithOptions:");
+    typedef BOOL (*ActivateFn)(id, SEL, uintptr_t);
+    ActivateFn doActivate = (ActivateFn)objc_msgSend;
+    // 3 = NSApplicationActivateAllWindows (1) | NSApplicationActivateIgnoringOtherApps (2)
+    BOOL ok = doActivate(app, activateSel, 3);
+    return Napi::Boolean::New(env, ok != NO);
+  }
+
+  return Napi::Boolean::New(env, false);
 }
 
 Napi::Value SetAlwaysOnTop(const Napi::CallbackInfo& info) {
@@ -1011,6 +1090,33 @@ Napi::Value GetLastForegroundHwnd(const Napi::CallbackInfo& info) {
   return Napi::String::New(env, std::to_string(g_lastReportedFrontPid));
 }
 
+Napi::Value SendNativePaste(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  // Keycode 9 = 'v' on macOS US keyboard layout
+  CGEventRef down = CGEventCreateKeyboardEvent(NULL, 9, true);
+  CGEventRef up = CGEventCreateKeyboardEvent(NULL, 9, false);
+  if (down && up) {
+    CGEventSetFlags(down, kCGEventFlagMaskCommand);
+    CGEventSetFlags(up, kCGEventFlagMaskCommand);
+    CGEventPost(kCGHIDEventTap, down);
+    usleep(20000);
+    CGEventPost(kCGHIDEventTap, up);
+    CFRelease(down);
+    CFRelease(up);
+    return Napi::Boolean::New(env, true);
+  }
+  if (down) CFRelease(down);
+  if (up) CFRelease(up);
+  return Napi::Boolean::New(env, false);
+}
+
+Napi::Value IsAnyModifierDown(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  CGEventFlags flags = CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
+  bool down = (flags & (kCGEventFlagMaskShift | kCGEventFlagMaskControl | kCGEventFlagMaskAlternate | kCGEventFlagMaskCommand)) != 0;
+  return Napi::Boolean::New(env, down);
+}
+
 #else
 
 // Generic Linux stub implementation
@@ -1159,6 +1265,14 @@ Napi::Value GetLastForegroundHwnd(const Napi::CallbackInfo& info) {
   return Napi::String::New(info.Env(), "0");
 }
 
+Napi::Value SendNativePaste(const Napi::CallbackInfo& info) {
+  return Napi::Boolean::New(info.Env(), false);
+}
+
+Napi::Value IsAnyModifierDown(const Napi::CallbackInfo& info) {
+  return Napi::Boolean::New(info.Env(), false);
+}
+
 #endif  // _WIN32
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
@@ -1184,6 +1298,8 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("startForegroundHook", Napi::Function::New(env, StartForegroundHook));
   exports.Set("stopForegroundHook", Napi::Function::New(env, StopForegroundHook));
   exports.Set("getLastForegroundHwnd", Napi::Function::New(env, GetLastForegroundHwnd));
+  exports.Set("sendNativePaste", Napi::Function::New(env, SendNativePaste));
+  exports.Set("isAnyModifierDown", Napi::Function::New(env, IsAnyModifierDown));
   return exports;
 }
 

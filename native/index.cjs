@@ -123,6 +123,16 @@ function getLastForegroundHwnd() {
   return mod.getLastForegroundHwnd();
 }
 
+function sendNativePaste() {
+  if (!mod || typeof mod.sendNativePaste !== 'function') return false;
+  return mod.sendNativePaste();
+}
+
+function isAnyModifierDown() {
+  if (!mod || typeof mod.isAnyModifierDown !== 'function') return false;
+  return mod.isAnyModifierDown();
+}
+
 module.exports = {
   available,
   info,
@@ -147,4 +157,6 @@ module.exports = {
   startForegroundHook,
   stopForegroundHook,
   getLastForegroundHwnd,
+  sendNativePaste,
+  isAnyModifierDown,
 };
