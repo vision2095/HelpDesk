@@ -1782,11 +1782,25 @@ function App() {
           text,
           skipConfirm: true,
         });
-        notify(
-          result?.canceled ? "Typing cancelled." : "Typing complete.",
-        );
+        if (result?.accessibilityRequired) {
+          notify("Answer copied to clipboard (⌘V)! Enable LensDesk in Accessibility settings to type automatically.");
+        } else if (result?.focusRequired) {
+          notify("Answer copied to clipboard (⌘V)! Click into your destination editor to type.");
+        } else if (result?.canceled) {
+          notify("Typing cancelled.");
+        } else {
+          notify("Typing complete.");
+        }
       } catch (err: any) {
-        fail(err);
+        if (err?.message?.includes("Accessibility") || err?.message?.includes("System Settings")) {
+          try { await navigator.clipboard.writeText(text); } catch {}
+          notify("Answer copied to clipboard (⌘V)! Enable LensDesk in System Settings > Accessibility.");
+        } else if (err?.message?.includes("Focus a destination")) {
+          try { await navigator.clipboard.writeText(text); } catch {}
+          notify("Answer copied to clipboard (⌘V)! Focus your destination editor before typing.");
+        } else {
+          fail(err);
+        }
       } finally {
         setAutoTyping(false);
       }
