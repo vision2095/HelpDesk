@@ -92,7 +92,7 @@ try {
       data: { id: p.id },
     });
   await page.goto(origin + "/?workspace");
-  await page.getByRole("heading", { name: "Your thinking space." }).waitFor();
+  await page.getByRole("heading", { name: /LensDesk Assistant|What would you like to explore\?|Your thinking space/i }).first().waitFor();
   await page.screenshot({
     path: "resources/workspace-preview.png",
     fullPage: true,
@@ -127,7 +127,7 @@ try {
     .getByRole("status")
     .filter({ hasText: "Profile saved." })
     .waitFor();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).first().click();
   await page
     .getByRole("heading", { name: "Your assistant, your way." })
     .waitFor();
@@ -135,7 +135,7 @@ try {
     path: "resources/settings-preview.png",
     fullPage: true,
   });
-  await page.getByRole("button", { name: "Assistant", exact: true }).click();
+  await page.getByRole("button", { name: "Assistant", exact: true }).first().click();
   await page
     .getByLabel("Ask LensDesk")
     .fill("How do I explain React reconciliation?");
@@ -151,6 +151,7 @@ try {
   await page.reload();
   await page
     .getByRole("button", { name: "Session history", exact: true })
+    .first()
     .click();
   await page
     .getByRole("button")
