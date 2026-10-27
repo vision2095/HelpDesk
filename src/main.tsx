@@ -316,7 +316,7 @@ function App() {
     [page, setPage] = useState(() =>
       getPageFromPath(window.location.pathname, Boolean(window.lens)),
     ),
-    [showContext, setShowContext] = useState(false),
+    [showContext, setShowContext] = useState(true),
     [activeId, setActiveId] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
     [question, setQuestion] = useState(""),

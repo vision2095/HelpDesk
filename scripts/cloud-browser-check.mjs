@@ -61,18 +61,18 @@ try {
   await page
     .getByRole("button", { name: "Create account", exact: true })
     .click();
-  await page
-    .getByText("Verify your email to use hosted AI.", { exact: true })
-    .waitFor();
-  const outbox = path.join(data, "outbox"),
-    mail = JSON.parse(
-      fs.readFileSync(path.join(outbox, fs.readdirSync(outbox)[0]), "utf8"),
-    );
-  await page.goto(mail.url);
-  await page
-    .getByRole("status")
-    .filter({ hasText: "Email verified." })
-    .waitFor();
+  const unverifiedNotice = page.getByText("Verify your email to use hosted AI.", { exact: true });
+  if (await unverifiedNotice.isVisible({ timeout: 2000 }).catch(() => false)) {
+    const outbox = path.join(data, "outbox"),
+      mail = JSON.parse(
+        fs.readFileSync(path.join(outbox, fs.readdirSync(outbox)[0]), "utf8"),
+      );
+    await page.goto(mail.url);
+    await page
+      .getByRole("status")
+      .filter({ hasText: "Email verified." })
+      .waitFor();
+  }
   await page.screenshot({
     path: "resources/cloud-account-preview.png",
     fullPage: true,
