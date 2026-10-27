@@ -123,6 +123,29 @@ export function HintLensDownloadsSection({
         <p className="hl-card-note">
           macOS 12 Monterey or later supported with native stealth capture exclusion.
         </p>
+
+        <div className="hl-gatekeeper-helper" style={{ marginTop: "1rem", padding: "0.75rem 1rem", background: "rgba(255, 255, 255, 0.04)", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.1)" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.4rem" }}>
+            <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "#93c5fd" }}>
+              macOS Gatekeeper Fix (If &ldquo;App is damaged / cannot open&rdquo;):
+            </span>
+            <button
+              type="button"
+              className={`hl-copy-action-btn ${copiedGk ? "is-copied" : ""}`}
+              onClick={() => copyText(gkCommand, "gk")}
+              style={{ fontSize: "0.75rem", padding: "0.2rem 0.6rem" }}
+            >
+              {copiedGk ? <Check size={12} /> : <Copy size={12} />}
+              {copiedGk ? "Copied!" : "Copy Command"}
+            </button>
+          </div>
+          <code style={{ display: "block", fontSize: "0.8rem", color: "#e2e8f0", background: "rgba(0,0,0,0.3)", padding: "0.4rem 0.6rem", borderRadius: "4px" }}>
+            {gkCommand}
+          </code>
+          <p style={{ margin: "0.4rem 0 0", fontSize: "0.75rem", color: "#94a3b8" }}>
+            Open Terminal, paste this command, and press Enter to clear the browser download quarantine.
+          </p>
+        </div>
       </div>
 
       {/* 3. Quick Install via PowerShell (Windows - EXACTLY LIKE HINTLENS) */}

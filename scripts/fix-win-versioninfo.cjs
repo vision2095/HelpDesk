@@ -17,8 +17,14 @@ module.exports = async function fixWinVersionInfo(context) {
     const appPath = path.join(context.appOutDir, appName);
     if (fs.existsSync(appPath)) {
       try {
-        console.log("[macOS afterPack] Deep signing app bundle with ad-hoc signature:", appPath);
-        execFileSync("codesign", ["--force", "--deep", "-s", "-", appPath], { stdio: "inherit" });
+        const entitlementsPath = path.resolve(__dirname, "../resources/entitlements.mac.plist");
+        const args = ["--force", "--deep", "-s", "-"];
+        if (fs.existsSync(entitlementsPath)) {
+          args.push("--options", "runtime", "--entitlements", entitlementsPath);
+        }
+        args.push(appPath);
+        console.log("[macOS afterPack] Deep signing app bundle with hardened entitlements:", appPath);
+        execFileSync("codesign", args, { stdio: "inherit" });
         console.log("[macOS afterPack] Successfully signed:", appPath);
       } catch (err) {
         console.warn("[macOS afterPack] Code signing warning:", err.message);

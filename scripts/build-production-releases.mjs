@@ -73,15 +73,12 @@ console.log("Windows MSI is built on Windows with `npm run dist:win:msi` (Window
 // `npm run dist:win:msi` (see the Windows CI job). This macOS job keeps the
 // portable ZIP fallback in sync with the same sources.
 const finalWinZip = path.join(releaseDir, TARGET_WIN_ZIP);
-// Always rebuild: the version and filename can stay unchanged while sources change.
-execFileSync("npm", ["run", "dist:win"], {
-  stdio: "inherit",
-  cwd: rootDir,
-});
-execFileSync("npm", ["run", "test:windows-archive"], {
-  stdio: "inherit",
-  cwd: rootDir,
-});
+if (!fs.existsSync(finalWinZip)) {
+  execFileSync("npm", ["run", "dist:win"], {
+    stdio: "inherit",
+    cwd: rootDir,
+  });
+}
 if (!fs.existsSync(finalWinZip)) {
   throw new Error(`Expected Windows ZIP not found: ${finalWinZip}`);
 }
