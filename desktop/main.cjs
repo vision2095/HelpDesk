@@ -564,6 +564,12 @@ async function createWindow() {
   }
   mainWindow.on("hide", () => {
     trimProcessWorkingSet();
+    if (isMac) {
+      try {
+        const nativeMod = require("../native/index.cjs");
+        if (nativeMod?.available) nativeMod.getForegroundInfo();
+      } catch {}
+    }
   });
   browser = require("./browser.cjs").createBrowser({
     WebContentsView,
@@ -663,6 +669,14 @@ async function createWindow() {
   mainWindow.on("show", reassert);
   mainWindow.on("restore", reassert);
   mainWindow.on("focus", reassert);
+  mainWindow.on("blur", () => {
+    if (isMac) {
+      try {
+        const nativeMod = require("../native/index.cjs");
+        if (nativeMod?.available) nativeMod.getForegroundInfo();
+      } catch {}
+    }
+  });
   const reassertTimer = setInterval(reassert, 3000);
   const topmostTimer = setInterval(() => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -1051,17 +1065,38 @@ app.whenReady().then(async () => {
     }
     if (action === "desktop.openScreenSettings") {
       if (process.platform === "darwin") {
-        shell.openExternal(
-          "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
-        );
+        try {
+          await shell.openExternal(
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
+          );
+        } catch {
+          try {
+            const { execFile } = require("child_process");
+            execFile("open", ["x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"]);
+          } catch {}
+        }
       }
       return { ok: true };
     }
     if (action === "desktop.openAccessibilitySettings") {
       if (process.platform === "darwin") {
-        shell.openExternal(
-          "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
-        );
+        try {
+          await shell.openExternal(
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+          );
+        } catch {
+          try {
+            const { execFile } = require("child_process");
+            execFile("open", ["x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"]);
+          } catch {}
+        }
+      }
+      return { ok: true };
+    }
+    if (action === "desktop.openSettings") {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        showWindow();
+        mainWindow.webContents.send("lens:shortcut", "shortcuts");
       }
       return { ok: true };
     }
@@ -1256,7 +1291,7 @@ app.whenReady().then(async () => {
             message: "Enable LensDesk in System Settings > Privacy & Security > Accessibility. Answer copied to clipboard (press ⌘V).",
           };
         }
-        if (error.message && error.message.includes("Focus a destination")) {
+        if (error.message && (error.message.includes("Focus") || error.message.includes("focus") || error.message.includes("destination"))) {
           try {
             const { extractCode } = require("./autotype.cjs");
             const target = extractCode(payload.text, codeOnly);
@@ -1469,13 +1504,30 @@ app.whenReady().then(async () => {
     tray.setContextMenu(
       Menu.buildFromTemplate([
         { label: "Show LensDesk", click: showWindow },
-        { label: "Stop typing", click: stopTyping },
-        ...(isMac ? [{
-          label: "Fix Permissions (Accessibility)",
+        {
+          label: "Open Settings",
           click: () => {
-            shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility");
+            showWindow();
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send("lens:shortcut", "shortcuts");
+            }
           },
-        }] : []),
+        },
+        { label: "Stop typing", click: stopTyping },
+        ...(isMac ? [
+          {
+            label: "Fix Permissions (Screen Recording)",
+            click: () => {
+              shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture");
+            },
+          },
+          {
+            label: "Fix Permissions (Accessibility)",
+            click: () => {
+              shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility");
+            },
+          },
+        ] : []),
         {
           label: "Restore mouse interaction",
           click: () => {

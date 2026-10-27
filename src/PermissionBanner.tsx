@@ -16,12 +16,22 @@ export const PermissionBanner: React.FC<PermissionBannerProps> = ({
 
   const handleOpenSettings = () => {
     if (onOpenSettings) onOpenSettings();
-    else (window as any).lens?.openScreenSettings?.();
+    const lens = (window as any).lens;
+    if (typeof lens?.openScreenSettings === "function") {
+      lens.openScreenSettings();
+    } else if (typeof lens?.invoke === "function") {
+      lens.invoke("desktop.openScreenSettings").catch(() => {});
+    }
   };
 
   const handleRestart = () => {
     if (onRestart) onRestart();
-    else (window as any).lens?.relaunch?.();
+    const lens = (window as any).lens;
+    if (typeof lens?.relaunch === "function") {
+      lens.relaunch();
+    } else if (typeof lens?.invoke === "function") {
+      lens.invoke("desktop.restart").catch(() => {});
+    }
   };
 
   if (error.code === "PERMISSION_REQUIRED") {

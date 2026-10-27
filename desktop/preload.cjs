@@ -58,6 +58,8 @@ const actions = new Set([
   "desktop.preferences.save",
   "desktop.capture",
   "desktop.openScreenSettings",
+  "desktop.openAccessibilitySettings",
+  "desktop.openSettings",
   "desktop.overlay",
   "desktop.overlayState",
   "desktop.appearance",
@@ -111,6 +113,16 @@ contextBridge.exposeInMainWorld("lens", {
     return () => ipcRenderer.removeListener("lens:browser-focus-find", fn);
   },
   platform: process.platform,
+  openScreenSettings: () =>
+    ipcRenderer.invoke("lens:request", "desktop.openScreenSettings", {}),
+  openAccessibilitySettings: () =>
+    ipcRenderer.invoke("lens:request", "desktop.openAccessibilitySettings", {}),
+  openSettings: () =>
+    ipcRenderer.invoke("lens:request", "desktop.openSettings", {}),
+  relaunch: () =>
+    ipcRenderer.invoke("lens:request", "desktop.restart", {}),
+  capture: (payload = {}) =>
+    ipcRenderer.invoke("lens:request", "desktop.capture", payload),
   invoke: (action, payload = {}) => {
     if (!actions.has(action))
       return Promise.reject(new Error("Unknown action"));

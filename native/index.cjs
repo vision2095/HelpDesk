@@ -141,6 +141,11 @@ function isAnyModifierDown() {
   try { return mod.isAnyModifierDown(); } catch { return false; }
 }
 
+function isSameApplication(pid1, pid2) {
+  if (!mod || typeof mod.isSameApplication !== 'function') return false;
+  try { return mod.isSameApplication(pid1, pid2); } catch { return false; }
+}
+
 module.exports = {
   available,
   info,
@@ -167,4 +172,5 @@ module.exports = {
   getLastForegroundHwnd,
   sendNativePaste,
   isAnyModifierDown,
+  isSameApplication,
 };

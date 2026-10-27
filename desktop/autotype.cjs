@@ -146,14 +146,14 @@ async function typeMac(text, options, signal) {
     }
 
     let targetPid = 0;
-    for (let attempt = 0; attempt < 10; attempt++) {
+    for (let attempt = 0; attempt < 12; attempt++) {
       canceled(signal);
       const fg = nativeMod.getForegroundInfo();
       if (fg.pid && fg.pid !== process.pid) {
         targetPid = fg.pid;
         break;
       }
-      if (attempt === 2) {
+      if (attempt === 0 || attempt === 2 || attempt === 5) {
         const lastHwnd = nativeMod.getLastForegroundHwnd();
         if (lastHwnd && lastHwnd !== "0" && lastHwnd !== String(process.pid)) {
           try { nativeMod.activateWindow(lastHwnd); } catch {}
@@ -178,7 +178,12 @@ async function typeMac(text, options, signal) {
       if (index % 5 === 0 && index > 0) {
         const curFg = nativeMod.getForegroundInfo();
         if (curFg.pid && curFg.pid !== targetPid && curFg.pid !== process.pid) {
-          throw new Error("[TypeSim] Focus drifted — stopping to avoid typing into wrong window");
+          const sameApp = typeof nativeMod.isSameApplication === "function"
+            ? nativeMod.isSameApplication(curFg.pid, targetPid)
+            : false;
+          if (!sameApp) {
+            throw new Error("[TypeSim] Focus drifted — stopping to avoid typing into wrong window");
+          }
         }
       }
 
@@ -288,14 +293,14 @@ async function paste(text, signal) {
 
     if (nativeMod && typeof nativeMod.sendNativePaste === "function") {
       let targetPid = 0;
-      for (let attempt = 0; attempt < 8; attempt++) {
+      for (let attempt = 0; attempt < 10; attempt++) {
         canceled(signal);
         const fg = nativeMod.getForegroundInfo();
         if (fg.pid && fg.pid !== process.pid) {
           targetPid = fg.pid;
           break;
         }
-        if (attempt === 2) {
+        if (attempt === 0 || attempt === 2 || attempt === 4) {
           const lastHwnd = nativeMod.getLastForegroundHwnd();
           if (lastHwnd && lastHwnd !== "0" && lastHwnd !== String(process.pid)) {
             try { nativeMod.activateWindow(lastHwnd); } catch {}

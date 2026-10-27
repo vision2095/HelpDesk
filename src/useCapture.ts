@@ -25,7 +25,11 @@ export function useCapture() {
     }
 
     try {
-      const res = await lens.capture();
+      const res = typeof lens.capture === "function"
+        ? await lens.capture()
+        : typeof lens.invoke === "function"
+          ? await lens.invoke("desktop.capture")
+          : null;
       if (res && res.ok && res.dataUrl) {
         setError(null);
         setLoading(false);
@@ -39,7 +43,11 @@ export function useCapture() {
       setError(errState);
 
       if (errState.code === "PERMISSION_REQUIRED") {
-        await lens.openScreenSettings?.();
+        if (typeof lens.openScreenSettings === "function") {
+          await lens.openScreenSettings();
+        } else if (typeof lens.invoke === "function") {
+          await lens.invoke("desktop.openScreenSettings").catch(() => {});
+        }
       }
 
       setLoading(false);
@@ -57,7 +65,11 @@ export function useCapture() {
 
   const restart = useCallback(async () => {
     const lens = (window as any).lens;
-    await lens?.relaunch?.();
+    if (typeof lens?.relaunch === "function") {
+      await lens.relaunch();
+    } else if (typeof lens?.invoke === "function") {
+      await lens.invoke("desktop.restart").catch(() => {});
+    }
   }, []);
 
   return { grab, error, loading, restart };
