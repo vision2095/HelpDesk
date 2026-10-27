@@ -1057,6 +1057,14 @@ app.whenReady().then(async () => {
       }
       return { ok: true };
     }
+    if (action === "desktop.openAccessibilitySettings") {
+      if (process.platform === "darwin") {
+        shell.openExternal(
+          "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+        );
+      }
+      return { ok: true };
+    }
     if (action === "desktop.capture") {
       try {
         const result = await captureTools.capture({
@@ -1230,6 +1238,37 @@ app.whenReady().then(async () => {
           error.message === "Auto-typing canceled."
         )
           return { canceled: true };
+        if (error.message && error.message.includes("Accessibility")) {
+          if (isMac) {
+            try {
+              shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility");
+            } catch {}
+          }
+          try {
+            const { extractCode } = require("./autotype.cjs");
+            const target = extractCode(payload.text, codeOnly);
+            clipboard.writeText(target);
+          } catch {}
+          return {
+            ok: false,
+            accessibilityRequired: true,
+            copied: true,
+            message: "Enable LensDesk in System Settings > Privacy & Security > Accessibility. Answer copied to clipboard (press ⌘V).",
+          };
+        }
+        if (error.message && error.message.includes("Focus a destination")) {
+          try {
+            const { extractCode } = require("./autotype.cjs");
+            const target = extractCode(payload.text, codeOnly);
+            clipboard.writeText(target);
+          } catch {}
+          return {
+            ok: false,
+            focusRequired: true,
+            copied: true,
+            message: "Focus an editor window to auto-type. Answer copied to clipboard (press ⌘V).",
+          };
+        }
         throw error;
       } finally {
         if (typingController === controller) typingController = null;

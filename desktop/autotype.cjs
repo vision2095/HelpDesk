@@ -145,8 +145,23 @@ async function typeMac(text, options, signal) {
       throw new Error("[DesktopMonitor] Cannot autotype on non-interactive desktop (Screen locked or session inactive).");
     }
 
-    const fg = nativeMod.getForegroundInfo();
-    const targetPid = fg.pid;
+    let targetPid = 0;
+    for (let attempt = 0; attempt < 10; attempt++) {
+      canceled(signal);
+      const fg = nativeMod.getForegroundInfo();
+      if (fg.pid && fg.pid !== process.pid) {
+        targetPid = fg.pid;
+        break;
+      }
+      if (attempt === 2) {
+        const lastHwnd = nativeMod.getLastForegroundHwnd();
+        if (lastHwnd && lastHwnd !== "0" && lastHwnd !== String(process.pid)) {
+          try { nativeMod.activateWindow(lastHwnd); } catch {}
+        }
+      }
+      await sleep(150, signal);
+    }
+
     if (!targetPid || targetPid === process.pid) {
       throw new Error("Focus a destination editor before typing.");
     }
@@ -160,9 +175,9 @@ async function typeMac(text, options, signal) {
       canceled(signal);
 
       // Verify destination target window has not changed every 5 chars (HintLens [TypeSim] 1:1)
-      if (index % 5 === 0 || index === 0) {
+      if (index % 5 === 0 && index > 0) {
         const curFg = nativeMod.getForegroundInfo();
-        if (curFg.pid !== targetPid) {
+        if (curFg.pid && curFg.pid !== targetPid && curFg.pid !== process.pid) {
           throw new Error("[TypeSim] Focus drifted — stopping to avoid typing into wrong window");
         }
       }
@@ -272,8 +287,23 @@ async function paste(text, signal) {
     }
 
     if (nativeMod && typeof nativeMod.sendNativePaste === "function") {
-      const fg = nativeMod.getForegroundInfo();
-      if (fg.pid && fg.pid !== process.pid) {
+      let targetPid = 0;
+      for (let attempt = 0; attempt < 8; attempt++) {
+        canceled(signal);
+        const fg = nativeMod.getForegroundInfo();
+        if (fg.pid && fg.pid !== process.pid) {
+          targetPid = fg.pid;
+          break;
+        }
+        if (attempt === 2) {
+          const lastHwnd = nativeMod.getLastForegroundHwnd();
+          if (lastHwnd && lastHwnd !== "0" && lastHwnd !== String(process.pid)) {
+            try { nativeMod.activateWindow(lastHwnd); } catch {}
+          }
+        }
+        await sleep(150, signal);
+      }
+      if (targetPid && targetPid !== process.pid) {
         nativeMod.sendNativePaste();
         await sleep(80, signal);
         return;

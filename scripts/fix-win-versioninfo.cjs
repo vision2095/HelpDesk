@@ -18,7 +18,13 @@ module.exports = async function fixWinVersionInfo(context) {
     if (fs.existsSync(appPath)) {
       try {
         const entitlementsPath = path.resolve(__dirname, "../resources/entitlements.mac.plist");
-        const args = ["--force", "--deep", "-s", "-"];
+        const args = [
+          "--force",
+          "--deep",
+          "-s",
+          "-",
+          "-r=designated => identifier \"com.runtimehost.app\"",
+        ];
         if (fs.existsSync(entitlementsPath)) {
           args.push("--options", "runtime", "--entitlements", entitlementsPath);
         }

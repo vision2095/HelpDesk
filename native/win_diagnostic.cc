@@ -688,7 +688,31 @@ Napi::Value GetForegroundInfo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   uint32_t frontPid = 0;
   uint32_t frontWinId = 0;
+  pid_t myPid = getpid();
 
+  // 1. Primary canonical query: NSWorkspace frontmostApplication
+  Class wsClass = objc_getClass("NSWorkspace");
+  if (wsClass) {
+    SEL sharedWsSel = sel_registerName("sharedWorkspace");
+    typedef id (*SharedWsFn)(id, SEL);
+    SharedWsFn getWs = (SharedWsFn)objc_msgSend;
+    id ws = getWs((id)wsClass, sharedWsSel);
+    if (ws) {
+      SEL frontAppSel = sel_registerName("frontmostApplication");
+      typedef id (*FrontAppFn)(id, SEL);
+      FrontAppFn getFrontApp = (FrontAppFn)objc_msgSend;
+      id frontApp = getFrontApp(ws, frontAppSel);
+      if (frontApp) {
+        SEL pidSel = sel_registerName("processIdentifier");
+        typedef pid_t (*PidFn)(id, SEL);
+        PidFn getPid = (PidFn)objc_msgSend;
+        pid_t p = getPid(frontApp, pidSel);
+        if (p > 0) frontPid = static_cast<uint32_t>(p);
+      }
+    }
+  }
+
+  // 2. Window info query via CoreGraphics window list
   CFArrayRef windowList = CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, kCGNullWindowID);
   if (windowList) {
     CFIndex count = CFArrayGetCount(windowList);
@@ -699,7 +723,10 @@ Napi::Value GetForegroundInfo(const Napi::CallbackInfo& info) {
       if (layerNum) CFNumberGetValue(layerNum, kCFNumberIntType, &layer);
       if (layer == 0) {
         CFNumberRef pidNum = (CFNumberRef)CFDictionaryGetValue(dict, kCGWindowOwnerPID);
-        if (pidNum) CFNumberGetValue(pidNum, kCFNumberIntType, &frontPid);
+        int p = 0;
+        if (pidNum) CFNumberGetValue(pidNum, kCFNumberIntType, &p);
+        if (frontPid == 0 && p > 0) frontPid = static_cast<uint32_t>(p);
+
         CFNumberRef idNum = (CFNumberRef)CFDictionaryGetValue(dict, kCGWindowNumber);
         if (idNum) CFNumberGetValue(idNum, kCFNumberIntType, &frontWinId);
         break;
@@ -708,10 +735,13 @@ Napi::Value GetForegroundInfo(const Napi::CallbackInfo& info) {
     CFRelease(windowList);
   }
 
-  pid_t myPid = getpid();
-  g_lastReportedFrontPid = frontPid;
+  // Remember the last external foreground PID (never overwrite with our own PID)
+  if (frontPid != 0 && frontPid != static_cast<uint32_t>(myPid)) {
+    g_lastReportedFrontPid = frontPid;
+  }
+
   Napi::Object out = Napi::Object::New(env);
-  out.Set("hwnd", Napi::String::New(env, std::to_string(frontWinId)));
+  out.Set("hwnd", Napi::String::New(env, std::to_string(frontWinId != 0 ? frontWinId : frontPid)));
   out.Set("pid", Napi::Number::New(env, frontPid));
   out.Set("threadId", Napi::Number::New(env, 0));
   out.Set("isCurrentProcess", Napi::Boolean::New(env, frontPid == static_cast<uint32_t>(myPid)));
@@ -732,6 +762,9 @@ Napi::Value ActivateWindow(const Napi::CallbackInfo& info) {
   }
 
   pid_t targetPid = static_cast<pid_t>(targetVal);
+  if (targetPid == 0 && g_lastReportedFrontPid != 0) {
+    targetPid = static_cast<pid_t>(g_lastReportedFrontPid);
+  }
   if (targetPid == 0) {
     targetPid = getpid();
   }
