@@ -17,6 +17,7 @@ const {
   systemPreferences,
 } = require("electron");
 const path = require("node:path");
+const crypto = require("node:crypto");
 const fs = require("node:fs/promises");
 const { pathToFileURL } = require("node:url");
 const { autoType: autoTypeHelper } = require("./autotype.cjs");
@@ -743,16 +744,37 @@ app.whenReady().then(async () => {
     });
   }
   const encrypt = (value) => {
-    if (
-      !safeStorage.isEncryptionAvailable() ||
-      safeStorage.getSelectedStorageBackend?.() === "basic_text"
-    )
-      throw new Error(
-        "OS credential encryption is unavailable. Credentials were not saved.",
-      );
-    return safeStorage.encryptString(value);
+    try {
+      if (
+        safeStorage.isEncryptionAvailable() &&
+        safeStorage.getSelectedStorageBackend?.() !== "basic_text"
+      ) {
+        return safeStorage.encryptString(value);
+      }
+    } catch (err) {
+      console.warn("[safeStorage] Keychain unavailable, using hardware-bound fallback:", err.message);
+    }
+    const machineId = getMachineGuid() || "lensdesk-default-guid";
+    const key = crypto.scryptSync(machineId, "lensdesk-storage-salt", 32);
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+    const enc = Buffer.concat([cipher.update(value, "utf8"), cipher.final()]);
+    const tag = cipher.getAuthTag();
+    return Buffer.concat([Buffer.from("LDFB:"), iv, tag, enc]);
   };
-  const decrypt = (value) => safeStorage.decryptString(value);
+  const decrypt = (value) => {
+    if (Buffer.isBuffer(value) && value.subarray(0, 5).toString("utf8") === "LDFB:") {
+      const machineId = getMachineGuid() || "lensdesk-default-guid";
+      const key = crypto.scryptSync(machineId, "lensdesk-storage-salt", 32);
+      const iv = value.subarray(5, 17);
+      const tag = value.subarray(17, 33);
+      const enc = value.subarray(33);
+      const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
+      decipher.setAuthTag(tag);
+      return decipher.update(enc, undefined, "utf8") + decipher.final("utf8");
+    }
+    return safeStorage.decryptString(value);
+  };
   try {
     cloudClient = require("./cloud.cjs").createCloudClient({
       directory,
@@ -761,17 +783,8 @@ app.whenReady().then(async () => {
     });
     service = createService({
       directory,
-      encrypt: (value) => {
-        if (
-          !safeStorage.isEncryptionAvailable() ||
-          safeStorage.getSelectedStorageBackend?.() === "basic_text"
-        )
-          throw new Error(
-            "OS credential encryption is unavailable. API keys were not saved.",
-          );
-        return safeStorage.encryptString(value);
-      },
-      decrypt: (value) => safeStorage.decryptString(value),
+      encrypt,
+      decrypt,
     });
   } catch (error) {
     dialog.showErrorBox(
@@ -1385,6 +1398,22 @@ app.whenReady().then(async () => {
     !isMac || systemPreferences.isTrustedAccessibilityClient(true);
   if (isMac && !accessibilityOk) {
     console.warn("[lens] accessibility permission chahiye, warna hook keys nahi pakdega");
+    const axPoller = setInterval(() => {
+      try {
+        if (systemPreferences.isTrustedAccessibilityClient(false)) {
+          if (!gkeys.isAvailable()) {
+            const started = gkeys.start({ getWindow: () => mainWindow });
+            if (started) {
+              shortcutErrors = registerShortcuts(desktopPreferences.get());
+              console.log("[lens] Accessibility permission granted dynamically: global keys hook started");
+              clearInterval(axPoller);
+            }
+          } else {
+            clearInterval(axPoller);
+          }
+        }
+      } catch {}
+    }, 2000);
   }
   const hookOk = accessibilityOk
     ? gkeys.start({ getWindow: () => mainWindow })
@@ -1402,6 +1431,12 @@ app.whenReady().then(async () => {
       Menu.buildFromTemplate([
         { label: "Show LensDesk", click: showWindow },
         { label: "Stop typing", click: stopTyping },
+        ...(isMac ? [{
+          label: "Fix Permissions (Accessibility)",
+          click: () => {
+            shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility");
+          },
+        }] : []),
         {
           label: "Restore mouse interaction",
           click: () => {

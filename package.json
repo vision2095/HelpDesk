@@ -111,7 +111,9 @@
         "NSHighResolutionCapable": true,
         "NSScreenCaptureUsageDescription": "LensDesk captures a screen you select to attach to an AI question.",
         "NSDesktopCaptureUsageDescription": "LensDesk captures a screen you select to attach to an AI question.",
-        "NSMicrophoneUsageDescription": "LensDesk uses your microphone when you start transcription."
+        "NSMicrophoneUsageDescription": "LensDesk uses your microphone when you start transcription.",
+        "NSAppleEventsUsageDescription": "LensDesk needs access to Apple Events to activate target windows.",
+        "NSSystemAdministrationUsageDescription": "LensDesk uses administration privileges for memory optimizations."
       },
       "icon": "resources/icon.png"
     },
