@@ -151,6 +151,8 @@ async function typeMac(text, options, signal) {
       throw new Error("Focus a destination editor before typing.");
     }
 
+    await waitModifiersReleased(signal, 5000);
+
     const isFullscreen = nativeMod.isWindowFullscreen(targetPid);
 
     const characters = Array.from(text.replace(/\r\n/g, "\n"));
@@ -261,6 +263,23 @@ async function paste(text, signal) {
   );
   clipboard.writeText(text);
   try {
+    let nativeMod = null;
+    try {
+      nativeMod = require("../native/index.cjs");
+      if (!nativeMod.available) nativeMod = null;
+    } catch {
+      nativeMod = null;
+    }
+
+    if (nativeMod && typeof nativeMod.sendNativePaste === "function") {
+      const fg = nativeMod.getForegroundInfo();
+      if (fg.pid && fg.pid !== process.pid) {
+        nativeMod.sendNativePaste();
+        await sleep(80, signal);
+        return;
+      }
+    }
+
     if (process.platform === "darwin") {
       let targetPid = 0;
       for (let attempt = 0; attempt < 5; attempt++) {
@@ -319,8 +338,23 @@ async function paste(text, signal) {
 }
 async function waitModifiersReleased(signal, timeoutMs = 8000) {
   canceled(signal);
-  if (process.platform !== "win32") return;
   try {
+    let nativeMod = null;
+    try {
+      nativeMod = require("../native/index.cjs");
+      if (!nativeMod.available) nativeMod = null;
+    } catch {
+      nativeMod = null;
+    }
+    if (nativeMod && typeof nativeMod.isAnyModifierDown === "function") {
+      const start = Date.now();
+      while (Date.now() - start < timeoutMs) {
+        canceled(signal);
+        if (!nativeMod.isAnyModifierDown()) break;
+        await sleep(15, signal);
+      }
+      return;
+    }
     const nativeWin = require("./native-win.cjs");
     if (!nativeWin.load?.()) return;
     const start = Date.now();

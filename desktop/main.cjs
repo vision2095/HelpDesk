@@ -138,7 +138,7 @@ function showWindow(options = {}) {
     mainWindow.show();
     mainWindow.focus();
   }
-  if (isWin) reassert();
+  reassert();
 }
 
 let currentOpacity = 0.5;
@@ -242,79 +242,60 @@ function registerShortcuts(preferences) {
     globalShortcut.register("Alt+Shift+H", toggleHide);
   } catch {}
 
-  if (isMac) {
-    if (gkeys.isAvailable()) {
-      gkeys.registerCombo("Shift+H", toggleHide);          // hook swallow nahi karta, capital H bhi type hota hai
-      gkeys.registerCombo("CommandOrControl+Shift+H", toggleHide);
-      gkeys.registerCombo("Shift+M", toggleClickThrough);
-      gkeys.registerCombo("CommandOrControl+Shift+M", toggleClickThrough);
-      gkeys.registerCombo("Shift+I", () => adjustOpacity(0.1));
-      gkeys.registerCombo("CommandOrControl+Shift+I", () => adjustOpacity(0.1));
-      gkeys.registerCombo("Shift+J", () => adjustOpacity(-0.1));
-      gkeys.registerCombo("CommandOrControl+Shift+J", () => adjustOpacity(-0.1));
-      gkeys.registerCombo("Control+Shift+Space", toggleTyping);
-      if (callbacks.getAnswer) gkeys.registerCombo("Shift+A", callbacks.getAnswer);
-      if (callbacks.capture) gkeys.registerCombo("Shift+S", callbacks.capture);
-      if (callbacks.autoType) gkeys.registerCombo("Shift+T", callbacks.autoType);
-      if (callbacks.undo) gkeys.registerCombo("Shift+U", callbacks.undo);
-    } else {
-      try {
-        if (!globalShortcut.register("Shift+H", toggleHide) && process.platform !== "darwin") {
-          errors.push("hide: Shift+H");
-        }
-      } catch {
-        if (process.platform !== "darwin") errors.push("hide: Shift+H");
-      }
-      if (!globalShortcut.register("Shift+M", toggleClickThrough) && process.platform !== "darwin") {
-        errors.push("clickThrough: Shift+M");
-      }
-      if (!globalShortcut.register("Control+Shift+Space", toggleTyping)) errors.push("typing: Control+Shift+Space");
-    }
-    try { globalShortcut.register("CommandOrControl+Shift+I", () => adjustOpacity(0.1)); } catch {}
-    try { globalShortcut.register("CommandOrControl+Shift+J", () => adjustOpacity(-0.1)); } catch {}
-    try { globalShortcut.register("CommandOrControl+Shift+H", toggleHide); } catch {}
-    try { globalShortcut.register("CommandOrControl+Shift+M", toggleClickThrough); } catch {}
+  const lastFire = new Map();
+  const once = (key, fn) => () => {
+    const now = Date.now();
+    if (now - (lastFire.get(key) || 0) < 150) return;
+    lastFire.set(key, now);
+    fn();
+  };
+
+  const combo = (accel, key, fn) => {
+    const wrapped = once(key, fn);
+    if (gkeys.isAvailable()) gkeys.registerCombo(accel, wrapped);
+    try { globalShortcut.register(accel, wrapped); } catch {}
+  };
+
+  combo("Shift+H", "hide", toggleHide);
+  combo("CommandOrControl+Shift+H", "hideCmdCtrl", toggleHide);
+  combo("Control+Shift+H", "hideCtrl", toggleHide);
+  combo("Shift+M", "clickThrough", toggleClickThrough);
+  combo("CommandOrControl+Shift+M", "clickThroughCmdCtrl", toggleClickThrough);
+  combo("Control+Shift+M", "clickThroughCtrl", toggleClickThrough);
+  combo("Shift+I", "opacityUp", () => adjustOpacity(0.1));
+  combo("CommandOrControl+Shift+I", "opacityUpCmdCtrl", () => adjustOpacity(0.1));
+  combo("Control+Shift+I", "opacityUpCtrl", () => adjustOpacity(0.1));
+  combo("Shift+J", "opacityDown", () => adjustOpacity(-0.1));
+  combo("CommandOrControl+Shift+J", "opacityDownCmdCtrl", () => adjustOpacity(-0.1));
+  combo("Control+Shift+J", "opacityDownCtrl", () => adjustOpacity(-0.1));
+  combo("Control+Shift+Space", "typing", toggleTyping);
+  combo("CommandOrControl+Shift+Space", "typingCmdCtrl", toggleTyping);
+  combo("Control+Alt+L", "click", toggleClickThrough);
+  combo("Command+Option+L", "clickMac", toggleClickThrough);
+
+  if (callbacks.getAnswer) combo("Shift+A", "getAnswer", callbacks.getAnswer);
+  if (callbacks.capture) {
+    combo("Shift+S", "capture", callbacks.capture);
+    combo("CommandOrControl+Shift+D", "captureCmdD", callbacks.capture);
+    combo("Control+Shift+D", "captureCtrlD", callbacks.capture);
+  }
+  if (callbacks.autoType) combo("Shift+T", "autoType", callbacks.autoType);
+  if (callbacks.undo) combo("Shift+U", "undo", callbacks.undo);
+  if (callbacks.browser) {
+    combo("CommandOrControl+Shift+G", "browserCmdG", callbacks.browser);
+    combo("Control+Shift+G", "browserCtrlG", callbacks.browser);
+  }
+  if (callbacks.cycleProvider) {
+    combo("CommandOrControl+Shift+P", "cycleProviderCmdP", callbacks.cycleProvider);
+    combo("Control+Shift+P", "cycleProviderCtrlP", callbacks.cycleProvider);
+  }
+  if (callbacks.pasteBundle) {
+    combo("CommandOrControl+Shift+B", "pasteBundleCmdB", callbacks.pasteBundle);
+    combo("Control+Shift+B", "pasteBundleCtrlB", callbacks.pasteBundle);
   }
 
-  if (isWin) {
-    const lastFire = new Map();
-    const once = (key, fn) => () => {
-      const now = Date.now();
-      if (now - (lastFire.get(key) || 0) < 150) return;
-      lastFire.set(key, now);
-      fn();
-    };
-
-    const combo = (accel, key, fn) => {
-      const wrapped = once(key, fn);
-      if (gkeys.isAvailable()) gkeys.registerCombo(accel, wrapped);
-      try { globalShortcut.register(accel, wrapped); } catch {}
-    };
-
-    combo("Shift+H", "hide", toggleHide);
-    combo("Control+Shift+H", "hideCtrl", toggleHide);
-    combo("Shift+M", "clickThrough", toggleClickThrough);
-    combo("Control+Shift+M", "clickThroughCtrl", toggleClickThrough);
-    combo("Shift+I", "opacityUp", () => adjustOpacity(0.1));
-    combo("Control+Shift+I", "opacityUpCtrl", () => adjustOpacity(0.1));
-    combo("Shift+J", "opacityDown", () => adjustOpacity(-0.1));
-    combo("Control+Shift+J", "opacityDownCtrl", () => adjustOpacity(-0.1));
-    combo("Control+Shift+Space", "typing", toggleTyping);
-    combo("Control+Alt+L", "click", toggleClickThrough);
-    if (callbacks.getAnswer) combo("Shift+A", "getAnswer", callbacks.getAnswer);
-    if (callbacks.capture) {
-      combo("Shift+S", "capture", callbacks.capture);
-      combo("Control+Shift+D", "captureCtrlD", callbacks.capture);
-    }
-    if (callbacks.autoType) combo("Shift+T", "autoType", callbacks.autoType);
-    if (callbacks.undo) combo("Shift+U", "undo", callbacks.undo);
-    if (callbacks.browser) combo("Control+Shift+G", "browserCtrlG", callbacks.browser);
-    if (callbacks.cycleProvider) combo("Control+Shift+P", "cycleProviderCtrlP", callbacks.cycleProvider);
-    if (callbacks.pasteBundle) combo("Control+Shift+B", "pasteBundleCtrlB", callbacks.pasteBundle);
-
-    // SEB ka hook hamare hook se aage aa jata hai — 20s me apna hook dobara install karo
-    setInterval(() => { if (gkeys.isAvailable()) gkeys.rehook(); }, 20000);
-  }
+  // Periodic hook re-assertion (protects against third party hooks stealing focus/events)
+  setInterval(() => { if (gkeys.isAvailable()) gkeys.rehook(); }, 20000);
 
   return errors;
 }
@@ -1376,19 +1357,17 @@ app.whenReady().then(async () => {
   await maybeStartChild();
   await createWindow();
   reassert();
-  if (isWin) {
-    let lastFg = null;
-    setInterval(() => {
-      if (!mainWindow || mainWindow.isDestroyed() || userHidden) return;
-      const fg = nativeWin.foregroundWindow();
-      const fgStr = fg === null ? null : String(fg);
-      const mine = fgStr !== null && nativeWin.foregroundPid(fg) === process.pid;
-      if (fgStr !== lastFg) {
-        lastFg = fgStr;
-        if (!mine) nativeWin.ensureTopmost(mainWindow, true);
-      }
-    }, 400);
-  }
+  let lastFg = null;
+  setInterval(() => {
+    if (!mainWindow || mainWindow.isDestroyed() || userHidden) return;
+    const fg = nativeWin.foregroundWindow();
+    const fgStr = fg === null ? null : String(fg);
+    const mine = fgStr !== null && nativeWin.foregroundPid(fg) === process.pid;
+    if (fgStr !== lastFg) {
+      lastFg = fgStr;
+      if (!mine) nativeWin.ensureTopmost(mainWindow, true);
+    }
+  }, 400);
   setInterval(reassert, 3000); // T5: requested app-ready 3s loop; createWindow timer retained.
   const probe = nativeWin.desktopProbe();
   if (probe && !probe.same) {

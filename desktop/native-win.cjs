@@ -187,6 +187,14 @@ function forceTopmost(win, opts = {}) {
 
 function ensureTopmost(win, show = true) {
   if (!win || win.isDestroyed()) return false;
+  if (process.platform === 'darwin') {
+    try {
+      win.setAlwaysOnTop(true, 'screen-saver', 1);
+      win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+      if (show && !win.isVisible()) win.showInactive();
+      return true;
+    } catch { return false; }
+  }
   const h = hwndOf(win);
   const focused = isFocused(win);
 
@@ -222,6 +230,10 @@ function foregroundWindow() {
 }
 
 function foregroundPid(handle) {
+  if (nativeAddon?.available) {
+    const info = nativeAddon.getForegroundInfo();
+    if (info && typeof info.pid === 'number' && info.pid > 0) return info.pid;
+  }
   if (!load() || handle == null) return 0;
   try {
     const out = [0];
@@ -292,6 +304,9 @@ function captureAffinity(win) {
 }
 
 function isAnyModifierDown() {
+  if (nativeAddon?.available && typeof nativeAddon.isAnyModifierDown === 'function') {
+    return nativeAddon.isAnyModifierDown();
+  }
   if (!load() || !F.GetAsyncKeyState) return false;
   // VK_SHIFT = 0x10, VK_CONTROL = 0x11, VK_MENU = 0x12, VK_LWIN = 0x5B, VK_RWIN = 0x5C
   const modifiers = [0x10, 0x11, 0x12, 0x5B, 0x5C];
@@ -300,6 +315,13 @@ function isAnyModifierDown() {
       const state = F.GetAsyncKeyState(vk);
       if ((state & 0x8000) !== 0) return true;
     } catch {}
+  }
+  return false;
+}
+
+function sendNativePaste() {
+  if (nativeAddon?.available && typeof nativeAddon.sendNativePaste === 'function') {
+    return nativeAddon.sendNativePaste();
   }
   return false;
 }
@@ -545,4 +567,5 @@ module.exports = {
   startForegroundHook,
   stopForegroundHook,
   lastForegroundWindow,
+  sendNativePaste,
 };
