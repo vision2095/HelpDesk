@@ -645,6 +645,15 @@ Napi::Value IsAnyModifierDown(const Napi::CallbackInfo& info) {
   return Napi::Boolean::New(env, down);
 }
 
+Napi::Value IsSameApplication(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2) return Napi::Boolean::New(env, false);
+  uint32_t pid1 = info[0].As<Napi::Number>().Uint32Value();
+  uint32_t pid2 = info[1].As<Napi::Number>().Uint32Value();
+  if (pid1 == 0 || pid2 == 0) return Napi::Boolean::New(env, false);
+  return Napi::Boolean::New(env, pid1 == pid2);
+}
+
 #elif defined(__APPLE__)
 
 #include <CoreGraphics/CoreGraphics.h>
@@ -659,6 +668,30 @@ Napi::Value IsAnyModifierDown(const Napi::CallbackInfo& info) {
 
 namespace {
 static uint32_t g_lastReportedFrontPid = 0;
+
+static void UpdateFrontmostApp() {
+  Class wsClass = objc_getClass("NSWorkspace");
+  if (!wsClass) return;
+  SEL sharedWsSel = sel_registerName("sharedWorkspace");
+  typedef id (*SharedWsFn)(id, SEL);
+  SharedWsFn getWs = (SharedWsFn)objc_msgSend;
+  id ws = getWs((id)wsClass, sharedWsSel);
+  if (!ws) return;
+
+  SEL frontAppSel = sel_registerName("frontmostApplication");
+  typedef id (*FrontAppFn)(id, SEL);
+  FrontAppFn getFrontApp = (FrontAppFn)objc_msgSend;
+  id frontApp = getFrontApp(ws, frontAppSel);
+  if (frontApp) {
+    SEL pidSel = sel_registerName("processIdentifier");
+    typedef pid_t (*PidFn)(id, SEL);
+    PidFn getPid = (PidFn)objc_msgSend;
+    pid_t p = getPid(frontApp, pidSel);
+    if (p > 0 && p != getpid()) {
+      g_lastReportedFrontPid = static_cast<uint32_t>(p);
+    }
+  }
+}
 }
 
 Napi::Value Info(const Napi::CallbackInfo& info) {
@@ -1121,11 +1154,46 @@ Napi::Value InitDpiAwareness(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value StartForegroundHook(const Napi::CallbackInfo& info) {
+  UpdateFrontmostApp();
   return Napi::Boolean::New(info.Env(), true);
 }
 
 Napi::Value StopForegroundHook(const Napi::CallbackInfo& info) {
   return Napi::Boolean::New(info.Env(), true);
+}
+
+Napi::Value IsSameApplication(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2) return Napi::Boolean::New(env, false);
+  pid_t pid1 = static_cast<pid_t>(info[0].As<Napi::Number>().Uint32Value());
+  pid_t pid2 = static_cast<pid_t>(info[1].As<Napi::Number>().Uint32Value());
+  if (pid1 <= 0 || pid2 <= 0) return Napi::Boolean::New(env, false);
+  if (pid1 == pid2) return Napi::Boolean::New(env, true);
+
+  Class appClass = objc_getClass("NSRunningApplication");
+  if (!appClass) return Napi::Boolean::New(env, false);
+
+  SEL runningWithPidSel = sel_registerName("runningApplicationWithProcessIdentifier:");
+  typedef id (*RunningWithPidFn)(id, SEL, pid_t);
+  RunningWithPidFn getApp = (RunningWithPidFn)objc_msgSend;
+
+  id app1 = getApp((id)appClass, runningWithPidSel, pid1);
+  id app2 = getApp((id)appClass, runningWithPidSel, pid2);
+  if (app1 && app2) {
+    SEL bundleSel = sel_registerName("bundleIdentifier");
+    typedef id (*BundleFn)(id, SEL);
+    BundleFn getBundle = (BundleFn)objc_msgSend;
+    id b1 = getBundle(app1, bundleSel);
+    id b2 = getBundle(app2, bundleSel);
+    if (b1 && b2) {
+      SEL isEqSel = sel_registerName("isEqualToString:");
+      typedef BOOL (*IsEqFn)(id, SEL, id);
+      IsEqFn doIsEq = (IsEqFn)objc_msgSend;
+      BOOL eq = doIsEq(b1, isEqSel, b2);
+      return Napi::Boolean::New(env, eq != NO);
+    }
+  }
+  return Napi::Boolean::New(env, false);
 }
 
 Napi::Value GetLastForegroundHwnd(const Napi::CallbackInfo& info) {
@@ -1304,6 +1372,15 @@ Napi::Value StopForegroundHook(const Napi::CallbackInfo& info) {
   return Napi::Boolean::New(info.Env(), true);
 }
 
+Napi::Value IsSameApplication(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2) return Napi::Boolean::New(env, false);
+  uint32_t pid1 = info[0].As<Napi::Number>().Uint32Value();
+  uint32_t pid2 = info[1].As<Napi::Number>().Uint32Value();
+  if (pid1 == 0 || pid2 == 0) return Napi::Boolean::New(env, false);
+  return Napi::Boolean::New(env, pid1 == pid2);
+}
+
 Napi::Value GetLastForegroundHwnd(const Napi::CallbackInfo& info) {
   return Napi::String::New(info.Env(), "0");
 }
@@ -1343,6 +1420,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("getLastForegroundHwnd", Napi::Function::New(env, GetLastForegroundHwnd));
   exports.Set("sendNativePaste", Napi::Function::New(env, SendNativePaste));
   exports.Set("isAnyModifierDown", Napi::Function::New(env, IsAnyModifierDown));
+  exports.Set("isSameApplication", Napi::Function::New(env, IsSameApplication));
   return exports;
 }
 

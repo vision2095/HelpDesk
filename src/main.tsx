@@ -361,7 +361,7 @@ function App() {
     [elapsed, setElapsed] = useState(0),
     [recordSeconds, setRecordSeconds] = useState(0),
     [profileDraft, setProfileDraft] = useState<Profile | null>(null),
-    [settingsDraft, setSettingsDraft] = useState<Settings | null>(null),
+    [settingsDraft, setSettingsDraft] = useState<Settings>(blankState.settings),
     [keyDraft, setKeyDraft] = useState(""),
     [confirmProfileDelete, setConfirmProfileDelete] = useState(false),
     [floating, setFloating] = useState(Boolean(window.lens)),
@@ -1795,7 +1795,7 @@ function App() {
         if (err?.message?.includes("Accessibility") || err?.message?.includes("System Settings")) {
           try { await navigator.clipboard.writeText(text); } catch {}
           notify("Answer copied to clipboard (⌘V)! Enable LensDesk in System Settings > Accessibility.");
-        } else if (err?.message?.includes("Focus a destination")) {
+        } else if (err?.message?.includes("Focus") || err?.message?.includes("focus") || err?.message?.includes("destination")) {
           try { await navigator.clipboard.writeText(text); } catch {}
           notify("Answer copied to clipboard (⌘V)! Focus your destination editor before typing.");
         } else {
@@ -2715,13 +2715,13 @@ function App() {
             isOpen={hintlensSettingsOpen}
             onClose={() => setHintlensSettingsOpen(false)}
             initialTab={hintlensSettingsTab}
-            settings={settingsDraft || state.settings}
+            settings={settingsDraft || state?.settings || blankState.settings}
             onSaveSettings={saveSettingsPatch}
             desktopPreferences={desktopPreferences}
             onSaveDesktopPreferences={handleSaveDesktopPreferences}
             onRestart={() => run(() => api("desktop.restart"))}
             onQuit={() => run(() => api("desktop.quit"))}
-            keys={state.keys}
+            keys={state?.keys || blankState.keys}
             onRefresh={refresh}
           />
         )}
@@ -4424,13 +4424,13 @@ function App() {
                     AI connection
                   </h2>
                   <span
-                    className={`connection-badge ${settingsDraft.provider === "local" || state.keys[settingsDraft.provider] ? "connected" : ""}`}
+                    className={`connection-badge ${settingsDraft.provider === "local" || (state?.keys || blankState.keys)[settingsDraft.provider] ? "connected" : ""}`}
                   >
                     {settingsDraft.provider === "local"
                       ? "Local endpoint"
-                      : state.keys[settingsDraft.provider]
-                        ? !state.ownedKeys?.[settingsDraft.provider] &&
-                          (cloudStorage || state.cloudConnected)
+                      : (state?.keys || blankState.keys)[settingsDraft.provider]
+                        ? !state?.ownedKeys?.[settingsDraft.provider] &&
+                          (cloudStorage || state?.cloudConnected)
                           ? "Hosted access"
                           : "Key saved"
                         : "Add an API key"}
@@ -5192,13 +5192,13 @@ function App() {
           isOpen={hintlensSettingsOpen}
           onClose={() => setHintlensSettingsOpen(false)}
           initialTab={hintlensSettingsTab}
-          settings={settingsDraft || state.settings}
+          settings={settingsDraft || state?.settings || blankState.settings}
           onSaveSettings={saveSettingsPatch}
           desktopPreferences={desktopPreferences}
           onSaveDesktopPreferences={handleSaveDesktopPreferences}
           onRestart={() => run(() => api("desktop.restart"))}
           onQuit={() => run(() => api("desktop.quit"))}
-          keys={state.keys}
+          keys={state?.keys || blankState.keys}
           onRefresh={refresh}
         />
       )}

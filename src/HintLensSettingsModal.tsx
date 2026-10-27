@@ -26,7 +26,7 @@ export interface HintLensSettingsModalProps {
 }
 
 export const DEFAULT_HINTLENS_SYSTEM_PROMPT =
-  "Analyse the provided screenshot(s) or question and provide the correct answer. For MCQs, give the correct option with a brief explanation if helpful. For coding/debugging, return the complete correct code. For descriptive questions, provide a clear and accurate answer.";
+  "Give clear, practical answers. Explain your reasoning, state assumptions, and ask for clarification when needed.";
 export const DEFAULT_HINTLENS_HOTKEYS: Record<string, string> = {
   toggle: "CommandOrControl+Shift+L",
   hide: "Shift+H",
@@ -159,6 +159,24 @@ const errorText = (error: unknown) =>
 const same = (a: unknown, b: unknown) =>
   JSON.stringify(a) === JSON.stringify(b);
 
+const DEFAULT_MODAL_SETTINGS: Settings = {
+  provider: "openai",
+  model: "gpt-4o-mini",
+  localBaseUrl: "http://127.0.0.1:11434/v1",
+  language: "English",
+  systemPrompt:
+    "Analyse the provided screenshot(s) or question and provide the correct answer. For MCQs, give the correct option with a brief explanation if helpful. For coding/debugging, return the complete correct code. For descriptive questions, provide a clear and accurate answer.",
+  transcriptionProvider: "openai",
+  transcriptionModel: "whisper-1",
+  opacity: 1,
+  alwaysOnTop: true,
+  captureProtection: true,
+  theme: "dark",
+  lightTextColor: "#24384c",
+  darkTextColor: "#e2eaf5",
+  interviewLayout: "full",
+};
+
 export function HintLensSettingsModal({
   isOpen,
   onClose,
@@ -172,14 +190,15 @@ export function HintLensSettingsModal({
   keys,
   onRefresh,
 }: HintLensSettingsModalProps) {
+  const safeSettings: Settings = { ...DEFAULT_MODAL_SETTINGS, ...(settings || {}) };
   const [activeTab, setActiveTab] = useState(initialTab);
-  const [draft, setDraft] = useState(settings);
+  const [draft, setDraft] = useState<Settings>(safeSettings);
   const [savedKeys, setSavedKeys] = useState<Record<string, boolean>>(keys || {});
   const [keyDraft, setKeyDraft] = useState("");
   const [keyBusy, setKeyBusy] = useState(false);
   const [prefs, setPrefs] = useState<any>(desktopPreferences || null);
   const [baseline, setBaseline] = useState<any>(desktopPreferences || null);
-  const [settingsBase, setSettingsBase] = useState(settings);
+  const [settingsBase, setSettingsBase] = useState<Settings>(safeSettings);
   const [recording, setRecording] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
     "Core Actions": true,
@@ -203,9 +222,9 @@ export function HintLensSettingsModal({
     ),
     [localModel, setLocalModel] = useState("");
   const [lightHex, setLightHex] = useState(
-      settings.lightTextColor || "#24384c",
+      safeSettings.lightTextColor || "#24384c",
     ),
-    [darkHex, setDarkHex] = useState(settings.darkTextColor || "#e2eaf5");
+    [darkHex, setDarkHex] = useState(safeSettings.darkTextColor || "#e2eaf5");
   const desktop = Boolean(window.lens);
   const [updateInfo, setUpdateInfo] = useState<{
     updateAvailable?: boolean;
@@ -318,20 +337,22 @@ export function HintLensSettingsModal({
   };
   const hotkeys = { ...DEFAULT_HINTLENS_HOTKEYS, ...prefs?.shortcuts };
   const dirty =
-    editableKeys.some((key) => draft[key] !== settingsBase[key]) ||
-    lightHex !== (settingsBase.lightTextColor || "#24384c") ||
-    darkHex !== (settingsBase.darkTextColor || "#e2eaf5") ||
-    !same(prefs, baseline);
+    Boolean(draft && settingsBase && (
+      editableKeys.some((key) => draft[key] !== settingsBase[key]) ||
+      lightHex !== (settingsBase.lightTextColor || "#24384c") ||
+      darkHex !== (settingsBase.darkTextColor || "#e2eaf5")
+    )) || !same(prefs, baseline);
 
   useEffect(() => {
     if (!isOpen) return;
+    const currentSafe: Settings = { ...DEFAULT_MODAL_SETTINGS, ...(settings || {}) };
     setActiveTab(initialTab);
-    setDraft(settings);
-    setSettingsBase(settings);
+    setDraft(currentSafe);
+    setSettingsBase(currentSafe);
     if (keys) setSavedKeys(keys);
     setKeyDraft("");
-    setLightHex(settings.lightTextColor || "#24384c");
-    setDarkHex(settings.darkTextColor || "#e2eaf5");
+    setLightHex(currentSafe.lightTextColor || "#24384c");
+    setDarkHex(currentSafe.darkTextColor || "#e2eaf5");
     setPrefs(desktopPreferences || null);
     setBaseline(desktopPreferences || null);
     setError("");

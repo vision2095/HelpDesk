@@ -200,3 +200,28 @@ test("preload exposes desktop.focusWindow", () => {
   const preloadSrc = fs.readFileSync(new URL("../desktop/preload.cjs", import.meta.url), "utf8");
   assert.ok(preloadSrc.includes('"desktop.focusWindow"'));
 });
+
+test("preload exposes accessibility and settings actions and convenience methods", () => {
+  const fs = require("node:fs");
+  const preloadSrc = fs.readFileSync(new URL("../desktop/preload.cjs", import.meta.url), "utf8");
+  assert.ok(preloadSrc.includes('"desktop.openAccessibilitySettings"'));
+  assert.ok(preloadSrc.includes('"desktop.openSettings"'));
+  assert.ok(preloadSrc.includes('openScreenSettings:'));
+  assert.ok(preloadSrc.includes('openAccessibilitySettings:'));
+  assert.ok(preloadSrc.includes('openSettings:'));
+  assert.ok(preloadSrc.includes('relaunch:'));
+  assert.ok(preloadSrc.includes('capture:'));
+});
+
+test("native module exports isSameApplication and startForegroundHook", () => {
+  const nativeMod = require("../native/index.cjs");
+  assert.equal(typeof nativeMod.isSameApplication, "function");
+  assert.equal(typeof nativeMod.startForegroundHook, "function");
+  assert.equal(typeof nativeMod.stopForegroundHook, "function");
+  assert.equal(typeof nativeMod.getLastForegroundHwnd, "function");
+  // Reflexivity check: same pid is always same application
+  assert.equal(nativeMod.isSameApplication(1234, 1234), true);
+  // Zero / negative pids are false
+  assert.equal(nativeMod.isSameApplication(0, 0), false);
+  assert.equal(nativeMod.isSameApplication(0, 1234), false);
+});
