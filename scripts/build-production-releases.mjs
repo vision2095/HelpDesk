@@ -25,13 +25,13 @@ console.log("\n=== STEP 2: Building macOS Apple Silicon ARM64 Release ===");
 execFileSync("npx", ["electron-builder", "--mac", "dmg", "--arm64", "--publish", "never"], {
   stdio: "inherit",
   cwd: rootDir,
+  env: { ...process.env, CSC_IDENTITY_AUTO_DISCOVERY: "false" },
 });
 
 const defaultArm64Dmg = path.join(releaseDir, `LensDesk-${version}-arm64.dmg`);
 const finalArm64Dmg = path.join(releaseDir, TARGET_ARM64_DMG);
 if (fs.existsSync(defaultArm64Dmg)) {
-  if (fs.existsSync(finalArm64Dmg)) fs.unlinkSync(finalArm64Dmg);
-  fs.renameSync(defaultArm64Dmg, finalArm64Dmg);
+  fs.copyFileSync(defaultArm64Dmg, finalArm64Dmg);
 }
 if (!fs.existsSync(finalArm64Dmg)) {
   throw new Error(`Expected ARM64 DMG not found: ${finalArm64Dmg}`);
@@ -48,13 +48,13 @@ console.log("\n=== STEP 3: Building macOS Intel x64 Release ===");
 execFileSync("npx", ["electron-builder", "--mac", "dmg", "--x64", "--publish", "never"], {
   stdio: "inherit",
   cwd: rootDir,
+  env: { ...process.env, CSC_IDENTITY_AUTO_DISCOVERY: "false" },
 });
 
 const defaultX64Dmg = path.join(releaseDir, `LensDesk-${version}.dmg`);
 const finalX64Dmg = path.join(releaseDir, TARGET_X64_DMG);
 if (fs.existsSync(defaultX64Dmg)) {
-  if (fs.existsSync(finalX64Dmg)) fs.unlinkSync(finalX64Dmg);
-  fs.renameSync(defaultX64Dmg, finalX64Dmg);
+  fs.copyFileSync(defaultX64Dmg, finalX64Dmg);
 }
 if (!fs.existsSync(finalX64Dmg)) {
   throw new Error(`Expected Intel x64 DMG not found: ${finalX64Dmg}`);
@@ -140,5 +140,25 @@ fs.writeFileSync(
   path.join(releaseDir, "checksums.json"),
   JSON.stringify(checksumsData, null, 2) + "\n",
 );
+
+function computeSha512Base64(filePath) {
+  const hash = createHash("sha512");
+  hash.update(fs.readFileSync(filePath));
+  return hash.digest("base64");
+}
+
+const armStat = fs.statSync(finalArm64Dmg);
+const armSha512 = computeSha512Base64(finalArm64Dmg);
+const latestMac = [
+  `version: ${version}`,
+  "files:",
+  `  - url: LensDesk-${version}-arm64.dmg`,
+  `    sha512: ${armSha512}`,
+  `    size: ${armStat.size}`,
+  `path: LensDesk-${version}-arm64.dmg`,
+  `sha512: ${armSha512}`,
+  `releaseDate: '${new Date().toISOString()}'`,
+].join("\n") + "\n";
+fs.writeFileSync(path.join(releaseDir, "latest-mac.yml"), latestMac);
 
 console.log("\n=== Production Releases Successfully Built & Verified ===");
