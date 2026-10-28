@@ -45,6 +45,8 @@
     "dist:mac:x64": "npm run build && electron-builder --mac dmg --x64 --publish never"
   },
   "dependencies": {
+    "@neon/config": "^1.9.5",
+    "@neon/env": "^1.6.6",
     "@types/pg": "^8.23.1",
     "koffi": "^3.3.3",
     "lucide-react": "^0.468.0",
