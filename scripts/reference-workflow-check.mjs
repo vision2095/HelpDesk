@@ -182,7 +182,7 @@ try {
   );
   await page.getByRole("button", { name: "Keys", exact: true }).click();
   await page.getByRole("button", { name: "Capture", exact: true }).click();
-  await page.getByAltText("Capture 1", { exact: true }).waitFor();
+  await page.getByAltText("Capture 1", { exact: true }).first().waitFor();
   assert.equal(
     (await page.evaluate(() => window.lens.invoke("state"))).sessions.flatMap(
       (s) => s.messages,
@@ -200,9 +200,10 @@ try {
   await page.mouse.move(box.x + box.width * 0.75, box.y + box.height * 0.75);
   await page.mouse.up();
   await dialog.getByRole("button", { name: "Attach selected region" }).click();
-  await page.getByAltText("Capture 2", { exact: true }).waitFor();
+  await page.getByAltText("Capture 2", { exact: true }).first().waitFor();
   const dimensions = await page
     .getByAltText("Capture 2", { exact: true })
+    .first()
     .evaluate(async (element) => {
       await element.decode();
       return [element.naturalWidth, element.naturalHeight];

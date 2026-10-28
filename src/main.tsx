@@ -851,7 +851,7 @@ function App() {
   shortcutHandlerRef.current = (action) => {
     if (action === "getAnswer" && !chatBusyRef.current) run(snapAndSolve);
     if (action === "capture") run(quickCaptureScreen);
-    if (action === "regionSnip") run(captureRegion);
+    if (action === "regionSnip") run(() => captureRegion(true));
     if (action === "overlay") {
       // The desktop product has one floating window; this shortcut can only
       // bring it back, never expand a second workspace surface.
@@ -1506,7 +1506,7 @@ function App() {
     });
   }
 
-  async function captureRegion() {
+  async function captureRegion(fromHotkey = false) {
     if (regionImage) return;
     if (!currentRef.current) {
       const session = await createSession("general");
@@ -1518,7 +1518,7 @@ function App() {
         "The bundle holds five screenshots. Remove a capture before adding another.",
       );
 
-    if (desktop) {
+    if (desktop && fromHotkey) {
       try {
         const curPos = await api<{ x: number; y: number }>("desktop.cursorPos");
         if (curPos && typeof curPos.x === "number") {
