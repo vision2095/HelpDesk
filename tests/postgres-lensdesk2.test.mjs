@@ -6,7 +6,22 @@ import { runPostgresMigrations } from "../server/cloud/postgres-migrations.mjs";
 
 const pool = getDatabasePool("postgres://localhost:5432/lensdesk");
 
+const POSTGRES_SKIP_REASON = "PostgreSQL is unavailable at localhost:5432; skipping postgres-lensdesk2 integration tests";
+
+async function isPostgresAvailable() {
+  try {
+    await pool.query("SELECT 1");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const postgresAvailable = await isPostgresAvailable();
+const pgTest = (name, fn) => test(name, { skip: postgresAvailable ? false : POSTGRES_SKIP_REASON }, fn);
+
 test.before(async () => {
+  if (!postgresAvailable) return;
   await runPostgresMigrations(pool);
 });
 
@@ -14,7 +29,7 @@ test.after(async () => {
   await pool.end();
 });
 
-test("01. Website registration and authentication", async () => {
+pgTest("01. Website registration and authentication", async () => {
   const store = createPostgresStore({ pool });
   const email = `reg-test-${Date.now()}@example.com`;
   
@@ -42,7 +57,7 @@ test("01. Website registration and authentication", async () => {
   );
 });
 
-test("02. Desktop initial login and relaunch", async () => {
+pgTest("02. Desktop initial login and relaunch", async () => {
   const store = createPostgresStore({ pool });
   const email = `desk-init-${Date.now()}@example.com`;
   const reg = await store.register({ email, password: "Password123!", name: "Desk User", verified: true });
@@ -77,7 +92,7 @@ test("02. Desktop initial login and relaunch", async () => {
   assert.ok(loginRelaunch.accessToken);
 });
 
-test("03. Verified same-device pairing", async () => {
+pgTest("03. Verified same-device pairing", async () => {
   const store = createPostgresStore({ pool });
   const email = `pair-test-${Date.now()}@example.com`;
   const deviceId = "dev_paired_pc_1";
@@ -114,7 +129,7 @@ test("03. Verified same-device pairing", async () => {
   assert.equal(devList.devices[0].hasDesktopSeat, true);
 });
 
-test("04. Website logout without desktop logout", async () => {
+pgTest("04. Website logout without desktop logout", async () => {
   const store = createPostgresStore({ pool });
   const email = `web-logout-${Date.now()}@example.com`;
   const reg = await store.register({ email, password: "Password123!", name: "User 4", verified: true });
@@ -141,7 +156,7 @@ test("04. Website logout without desktop logout", async () => {
   assert.equal(deskCheck.userId, reg.user.id);
 });
 
-test("05. Desktop logout without website logout", async () => {
+pgTest("05. Desktop logout without website logout", async () => {
   const store = createPostgresStore({ pool });
   const email = `desk-logout-${Date.now()}@example.com`;
   const reg = await store.register({ email, password: "Password123!", name: "User 5", verified: true });
@@ -167,7 +182,7 @@ test("05. Desktop logout without website logout", async () => {
   assert.equal(webUser.id, reg.user.id);
 });
 
-test("06. One-active-desktop-seat enforcement", async () => {
+pgTest("06. One-active-desktop-seat enforcement", async () => {
   const store = createPostgresStore({ pool });
   const email = `single-seat-${Date.now()}@example.com`;
   const reg = await store.register({ email, password: "Password123!", name: "Seat User", verified: true });
@@ -212,7 +227,7 @@ test("06. One-active-desktop-seat enforcement", async () => {
   assert.ok(await store.verifyDesktopAccess(devBTakeover.accessToken));
 });
 
-test("07. Simultaneous desktop login race conditions", async () => {
+pgTest("07. Simultaneous desktop login race conditions", async () => {
   const store = createPostgresStore({ pool });
   const email = `race-test-${Date.now()}@example.com`;
   const reg = await store.register({ email, password: "Password123!", name: "Race User", verified: true });
@@ -243,7 +258,7 @@ test("07. Simultaneous desktop login race conditions", async () => {
   assert.equal(parseInt(seatRes.rows[0].c, 10), 1);
 });
 
-test("08. Remote logout from another browser/phone", async () => {
+pgTest("08. Remote logout from another browser/phone", async () => {
   const store = createPostgresStore({ pool });
   const email = `college-pc-${Date.now()}@example.com`;
   const reg = await store.register({ email, password: "Password123!", name: "Student", verified: true });
@@ -267,7 +282,7 @@ test("08. Remote logout from another browser/phone", async () => {
   assert.equal(await store.verifyDesktopAccess(collegeDesk.accessToken), null);
 });
 
-test("09. Sign out everywhere", async () => {
+pgTest("09. Sign out everywhere", async () => {
   const store = createPostgresStore({ pool });
   const email = `signout-all-${Date.now()}@example.com`;
   const reg = await store.register({ email, password: "Password123!", name: "Everywhere User", verified: true });
@@ -287,7 +302,7 @@ test("09. Sign out everywhere", async () => {
   assert.equal(await store.verifyDesktopAccess(desk.accessToken), null);
 });
 
-test("10. Active interview versus routine cleanup", async () => {
+pgTest("10. Active interview versus routine cleanup", async () => {
   const store = createPostgresStore({ pool });
   const email = `interview-${Date.now()}@example.com`;
   const reg = await store.register({ email, password: "Password123!", name: "Interview Candidate", verified: true });
@@ -315,7 +330,7 @@ test("10. Active interview versus routine cleanup", async () => {
   assert.equal(wsRes.rows[0].interview_mode, true);
 });
 
-test("11. Explicit revocation during an active interview", async () => {
+pgTest("11. Explicit revocation during an active interview", async () => {
   const store = createPostgresStore({ pool });
   const email = `interview-revoke-${Date.now()}@example.com`;
   const reg = await store.register({ email, password: "Password123!", name: "Candidate 2", verified: true });
@@ -340,7 +355,7 @@ test("11. Explicit revocation during an active interview", async () => {
   assert.equal(await store.verifyDesktopAccess(desk.accessToken), null);
 });
 
-test("12. Subscription expiration", async () => {
+pgTest("12. Subscription expiration", async () => {
   let simulatedTime = 1790000000000;
   const store = createPostgresStore({ pool, clock: () => simulatedTime });
   const email = `sub-exp-${Date.now()}@example.com`;
@@ -361,7 +376,7 @@ test("12. Subscription expiration", async () => {
   assert.equal(auth, null);
 });
 
-test("13. Refresh-token rotation and revoked-token reuse", async () => {
+pgTest("13. Refresh-token rotation and revoked-token reuse", async () => {
   const store = createPostgresStore({ pool });
   const email = `token-rot-${Date.now()}@example.com`;
   const reg = await store.register({ email, password: "Password123!", name: "Rotation User", verified: true });
@@ -390,7 +405,7 @@ test("13. Refresh-token rotation and revoked-token reuse", async () => {
   assert.equal(await store.verifyDesktopAccess(rotated.accessToken), null);
 });
 
-test("14. Network disconnection and reconnection", async () => {
+pgTest("14. Network disconnection and reconnection", async () => {
   const store = createPostgresStore({ pool });
   const email = `net-recon-${Date.now()}@example.com`;
   const reg = await store.register({ email, password: "Password123!", name: "Net User", verified: true });
@@ -408,7 +423,7 @@ test("14. Network disconnection and reconnection", async () => {
   assert.ok(hb.leaseUntil > Date.now());
 });
 
-test("15. Application restart and interrupted authentication", async () => {
+pgTest("15. Application restart and interrupted authentication", async () => {
   const store = createPostgresStore({ pool });
   const email = `restart-test-${Date.now()}@example.com`;
   const reg = await store.register({ email, password: "Password123!", name: "Restart User", verified: true });
@@ -428,7 +443,7 @@ test("15. Application restart and interrupted authentication", async () => {
   assert.ok(await store.verifyDesktopAccess(restored.accessToken));
 });
 
-test("16. PostgreSQL transaction failures and recovery", async () => {
+pgTest("16. PostgreSQL transaction failures and recovery", async () => {
   const userCountBefore = await pool.query("SELECT COUNT(*) AS c FROM users");
 
   // Attempt transaction that throws an intentional error
@@ -451,7 +466,7 @@ test("16. PostgreSQL transaction failures and recovery", async () => {
   assert.equal(userCountAfter.rows[0].c, userCountBefore.rows[0].c);
 });
 
-test("17. Windows and macOS compatibility", async () => {
+pgTest("17. Windows and macOS compatibility", async () => {
   const store = createPostgresStore({ pool });
   const email = `crossplat-${Date.now()}@example.com`;
   const reg = await store.register({ email, password: "Password123!", name: "Cross Platform", verified: true });
@@ -481,7 +496,7 @@ test("17. Windows and macOS compatibility", async () => {
   assert.ok(await store.verifyDesktopAccess(mac.accessToken));
 });
 
-test("18. Existing functionality regression", async () => {
+pgTest("18. Existing functionality regression", async () => {
   // Verify existing users imported from SQLite exist in PostgreSQL
   const vivek = await pool.query("SELECT * FROM users WHERE email = 'vivek@gmail.com'");
   assert.equal(vivek.rows.length, 1);
@@ -492,7 +507,7 @@ test("18. Existing functionality regression", async () => {
   assert.equal(mukul.rows[0].verified, true);
 });
 
-test("19. Backend load and database connection limits", async () => {
+pgTest("19. Backend load and database connection limits", async () => {
   // Concurrent pool query burst (30 parallel operations)
   const results = await Promise.all(
     Array.from({ length: 30 }, (_, i) =>
@@ -503,7 +518,7 @@ test("19. Backend load and database connection limits", async () => {
   results.forEach((r, idx) => assert.equal(r.rows[0].val, idx));
 });
 
-test("20. Unauthorized API access and session replay attempts", async () => {
+pgTest("20. Unauthorized API access and session replay attempts", async () => {
   const store = createPostgresStore({ pool });
 
   // Forged bearer token
