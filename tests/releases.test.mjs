@@ -201,7 +201,7 @@ test("Windows packages an MSI while the macOS DMG targets and scripts stay uncha
   );
 });
 
-test("serves HintLens parity stealth ZIP and installer via /api/v1/download/windows and /hintlens-install.ps1", async (t) => {
+test("serves LensDesk stealth ZIP and installer via /api/v1/download/windows and /lensdesk-install.ps1", async (t) => {
   const { directory, origin, releases } = await fixture(t);
   const stealthDir = path.join(directory, "stealth");
   fs.mkdirSync(stealthDir, { recursive: true });
@@ -211,7 +211,7 @@ test("serves HintLens parity stealth ZIP and installer via /api/v1/download/wind
   assert.equal(dlRes.status, 200);
   assert.equal(dlRes.headers.get("content-type"), "application/zip");
   assert.ok(dlRes.headers.get("content-disposition").includes(".zip"));
-  const psRes = await fetch(origin + "/hintlens-install.ps1");
+  const psRes = await fetch(origin + "/lensdesk-install.ps1");
   assert.equal(psRes.status, 200);
   const psText = await psRes.text();
   assert.ok(psText.includes("LensDesk-Application"));

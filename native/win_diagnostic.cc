@@ -492,7 +492,7 @@ Napi::Value SendCaretNudge(const Napi::CallbackInfo& info) {
   return Napi::Boolean::New(env, true);
 }
 
-// Module 3: Windows Desktop Session Integration (HintLens 1:1)
+// Module 3: Windows Desktop Session Integration (LensDesk 1:1)
 Napi::Value GetInputDesktopInfo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   HDESK hDesk = OpenInputDesktop(0, FALSE, DESKTOP_READOBJECTS);
@@ -534,7 +534,7 @@ Napi::Value GetInputDesktopInfo(const Napi::CallbackInfo& info) {
   return res;
 }
 
-// Module 4: Fullscreen Target Detection for Caret Nudge (HintLens [TypingSim] 1:1)
+// Module 4: Fullscreen Target Detection for Caret Nudge (LensDesk [TypingSim] 1:1)
 Napi::Value IsWindowFullscreen(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (info.Length() < 1) return Napi::Boolean::New(env, false);
@@ -562,7 +562,7 @@ Napi::Value IsWindowFullscreen(const Napi::CallbackInfo& info) {
   return res;
 }
 
-// Module 1: Per-Monitor V2 DPI Awareness Context (HintLens 1:1)
+// Module 1: Per-Monitor V2 DPI Awareness Context (LensDesk 1:1)
 Napi::Value InitDpiAwareness(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   typedef BOOL(WINAPI* PFN_SetProcessDpiAwarenessContext)(HANDLE);
@@ -578,7 +578,7 @@ Napi::Value InitDpiAwareness(const Napi::CallbackInfo& info) {
   return Napi::Boolean::New(env, false);
 }
 
-// Module 4: WinEvent Foreground Hook (HintLens SetWinEventHook 1:1)
+// Module 4: WinEvent Foreground Hook (LensDesk SetWinEventHook 1:1)
 static HWINEVENTHOOK g_hFgEventHook = nullptr;
 static HWND g_lastReportedForeground = nullptr;
 
@@ -919,7 +919,7 @@ Napi::Value ActivateWindow(const Napi::CallbackInfo& info) {
     // 3 = NSApplicationActivateAllWindows (1) | NSApplicationActivateIgnoringOtherApps (2)
     BOOL ok = doActivate(app, activateSel, 3);
 
-    // HintLens Accessibility parity: ensure window & text caret have active focus
+    // LensDesk Accessibility parity: ensure window & text caret have active focus
     if (AXIsProcessTrusted()) {
       AXUIElementRef axApp = AXUIElementCreateApplication(targetPid);
       if (axApp) {

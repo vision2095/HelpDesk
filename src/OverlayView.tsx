@@ -44,7 +44,7 @@ import type { Session, Provider } from "./types";
 import { shortcutLabel } from "./shortcut-label";
 import { useGamepadController } from "./useGamepadController";
 
-export const HINTLENS_SPEECH_LANGUAGES = [
+export const LENSDESK_SPEECH_LANGUAGES = [
   { id: "en", label: "English" },
   { id: "multi", label: "Auto / Multilingual" },
   { id: "hi", label: "Hindi" },
@@ -80,6 +80,7 @@ export const HINTLENS_SPEECH_LANGUAGES = [
   { id: "lt", label: "Lithuanian" },
   { id: "ca", label: "Catalan" },
 ];
+export const HINTLENS_SPEECH_LANGUAGES = LENSDESK_SPEECH_LANGUAGES;
 
 export interface OverlayViewProps {
   shortcuts?: Record<string, string>;
@@ -124,7 +125,7 @@ export interface OverlayViewProps {
   clickThrough?: boolean;
   onToggleClickThrough?: () => void;
   onSnapAndSolve?: () => void;
-  // HintLens explicit actions
+  // LensDesk explicit actions
   onOpenSettings?: (tab?: string) => void;
   onUndoCapture?: () => void;
   onClearBundle?: () => void;
@@ -788,7 +789,7 @@ export function OverlayView({
     return (
       <div className="iv-messages-scroll">
         {session?.messages.map((m) => (
-          <div key={m.id} className={`hintlens-bubble ${m.role}`}>
+          <div key={m.id} className={`lensdesk-bubble hintlens-bubble ${m.role}`}>
             <div className="bubble-header">
               <span className="bubble-role">
                 {m.role === "user" ? "Interviewer" : "AI"}
@@ -844,7 +845,7 @@ export function OverlayView({
         ))}
 
         {busy && streamingText && (
-          <div className="hintlens-bubble assistant streaming">
+          <div className="lensdesk-bubble hintlens-bubble assistant streaming">
             <div className="bubble-header">
               <span className="bubble-role">AI</span>
               <div className="bubble-actions">
@@ -925,7 +926,7 @@ export function OverlayView({
 
   return (
     <div
-      className={`hintlens-overlay-shell ${opacity <= 0.2 ? "ghost-mode" : ""} ${interviewLayout === "compact" ? "compact-interview-mode" : ""}`}
+      className={`lensdesk-overlay-shell hintlens-overlay-shell ${opacity <= 0.2 ? "ghost-mode" : ""} ${interviewLayout === "compact" ? "compact-interview-mode" : ""}`}
       style={{
         backgroundColor: isDark
           ? `rgba(15, 23, 42, ${Math.max(0.1, opacity)})`
@@ -936,7 +937,7 @@ export function OverlayView({
       }}
     >
       {/* 1. TOP TITLEBAR */}
-      <header className="hintlens-titlebar">
+      <header className="lensdesk-titlebar hintlens-titlebar">
         <div className="titlebar-left">
           <span className="app-title">LensDesk</span>
           {availableUpdate && (
@@ -1046,9 +1047,9 @@ export function OverlayView({
         </div>
       </header>
 
-      {/* 2. HINTLENS INTERVIEW TOP ACTION BAR */}
+      {/* 2. LENSDESK INTERVIEW TOP ACTION BAR */}
       {inInterviewMode && (
-        <div className="hintlens-interview-action-bar">
+        <div className="lensdesk-interview-action-bar hintlens-interview-action-bar">
           {/* Start/Stop Session */}
           <button
             type="button"
@@ -1091,7 +1092,7 @@ export function OverlayView({
                 onSetSpeechLanguage?.(val);
               }}
             >
-              {HINTLENS_SPEECH_LANGUAGES.map((lang) => (
+              {LENSDESK_SPEECH_LANGUAGES.map((lang) => (
                 <option key={lang.id} value={lang.id}>
                   {lang.label}
                 </option>
@@ -1172,9 +1173,9 @@ export function OverlayView({
 
       {/* 3. MAIN BODY */}
       {inInterviewMode && activeInterviewLayout === "compact" ? (
-        <div className="hintlens-compact-interview-body">
+        <div className="lensdesk-compact-interview-body hintlens-compact-interview-body">
           {/* ##ivcompactline */}
-          <div className="hintlens-compact-ticker-line">
+          <div className="lensdesk-compact-ticker-line hintlens-compact-ticker-line">
             <span className={`ticker-status-pill ${recording ? "live" : "off"}`}>
               {recording ? "[interviewer: live]" : "[interviewer: off]"}
             </span>
@@ -1201,7 +1202,7 @@ export function OverlayView({
           </div>
 
           {/* Full-width AI Suggestions Canvas (##ivsuggest) */}
-          <div className="hintlens-compact-suggestions-canvas">
+          <div className="lensdesk-compact-suggestions-canvas hintlens-compact-suggestions-canvas">
             <div className="iv-suggestions-header">
               <span className="iv-suggestions-title">AI Suggestions</span>
               {busy && streamingText && (
@@ -1217,7 +1218,7 @@ export function OverlayView({
           </div>
         </div>
       ) : inInterviewMode && activeInterviewLayout === "full" ? (
-        <div className="hintlens-interview-split">
+        <div className="lensdesk-interview-split hintlens-interview-split">
           {/* Left Column: Live Transcript (##ivtranscript) */}
           <div className="iv-transcript-pane">
             <div className="iv-pane-header">
@@ -1300,13 +1301,13 @@ export function OverlayView({
       ) : chatLayout === "minimal" && interviewLayout !== "compact" ? (
         renderMinimalLayout()
       ) : (
-        <div className="hintlens-main-split">
+        <div className="lensdesk-main-split hintlens-main-split">
           {/* Left Column: Chat Area */}
-          <section className="hintlens-chat-column">
-            <div className="hintlens-messages-container">
+          <section className="lensdesk-chat-column hintlens-chat-column">
+            <div className="lensdesk-messages-container hintlens-messages-container">
               {/* Live Detected Question Banner */}
               {detectedQuestion && (
-                <div className="hintlens-detected-banner">
+                <div className="lensdesk-detected-banner hintlens-detected-banner">
                   <div className="detected-left">
                     <Sparkles size={14} className="sparkle-icon" />
                     <div className="detected-content">
@@ -1344,7 +1345,7 @@ export function OverlayView({
 
               {/* If no messages yet */}
               {(!session || session.messages.length === 0) && !busy && (
-                <div className="hintlens-chat-empty">
+                <div className="lensdesk-chat-empty hintlens-chat-empty">
                   <div className="empty-sparkle">
                     <Bot size={28} />
                   </div>
@@ -1364,7 +1365,7 @@ export function OverlayView({
 
               {/* Conversation Messages */}
               {session?.messages.map((m) => (
-                <div key={m.id} className={`hintlens-bubble ${m.role}`}>
+                <div key={m.id} className={`lensdesk-bubble hintlens-bubble ${m.role}`}>
                   <div className="bubble-header">
                     <span className="bubble-role">
                       {m.role === "user" ? "You" : "LensDesk"}
@@ -1445,7 +1446,7 @@ export function OverlayView({
               ))}
               {/* Streaming assistant response */}
               {busy && streamingText && (
-                <div className="hintlens-bubble assistant streaming">
+                <div className="lensdesk-bubble hintlens-bubble assistant streaming">
                   <div className="bubble-header">
                     <span className="bubble-role">LensDesk</span>
                     <div className="bubble-actions">
@@ -1492,7 +1493,7 @@ export function OverlayView({
 
               {/* Thinking status */}
               {busy && !streamingText && (
-                <div className="hintlens-thinking-row">
+                <div className="lensdesk-thinking-row hintlens-thinking-row">
                   <Aperture size={15} className="spin" />
                   <span>Thinking through solution...</span>
                   <button className="thinking-cancel-btn" onClick={onCancel}>
@@ -1504,7 +1505,7 @@ export function OverlayView({
               {/* Error Alert */}
               {error && (
                 <div
-                  className="hintlens-error-banner"
+                  className="lensdesk-error-banner hintlens-error-banner"
                   style={{
                     margin: "8px 0",
                     padding: "10px 14px",
@@ -1576,7 +1577,7 @@ export function OverlayView({
             )}
 
             {/* Inline Chat Composer */}
-            <div className="hintlens-composer">
+            <div className="lensdesk-composer hintlens-composer">
               <button
                 type="button"
                 className={`composer-tool-btn ${webSearchEnabled ? "active" : ""}`}
@@ -1620,7 +1621,7 @@ export function OverlayView({
           </section>
 
           {/* Right Column: Screenshot Bundle Drawer */}
-          <aside className="hintlens-bundle-column">
+          <aside className="lensdesk-bundle-column hintlens-bundle-column">
             <div className="bundle-header">
               <span className="bundle-title">Bundle ({images.length})</span>
               {images.length > 0 && (
@@ -1678,7 +1679,7 @@ export function OverlayView({
       )}
 
       {/* 3. BOTTOM STATUS ROW */}
-      <div className="hintlens-status-row">
+      <div className="lensdesk-status-row hintlens-status-row">
         <div className="status-left">
           <span
             className={`status-dot ${
@@ -1705,7 +1706,7 @@ export function OverlayView({
       </div>
 
       {/* 4. ACTION TOOLBAR */}
-      <div className="hintlens-toolbar-row">
+      <div className="lensdesk-toolbar-row hintlens-toolbar-row">
         <div className="toolbar-left-buttons">
           {/* 1. Get Answer */}
           <button
@@ -1875,7 +1876,7 @@ export function OverlayView({
 
       {/* 5. SHORTCUT CHEAT-SHEET LEGEND BAR */}
       {showKeysLegend && (
-        <div className="hintlens-shortcuts-legend-bar">
+        <div className="lensdesk-shortcuts-legend-bar hintlens-shortcuts-legend-bar">
           <div className="legend-row">
             <div
               className="legend-pill"

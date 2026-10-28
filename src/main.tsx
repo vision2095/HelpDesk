@@ -80,11 +80,11 @@ import { Admin } from "./Admin";
 import { OverlayView } from "./OverlayView";
 import { FloatingGate } from "./FloatingGate";
 import {
-  HintLensSettingsModal,
-  DEFAULT_HINTLENS_HOTKEYS,
-} from "./HintLensSettingsModal";
-import { HintLensAuthModal } from "./HintLensAuthModal";
-import { HintLensDownloadsSection } from "./HintLensDownloadsSection";
+  LensDeskSettingsModal,
+  DEFAULT_LENSDESK_HOTKEYS,
+} from "./LensDeskSettingsModal";
+import { LensDeskAuthModal } from "./LensDeskAuthModal";
+import { LensDeskDownloadsSection } from "./LensDeskDownloadsSection";
 import { RadialActionWheel } from "./RadialActionWheel";
 import { RegionCapture } from "./RegionCapture";
 import { installMouseGestures } from "./mouse-gestures.mjs";
@@ -327,8 +327,8 @@ function App() {
     [error, setError] = useState(""),
     [search, setSearch] = useState(""),
     [sessionFilter, setSessionFilter] = useState("all"),
-    [hintlensSettingsOpen, setHintlensSettingsOpen] = useState(false),
-    [hintlensSettingsTab, setHintlensSettingsTab] = useState("Model"),
+    [lensdeskSettingsOpen, setLensdeskSettingsOpen] = useState(false),
+    [lensdeskSettingsTab, setLensdeskSettingsTab] = useState("Model"),
     [authModalOpen, setAuthModalOpen] = useState(false),
     [radialWheelOpen, setRadialWheelOpen] = useState(false),
     [regionImage, setRegionImage] = useState<string | null>(null),
@@ -746,7 +746,7 @@ function App() {
         .catch(() => {});
       const unsubOverlay = window.lens.onOverlay?.(({ floating: f }) => {
         setFloating(f);
-        setHintlensSettingsOpen(false);
+        setLensdeskSettingsOpen(false);
       });
       const unsubClick = window.lens.onClickThrough?.(
         ({ clickThrough: ct }) => {
@@ -843,8 +843,8 @@ function App() {
         else await navigate(page === "browser" ? "workspace" : "browser");
       });
     } else if (actionKey === "settings") {
-      setHintlensSettingsTab("Model");
-      setHintlensSettingsOpen(true);
+      setLensdeskSettingsTab("Model");
+      setLensdeskSettingsOpen(true);
     }
   };
 
@@ -901,8 +901,8 @@ function App() {
     if (action === "shortcuts")
       run(async () => {
         if (floating) {
-          setHintlensSettingsTab("Hotkeys");
-          setHintlensSettingsOpen((prev) => !prev);
+          setLensdeskSettingsTab("Hotkeys");
+          setLensdeskSettingsOpen((prev) => !prev);
         } else {
           await navigate(page === "settings" ? "workspace" : "settings");
         }
@@ -1059,7 +1059,7 @@ function App() {
         return;
       }
 
-      // Dedicated capture shortcut: Ctrl+Shift+D / Cmd+Shift+D (HintLens 1:1)
+      // Dedicated capture shortcut: Ctrl+Shift+D / Cmd+Shift+D (LensDesk 1:1)
       if (
         (e.metaKey || e.ctrlKey) &&
         e.shiftKey &&
@@ -1070,7 +1070,7 @@ function App() {
         return;
       }
 
-      // Dedicated cycle provider shortcut: Ctrl+Shift+P / Cmd+Shift+P (HintLens 1:1)
+      // Dedicated cycle provider shortcut: Ctrl+Shift+P / Cmd+Shift+P (LensDesk 1:1)
       if (
         (e.metaKey || e.ctrlKey) &&
         e.shiftKey &&
@@ -1168,7 +1168,7 @@ function App() {
       // If focused inside an input or textarea, let normal typing occur without triggering global hotkeys
       if (isInput) return;
       const activeHotkeys = {
-        ...DEFAULT_HINTLENS_HOTKEYS,
+        ...DEFAULT_LENSDESK_HOTKEYS,
         ...desktopPreferences?.shortcuts,
       };
       const action = Object.entries(activeHotkeys).find(
@@ -1481,7 +1481,7 @@ function App() {
     }
     const res = await api<{ floating: boolean }>("desktop.overlay");
     if (res && typeof res.floating === "boolean") setFloating(res.floating);
-    setHintlensSettingsOpen(false);
+    setLensdeskSettingsOpen(false);
   }
   async function cropImage(
     dataUrl: string,
@@ -2238,7 +2238,7 @@ function App() {
             speechActiveInChunk = true;
           }
 
-          // Real-time chunk completion upon pause/silence (HintLens 800ms trailing silence threshold):
+          // Real-time chunk completion upon pause/silence (LensDesk 800ms trailing silence threshold):
           if (
             speechActiveInChunk &&
             lastSpeechTime > 0 &&
@@ -2566,8 +2566,8 @@ function App() {
     ),
     onConnectProvider: () => {
       setFloatingView("assistant");
-      setHintlensSettingsTab("Model");
-      setHintlensSettingsOpen(true);
+      setLensdeskSettingsTab("Model");
+      setLensdeskSettingsOpen(true);
     },
     desktop,
     shortcuts: desktopShortcuts,
@@ -2587,8 +2587,8 @@ function App() {
     onSnapAndSolve: () => run(snapAndSolve),
     onOpenSettings: (tab = "Model") => {
       setFloatingView("assistant");
-      setHintlensSettingsTab(tab);
-      setHintlensSettingsOpen(true);
+      setLensdeskSettingsTab(tab);
+      setLensdeskSettingsOpen(true);
     },
     onUndoCapture: () => setImages((old) => old.slice(0, -1)),
     onClearBundle: () => setImages([]),
@@ -2710,11 +2710,11 @@ function App() {
             />
           }
         />
-        {hintlensSettingsOpen && (
-          <HintLensSettingsModal
-            isOpen={hintlensSettingsOpen}
-            onClose={() => setHintlensSettingsOpen(false)}
-            initialTab={hintlensSettingsTab}
+        {lensdeskSettingsOpen && (
+          <LensDeskSettingsModal
+            isOpen={lensdeskSettingsOpen}
+            onClose={() => setLensdeskSettingsOpen(false)}
+            initialTab={lensdeskSettingsTab}
             settings={settingsDraft || state?.settings || blankState.settings}
             onSaveSettings={saveSettingsPatch}
             desktopPreferences={desktopPreferences}
@@ -2726,7 +2726,7 @@ function App() {
           />
         )}
         {authModalOpen && (
-          <HintLensAuthModal
+          <LensDeskAuthModal
             isOpen={authModalOpen}
             onClose={() => setAuthModalOpen(false)}
             onSuccess={() => {
@@ -4826,7 +4826,7 @@ function App() {
         )}
         {page === "downloads" && (
           <div className="content-page">
-            <HintLensDownloadsSection isDesktop={desktop} onNavigate={navigate} />
+            <LensDeskDownloadsSection isDesktop={desktop} onNavigate={navigate} />
 
             <section className="form-card" style={{ marginBottom: "30px", marginTop: "30px" }}>
               <div className="form-heading">
@@ -5187,11 +5187,11 @@ function App() {
           {toast}
         </div>
       )}
-      {hintlensSettingsOpen && (
-        <HintLensSettingsModal
-          isOpen={hintlensSettingsOpen}
-          onClose={() => setHintlensSettingsOpen(false)}
-          initialTab={hintlensSettingsTab}
+      {lensdeskSettingsOpen && (
+        <LensDeskSettingsModal
+          isOpen={lensdeskSettingsOpen}
+          onClose={() => setLensdeskSettingsOpen(false)}
+          initialTab={lensdeskSettingsTab}
           settings={settingsDraft || state?.settings || blankState.settings}
           onSaveSettings={saveSettingsPatch}
           desktopPreferences={desktopPreferences}
@@ -5203,7 +5203,7 @@ function App() {
         />
       )}
       {authModalOpen && (
-        <HintLensAuthModal
+        <LensDeskAuthModal
           isOpen={authModalOpen}
           onClose={() => setAuthModalOpen(false)}
           onSuccess={() => {

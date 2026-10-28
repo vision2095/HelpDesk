@@ -760,11 +760,10 @@ export function createCloudServer({
       // Enforce: User must have an account / be signed in to download the desktop application from the website
       const isDownloadPath =
         url.pathname.startsWith("/downloads/") ||
-        url.pathname.startsWith("/releases/") ||
-        ["/api/v1/download/windows", "/download/windows", "/hintlens-install.ps1", "/install-stealth.ps1", "/install.sh", "/install.ps1"].includes(url.pathname);
+        url.pathname.startsWith("/releases/");
 
       if (isDownloadPath && ["GET", "HEAD"].includes(req.method)) {
-        const rawToken = tokenFor(req);
+        const rawToken = tokenFor(req) || url.searchParams?.get("token");
         let user = rawToken ? accounts.userForToken(rawToken) : null;
         if (!user && pgStore && rawToken) {
           try {

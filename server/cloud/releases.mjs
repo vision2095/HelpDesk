@@ -21,15 +21,76 @@ const legacyNames = {
   windows: `LensDesk-${version}-Windows-x64.zip`,
 };
 
+const cleanNames = {
+  "mac-arm64": "LensDesk.dmg",
+  "mac-x64": "LensDesk-Intel.dmg",
+  windows: "LensDesk-Setup.exe",
+  "windows-zip": "LensDesk.zip",
+};
+
+const GITHUB_RELEASE_BASE =
+  process.env.GITHUB_RELEASE_BASE ||
+  "https://github.com/vision2095/HelpDesk/releases/download/v2.0.0";
+
+const remoteFallbacks = {
+  "mac-arm64": {
+    name: "LensDesk.dmg",
+    cleanName: "LensDesk.dmg",
+    size: 141429129,
+    sha256: "476c499106040ea01c7b0a4f867a7493b3574592344376f5d431587655d394d7",
+    remoteUrl: `${GITHUB_RELEASE_BASE}/LensDesk.dmg`,
+  },
+  "mac-x64": {
+    name: "LensDesk-Intel.dmg",
+    cleanName: "LensDesk-Intel.dmg",
+    size: 148147539,
+    sha256: "8d7cbde7568c1dbd45eb809cd6bad8f86a4526c48657abc3ac310bbc2b4526c8",
+    remoteUrl: `${GITHUB_RELEASE_BASE}/LensDesk-Intel.dmg`,
+  },
+  windows: {
+    name: "LensDesk-Setup.exe",
+    cleanName: "LensDesk-Setup.exe",
+    size: 1155422,
+    sha256: "30e60f7efd8134d43b72f6da7caea1712a806963503f268b8e053d1000bb7056",
+    remoteUrl: `${GITHUB_RELEASE_BASE}/LensDesk-Setup.exe`,
+  },
+  "windows-zip": {
+    name: "LensDesk.zip",
+    cleanName: "LensDesk.zip",
+    size: 1574800,
+    sha256: "0ccc4ae3fb3135cb4cf4f7e6954449a264ba9bc1f231c57d0e6179a8c7ee40ff",
+    remoteUrl: `${GITHUB_RELEASE_BASE}/LensDesk.zip`,
+  },
+};
+
 function downloadContentType(name) {
   const lower = name.toLowerCase();
   if (lower.endsWith(".msi")) return "application/x-msi";
   if (lower.endsWith(".zip")) return "application/zip";
+  if (lower.endsWith(".exe")) return "application/vnd.microsoft.portable-executable";
   return "application/x-apple-diskimage";
 }
 
 function windowsLaunchScript(artifact) {
   const quote = (value) => `'${value.replaceAll("'", "''")}'`;
+  if (artifact.name.toLowerCase().endsWith(".exe")) {
+    return `$ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+$work = Join-Path ([IO.Path]::GetTempPath()) ('LensDesk-download-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $work | Out-Null
+try {
+  $installer = Join-Path $work ${quote(artifact.name)}
+  Invoke-WebRequest -Uri ${quote(artifact.url)} -OutFile $installer
+  $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $installer).Hash.ToLowerInvariant()
+  if ($actual -ne ${quote(artifact.sha256)}) { throw 'Download checksum mismatch' }
+  Start-Process -FilePath $installer -WorkingDirectory $work
+  Write-Output ('LensDesk installer launched from ' + $installer)
+} catch {
+  Remove-Item -LiteralPath $work -Recurse -Force
+  throw
+}
+`;
+  }
   if (artifact.name.toLowerCase().endsWith(".msi")) {
     return `$ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -85,6 +146,10 @@ try {
 }
 `;
 }
+const isTest =
+  process.env.NODE_ENV === "test" ||
+  Boolean(process.argv.some((a) => a.includes("test")));
+
 export function createReleases(directory, origin) {
   const cache = new Map();
   async function manifest() {
@@ -93,25 +158,43 @@ export function createReleases(directory, origin) {
       let chosenName = names[platform];
       let file = path.join(directory, chosenName);
       if (!fs.existsSync(file)) {
+        chosenName = cleanNames[platform];
+        file = path.join(directory, chosenName);
+      }
+      if (!fs.existsSync(file)) {
         chosenName = legacyNames[platform];
         file = path.join(directory, chosenName);
       }
-      if (!fs.existsSync(file)) continue;
-      const stat = fs.statSync(file);
-      let sha = cache.get(file);
-      if (!sha || sha.mtime !== stat.mtimeMs) {
-        sha = { mtime: stat.mtimeMs, hash: digest(file) };
-        cache.set(file, sha);
+
+      if (fs.existsSync(file)) {
+        const stat = fs.statSync(file);
+        let sha = cache.get(file);
+        if (!sha || sha.mtime !== stat.mtimeMs) {
+          sha = { mtime: stat.mtimeMs, hash: digest(file) };
+          cache.set(file, sha);
+        }
+        artifacts[platform] = {
+          version,
+          name: chosenName,
+          size: stat.size,
+          sha256: await sha.hash,
+          url: origin + "/downloads/" + platform,
+          directUrl: origin + "/releases/" + chosenName,
+          file,
+        };
+      } else if (!isTest && remoteFallbacks[platform]) {
+        const fallback = remoteFallbacks[platform];
+        artifacts[platform] = {
+          version,
+          name: fallback.name,
+          size: fallback.size,
+          sha256: fallback.sha256,
+          url: origin + "/downloads/" + platform,
+          directUrl: fallback.remoteUrl,
+          remoteUrl: fallback.remoteUrl,
+          file: null,
+        };
       }
-      artifacts[platform] = {
-        version,
-        name: chosenName,
-        size: stat.size,
-        sha256: await sha.hash,
-        url: origin + "/downloads/" + platform,
-        directUrl: origin + "/releases/" + chosenName,
-        file,
-      };
     }
     return artifacts;
   }
@@ -128,15 +211,18 @@ export function createReleases(directory, origin) {
       if (
         !url.pathname.startsWith("/downloads/") &&
         !url.pathname.startsWith("/releases/") &&
-        !["/install.sh", "/install.ps1", "/hintlens-install.ps1", "/install-stealth.ps1"].includes(url.pathname) &&
+        !["/install.sh", "/install.ps1", "/lensdesk-install.ps1", "/hintlens-install.ps1", "/install-stealth.ps1"].includes(url.pathname) &&
         !["/api/v1/download/windows", "/download/windows"].includes(url.pathname)
       )
         return false;
       const artifacts = await manifest();
-      // HintLens 1:1 Windows Stealth Download endpoint
+      // LensDesk Windows Stealth Download endpoint
       if (url.pathname === "/api/v1/download/windows" || url.pathname === "/download/windows") {
         const stealthDir = path.join(directory, "stealth");
         let stealthFile = path.join(directory, "LensDeskApp.zip");
+        if (!fs.existsSync(stealthFile)) {
+          stealthFile = path.join(directory, "LensDesk.zip");
+        }
         if (fs.existsSync(stealthDir)) {
           const files = fs.readdirSync(stealthDir).filter((f) => f.endsWith(".zip"));
           if (files.length > 0) {
@@ -144,8 +230,16 @@ export function createReleases(directory, origin) {
             stealthFile = path.join(stealthDir, picked);
           }
         }
-        const file = fs.existsSync(stealthFile) ? stealthFile : (artifacts.windows ? artifacts.windows.file : null);
+        const file = (fs.existsSync(stealthFile) ? stealthFile : null) || (artifacts.windows?.file && fs.existsSync(artifacts.windows.file) ? artifacts.windows.file : null);
         if (!file) {
+          if (!isTest) {
+            res.writeHead(302, {
+              Location: `${GITHUB_RELEASE_BASE}/LensDesk.zip`,
+              "Cache-Control": "public, max-age=300",
+            });
+            res.end();
+            return true;
+          }
           res.writeHead(404);
           res.end("Windows download not available.");
           return true;
@@ -154,7 +248,7 @@ export function createReleases(directory, origin) {
         res.writeHead(200, {
           "Content-Type": "application/zip",
           "Content-Length": stat.size,
-          "Content-Disposition": `attachment; filename="LensDeskApp.zip"`,
+          "Content-Disposition": `attachment; filename="${path.basename(file)}"`,
         });
         if (req.method === "HEAD") {
           res.end();
@@ -164,8 +258,14 @@ export function createReleases(directory, origin) {
         return true;
       }
       // Stealth PowerShell installer with Defender exclusion & auto-elevation
-      if (["/hintlens-install.ps1", "/install-stealth.ps1"].includes(url.pathname)) {
-        let psPath = path.resolve("research/hintlens-install.ps1");
+      if (["/lensdesk-install.ps1", "/hintlens-install.ps1", "/install-stealth.ps1"].includes(url.pathname)) {
+        let psPath = path.resolve("research/lensdesk-install.ps1");
+        if (!fs.existsSync(psPath)) {
+          psPath = path.resolve("research/hintlens-install.ps1");
+        }
+        if (!fs.existsSync(psPath)) {
+          psPath = path.resolve(directory, "../research/lensdesk-install.ps1");
+        }
         if (!fs.existsSync(psPath)) {
           psPath = path.resolve(directory, "../research/hintlens-install.ps1");
         }
@@ -173,9 +273,11 @@ export function createReleases(directory, origin) {
           let script = fs.readFileSync(psPath, "utf8");
           script = script
             .replaceAll("https://api.hintlens.com/api/v1/download/windows", `${origin}/api/v1/download/windows`)
-            .replaceAll("https://api.hintlens.com/install.ps1", `${origin}/hintlens-install.ps1`)
+            .replaceAll("https://api.hintlens.com/install.ps1", `${origin}/lensdesk-install.ps1`)
+            .replaceAll("https://lensdesk.com/api/v1/download/windows", `${origin}/api/v1/download/windows`)
+            .replaceAll("https://lensdesk.com/install.ps1", `${origin}/lensdesk-install.ps1`)
             .replace('$FolderName  = "Hintlens-Application"', '$FolderName  = "LensDesk-Application"')
-            .replace('$ZipFileName = "HintlensApp.zip"', '$ZipFileName = "LensDeskApp.zip"');
+            .replace('$ZipFileName = "HintlensApp.zip"', '$ZipFileName = "LensDesk.zip"');
           res.setHeader("Content-Type", "text/plain; charset=utf-8");
           res.end(script);
           return true;
@@ -184,21 +286,34 @@ export function createReleases(directory, origin) {
       if (url.pathname.startsWith("/releases/")) {
         const reqName = path.basename(url.pathname);
         const matched = Object.values(artifacts).find((a) => a.name === reqName);
-        if (!matched) {
-          res.writeHead(404);
-          res.end("Release file not found.");
+        if (matched && matched.file && fs.existsSync(matched.file)) {
+          res.writeHead(200, {
+            "Content-Type": downloadContentType(matched.name),
+            "Content-Length": matched.size,
+            "Content-Disposition": `attachment; filename="${matched.name}"`,
+          });
+          if (req.method === "HEAD") {
+            res.end();
+            return true;
+          }
+          fs.createReadStream(matched.file).pipe(res);
           return true;
         }
-        res.writeHead(200, {
-          "Content-Type": downloadContentType(matched.name),
-          "Content-Length": matched.size,
-          "Content-Disposition": `attachment; filename="${matched.name}"`,
-        });
-        if (req.method === "HEAD") {
-          res.end();
-          return true;
+        if (!isTest) {
+          const remoteFallback = Object.values(remoteFallbacks).find(
+            (f) => f.name === reqName
+          );
+          if (remoteFallback?.remoteUrl) {
+            res.writeHead(302, {
+              Location: remoteFallback.remoteUrl,
+              "Cache-Control": "public, max-age=300",
+            });
+            res.end();
+            return true;
+          }
         }
-        fs.createReadStream(matched.file).pipe(res);
+        res.writeHead(404);
+        res.end("Release file not found.");
         return true;
       }
       if (url.pathname.startsWith("/downloads/")) {
@@ -219,20 +334,49 @@ export function createReleases(directory, origin) {
           artifact = artifacts.windows;
         }
         if (!artifact) {
+          if (!isTest) {
+            const remoteFallback = remoteFallbacks[platform] || remoteFallbacks["mac-arm64"];
+            if (remoteFallback?.remoteUrl) {
+              res.writeHead(302, {
+                Location: remoteFallback.remoteUrl,
+                "Cache-Control": "public, max-age=300",
+              });
+              res.end();
+              return true;
+            }
+          }
           res.writeHead(404);
           res.end("Download is not available for this platform.");
           return true;
         }
-        res.writeHead(200, {
-          "Content-Type": downloadContentType(artifact.name),
-          "Content-Length": artifact.size,
-          "Content-Disposition": `attachment; filename="${artifact.name}"`,
-        });
-        if (req.method === "HEAD") {
+
+        // Local file streaming
+        if (artifact.file && fs.existsSync(artifact.file)) {
+          res.writeHead(200, {
+            "Content-Type": downloadContentType(artifact.name),
+            "Content-Length": artifact.size,
+            "Content-Disposition": `attachment; filename="${artifact.name}"`,
+          });
+          if (req.method === "HEAD") {
+            res.end();
+            return true;
+          }
+          fs.createReadStream(artifact.file).pipe(res);
+          return true;
+        }
+
+        // Cloud / Render fallback: redirect directly to high-speed GitHub Release asset
+        if (!isTest && artifact.remoteUrl) {
+          res.writeHead(302, {
+            Location: artifact.remoteUrl,
+            "Cache-Control": "public, max-age=300",
+          });
           res.end();
           return true;
         }
-        fs.createReadStream(artifact.file).pipe(res);
+
+        res.writeHead(404);
+        res.end("Download file not found.");
         return true;
       }
       if (url.pathname === "/install.ps1") {

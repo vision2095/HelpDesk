@@ -53,7 +53,7 @@ function timingOptions({ speed = "human", wpm, jitter, pauses, mistakes } = {}) 
   return options;
 }
 
-// Adjacent QWERTY keys for human typing mistakes / slips simulation (HintLens 1:1)
+// Adjacent QWERTY keys for human typing mistakes / slips simulation (LensDesk 1:1)
 const QWERTY_ADJACENT = {
   a: "qwsz", b: "vghn", c: "xdfv", d: "serfcx", e: "wsdr",
   f: "drtgvc", g: "ftyhbv", h: "gyujnb", i: "ujko", j: "huikmn",
@@ -174,7 +174,7 @@ async function typeMac(text, options, signal) {
     for (let index = 0; index < characters.length; index++) {
       canceled(signal);
 
-      // Verify destination target window has not changed every 5 chars (HintLens [TypeSim] 1:1)
+      // Verify destination target window has not changed every 5 chars (LensDesk [TypeSim] 1:1)
       if (index % 5 === 0 && index > 0) {
         const curFg = nativeMod.getForegroundInfo();
         if (curFg.pid && curFg.pid !== targetPid && curFg.pid !== process.pid) {
@@ -407,7 +407,7 @@ async function typeWindows(text, options, signal) {
   const delays = computeTypingDelays(text, timing);
   const mistakesRate = timing.mistakes ? (timing.mistakes / 100) * 0.08 : 0;
 
-  // 1. Try 100% Native Win32 SendInput first (HintLens 1:1 parity without powershell)
+  // 1. Try 100% Native Win32 SendInput first (LensDesk 1:1 parity without powershell)
   let nativeWin = null;
   try {
     nativeWin = require("./native-win.cjs");
@@ -417,7 +417,7 @@ async function typeWindows(text, options, signal) {
   }
 
   if (nativeWin && typeof nativeWin.sendUnicodeChar === "function") {
-    // Module 3: Windows Desktop Session Integration (HintLens 1:1)
+    // Module 3: Windows Desktop Session Integration (LensDesk 1:1)
     if (typeof nativeWin.isDefaultDesktopActive === "function" && !nativeWin.isDefaultDesktopActive()) {
       throw new Error("[DesktopMonitor] Cannot autotype on non-interactive desktop (UAC prompt or session locked).");
     }
@@ -434,14 +434,14 @@ async function typeWindows(text, options, signal) {
       try { nativeWin.synchronizeFocus(targetHwnd); } catch {}
     }
 
-    // Check if target is fullscreen (HintLens [TypingSim] fullscreen caret nudge)
+    // Check if target is fullscreen (LensDesk [TypingSim] fullscreen caret nudge)
     const isFullscreen = typeof nativeWin.isWindowFullscreen === "function" ? nativeWin.isWindowFullscreen(targetHwnd) : false;
 
     const characters = Array.from(text.replace(/\r\n/g, "\n"));
     for (let index = 0; index < characters.length; index++) {
       canceled(signal);
 
-      // Verify destination target window has not changed every 5 chars (HintLens [TypeSim] 1:1)
+      // Verify destination target window has not changed every 5 chars (LensDesk [TypeSim] 1:1)
       if (index % 5 === 0 || index === 0) {
         const currentHwnd = nativeWin.foregroundWindow();
         if (currentHwnd !== targetHwnd) {
@@ -619,7 +619,7 @@ async function autoType({
         ) {
           throw err;
         }
-        // HintLens Dual-Pipeline Fallback: If hardware keystroke fails in sandboxed/protected editor, transparently paste
+        // LensDesk Dual-Pipeline Fallback: If hardware keystroke fails in sandboxed/protected editor, transparently paste
         await paste(target, signal);
         actualMethod = "clipboard";
       }

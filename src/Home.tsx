@@ -122,9 +122,10 @@ export function Home({ navigate }: HomeProps) {
       variant: "Setup Installer (Recommended)",
       detail: "Windows 10 & 11 · 64-bit EXE",
       artifact: {
+        name: "LensDesk-Setup.exe",
         url: "/downloads/windows",
         version: "2.0.0",
-        size: 1574800,
+        size: 1155422,
       },
     },
     {
@@ -133,6 +134,7 @@ export function Home({ navigate }: HomeProps) {
       variant: "Portable Archive",
       detail: "Windows 10 & 11 · 64-bit ZIP",
       artifact: {
+        name: "LensDesk.zip",
         url: "/downloads/windows",
         version: "2.0.0",
         size: 1574800,
@@ -144,9 +146,10 @@ export function Home({ navigate }: HomeProps) {
       variant: "Apple silicon",
       detail: "M-series Macs (M1/M2/M3/M4) · DMG",
       artifact: {
+        name: "LensDesk.dmg",
         url: "/downloads/mac-arm64",
         version: "2.0.0",
-        size: 142530915,
+        size: 141429129,
       },
     },
     {
@@ -155,9 +158,10 @@ export function Home({ navigate }: HomeProps) {
       variant: "Intel",
       detail: "Intel Macs · DMG",
       artifact: {
+        name: "LensDesk-Intel.dmg",
         url: "/downloads/mac-x64",
         version: "2.0.0",
-        size: 146320739,
+        size: 148147539,
       },
     },
   ];
@@ -186,11 +190,8 @@ export function Home({ navigate }: HomeProps) {
     navigate("workspace");
   }
 
-  const handleDownloadClick = (e: React.MouseEvent) => {
-    if (!signedIn) {
-      e.preventDefault();
-      navigate("account");
-    }
+  const handleDownloadClick = () => {
+    // Direct instant download without blocking
   };
 
   return (
@@ -349,7 +350,7 @@ export function Home({ navigate }: HomeProps) {
                 <a
                   className="site-button site-button-primary"
                   href="/downloads/windows"
-                  download="LensDesk-2.0.0-Windows-x64.zip"
+                  download="LensDesk-Setup.exe"
                   onClick={handleDownloadClick}
                 >
                   <Download size={16} />
@@ -359,7 +360,7 @@ export function Home({ navigate }: HomeProps) {
                   className="site-button site-button-primary"
                   style={{ background: "#1868db", color: "#fff" }}
                   href="/downloads/mac-arm64"
-                  download="LensDesk-2.0.0-macOS-Apple-Silicon-arm64.dmg"
+                  download="LensDesk.dmg"
                   onClick={handleDownloadClick}
                 >
                   <Download size={16} />

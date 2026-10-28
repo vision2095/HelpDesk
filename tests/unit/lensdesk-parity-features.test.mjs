@@ -13,7 +13,7 @@ test("Hardware Binding: getMachineGuid returns a non-empty string identifier", (
   assert.ok(guid.length > 5, "Hardware GUID should be at least 6 characters");
 });
 
-test("HintLens Parity Preferences: validates chatLayout, restrictedNetwork, and localOcr", async () => {
+test("LensDesk Parity Preferences: validates chatLayout, restrictedNetwork, and localOcr", async () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "lensdesk-parity-"));
   try {
     const prefs = await createPreferences(tmpDir);
@@ -23,7 +23,7 @@ test("HintLens Parity Preferences: validates chatLayout, restrictedNetwork, and 
     assert.equal(initial.restrictedNetwork, false);
     assert.equal(initial.localOcr, false);
 
-    // Save customized HintLens parity preferences
+    // Save customized LensDesk parity preferences
     await prefs.save({
       ...initial,
       chatLayout: "minimal",

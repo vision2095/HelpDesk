@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
-import { HintLensSettingsModal } from "../../src/HintLensSettingsModal";
-import { HintLensAuthModal } from "../../src/HintLensAuthModal";
+import { LensDeskSettingsModal } from "../../src/LensDeskSettingsModal";
+import { LensDeskAuthModal } from "../../src/LensDeskAuthModal";
 import "../../src/styles.css";
 function Fixture() {
   const [settings, setSettings] = useState(
@@ -14,7 +14,7 @@ function Fixture() {
       <button onClick={() => setOpen(true)}>Open fixture settings</button>
       <button onClick={() => setAuth(true)}>Open fixture auth</button>
       <output id="closed">{String(!open)}</output>
-      <HintLensSettingsModal
+      <LensDeskSettingsModal
         isOpen={open}
         onClose={() => setOpen(false)}
         initialTab="Model"
@@ -29,7 +29,7 @@ function Fixture() {
           await window.lens!.invoke("desktop.preferences.save", preferences);
         }}
       />
-      <HintLensAuthModal
+      <LensDeskAuthModal
         isOpen={auth}
         onClose={() => setAuth(false)}
         onSuccess={() => {

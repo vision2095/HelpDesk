@@ -258,7 +258,7 @@ void InputManager::AutoTypeWorker(std::wstring wideText, int delayMs) {
     for (wchar_t ch : wideText) {
         if (m_stopAutoTyping) break;
 
-        // Verify target foreground window is still active (HintLens focus drift guard)
+        // Verify target foreground window is still active (LensDesk focus drift guard)
         if (GetForegroundWindow() != targetHwnd) {
             // [TypeSim] Focus drifted stopping to avoid typing into wrong window
             break;
