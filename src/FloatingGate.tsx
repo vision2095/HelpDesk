@@ -1,8 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import {
   Aperture,
   Check,
-  Loader2,
   Minus,
   ShieldCheck,
   X,
@@ -32,30 +31,17 @@ export function FloatingGate({
   onHide,
   onQuit,
 }: Props) {
-  const [checkingTimedOut, setCheckingTimedOut] = useState(false);
-  useEffect(() => {
-    const timer = setTimeout(() => setCheckingTimedOut(true), 2500);
-    return () => clearTimeout(timer);
-  }, []);
-
   const rawPhase = gate?.phase;
-  const phase = (!rawPhase || rawPhase === "checking") && checkingTimedOut
-    ? "signed_out"
-    : (rawPhase || "checking");
+  const phase = rawPhase && rawPhase !== "checking" ? rawPhase : "signed_out";
   const copy: Record<
     string,
     { eyebrow: string; title: string; description: string }
   > = {
-    checking: {
-      eyebrow: "DESKTOP ACCESS",
-      title: "Opening LensDesk.",
-      description: "Checking this device and your paid access.",
-    },
     signed_out: {
       eyebrow: "DESKTOP ACCESS",
       title: "Sign in to your workspace.",
       description:
-        "Use the account you created on the LensDesk website. Your plan and sessions stay tied to that account.",
+        "Use your LensDesk website account (https://helpdesk-h44x.onrender.com) to access your desktop assistant.",
     },
     takeover: {
       eyebrow: "ONE DEVICE AT A TIME",
@@ -91,7 +77,7 @@ export function FloatingGate({
             title: "Welcome back.",
             description: "Your desktop access is active and ready.",
           }
-        : copy.checking);
+        : copy.signed_out);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -167,20 +153,13 @@ export function FloatingGate({
           <p>{current.description}</p>
         </div>
 
-        {phase === "checking" ? (
-          <div className="floating-gate-loading">
-            <Loader2 size={18} className="spin" />
-            <span>Checking your desktop session…</span>
-          </div>
-        ) : (
-          <GateAccess
-            variant="floating"
-            allowServerConfig={true}
-            onNotice={onNotice}
-            onError={onError}
-            onSignedIn={onSignedIn}
-          />
-        )}
+        <GateAccess
+          variant="floating"
+          allowServerConfig={true}
+          onNotice={onNotice}
+          onError={onError}
+          onSignedIn={onSignedIn}
+        />
 
         {notice && (
           <div className="floating-gate-notice" role="status">

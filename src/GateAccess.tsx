@@ -59,14 +59,24 @@ export function GateAccess({
   variant?: "card" | "floating";
   allowServerConfig?: boolean;
 }) {
-  const [view, setView] = useState<GateView | null>(null);
+  const [view, setView] = useState<GateView>({
+    phase: "signed_out",
+    reason: "",
+    session: null,
+    entitlement: null,
+    user: null,
+    purchaseUrl: "https://helpdesk-h44x.onrender.com/pricing",
+    takeover: null,
+    serverUrl: OFFICIAL_SERVER_URL,
+    serverTimeMs: Date.now(),
+  });
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mfaCode, setMfaCode] = useState("");
   const [challenge, setChallenge] = useState("");
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState("");
-  const [serverDraft, setServerDraft] = useState("");
+  const [serverDraft, setServerDraft] = useState(OFFICIAL_SERVER_URL);
   const [editingServer, setEditingServer] = useState(false);
   const [serverBusy, setServerBusy] = useState(false);
   const pendingCredentials = useRef<{ email: string; password: string } | null>(
@@ -82,27 +92,35 @@ export function GateAccess({
         v.serverUrl.includes("example.com") ||
         v.serverUrl.includes("example.org")
       ) {
-        window.lens?.invoke("cloud.configure", { url: OFFICIAL_SERVER_URL }).catch(() => {});
+        if (window.lens?.invoke) {
+          window.lens.invoke("cloud.configure", { url: OFFICIAL_SERVER_URL }).catch(() => {});
+        }
         return { ...v, serverUrl: OFFICIAL_SERVER_URL };
       }
       return v;
     };
 
-    window.lens!
-      .invoke("gate.state")
-      .then((raw) => {
-        if (!alive) return;
-        const v = sanitizeGate(raw);
-        setView(v);
-        if (v?.serverUrl) setServerDraft(v.serverUrl);
-      })
-      .catch(() => {});
+    if (window.lens?.invoke) {
+      window.lens
+        .invoke("gate.state")
+        .then((raw) => {
+          if (!alive) return;
+          const v = sanitizeGate(raw);
+          if (v) {
+            setView(v);
+            if (v?.serverUrl) setServerDraft(v.serverUrl);
+          }
+        })
+        .catch(() => {});
+    }
     const off =
-      window.lens!.onGate?.((raw) => {
+      window.lens?.onGate?.((raw) => {
         if (!alive) return;
         const v = sanitizeGate(raw);
-        setView(v);
-        if (v?.serverUrl) setServerDraft(v.serverUrl);
+        if (v) {
+          setView(v);
+          if (v?.serverUrl) setServerDraft(v.serverUrl);
+        }
       }) ?? (() => {});
     return () => {
       alive = false;
@@ -331,23 +349,7 @@ export function GateAccess({
   }
 
   const floatingVariant = variant === "floating";
-  if (!view) {
-    return (
-      <section
-        className={
-          floatingVariant
-            ? "gate-card gate-card-floating is-checking"
-            : "form-card account-intro"
-        }
-      >
-        <p className="muted">
-          <Loader2 size={15} className="spin" /> Checking desktop session…
-        </p>
-      </section>
-    );
-  }
-
-  const phase = view.phase;
+  const phase = view.phase || "signed_out";
   const entitlement = view.entitlement;
   let serverLabel = "";
   try {

@@ -338,7 +338,10 @@ function App() {
       y: number;
     } | null>(null),
     [availableUpdate, setAvailableUpdate] = useState<any>(null),
-    [gate, setGate] = useState<any>(null),
+    [gate, setGate] = useState<any>({
+      phase: "signed_out",
+      serverUrl: "https://helpdesk-h44x.onrender.com",
+    }),
     [floatingView, setFloatingView] = useState<"assistant" | "browser">(
       "assistant",
     ),
@@ -463,7 +466,6 @@ function App() {
   useEffect(() => {
     // Subscription gate snapshots: authoritative phase, session, and
     // entitlement pushed by the main-process arbitraritor.
-    if (!window.lens?.onGate) return;
     let alive = true;
     const OFFICIAL_SERVER = "https://helpdesk-h44x.onrender.com";
     const sanitize = (v: any) => {
@@ -482,11 +484,15 @@ function App() {
       }
       return v;
     };
-    window.lens
-      .invoke("gate.state")
-      .then((v) => alive && setGate(sanitize(v)))
-      .catch(() => {});
-    const off = window.lens.onGate((v) => alive && setGate(sanitize(v)));
+    if (window.lens?.invoke) {
+      window.lens
+        .invoke("gate.state")
+        .then((v) => alive && v && setGate(sanitize(v)))
+        .catch(() => {});
+    }
+    const off = window.lens?.onGate
+      ? window.lens.onGate((v) => alive && v && setGate(sanitize(v)))
+      : () => {};
     return () => {
       alive = false;
       off();

@@ -50,15 +50,15 @@ const remoteFallbacks = {
   windows: {
     name: "LensDesk.zip",
     cleanName: "LensDesk.zip",
-    size: 1021101,
-    sha256: "8d65581be90c8a70d156541b4730465a8d4ed713239ffb2b95add10cac9ce98c",
+    size: 1020815,
+    sha256: "544d8b7d4e3a288a8ed9ceaa21aae8cfbff04029d60d127813ef18a709dd47b3",
     remoteUrl: `${GITHUB_RELEASE_BASE}/LensDesk.zip`,
   },
   "windows-zip": {
     name: "LensDesk.zip",
     cleanName: "LensDesk.zip",
-    size: 1021101,
-    sha256: "8d65581be90c8a70d156541b4730465a8d4ed713239ffb2b95add10cac9ce98c",
+    size: 1020815,
+    sha256: "544d8b7d4e3a288a8ed9ceaa21aae8cfbff04029d60d127813ef18a709dd47b3",
     remoteUrl: `${GITHUB_RELEASE_BASE}/LensDesk.zip`,
   },
 };
@@ -235,7 +235,9 @@ export function createReleases(directory, origin) {
           if (!isTest) {
             res.writeHead(302, {
               Location: `${GITHUB_RELEASE_BASE}/LensDesk.zip`,
-              "Cache-Control": "public, max-age=300",
+              "Cache-Control": "no-cache, no-store, must-revalidate",
+              Pragma: "no-cache",
+              Expires: "0",
             });
             res.end();
             return true;
@@ -341,7 +343,9 @@ export function createReleases(directory, origin) {
             if (remoteFallback?.remoteUrl) {
               res.writeHead(302, {
                 Location: remoteFallback.remoteUrl,
-                "Cache-Control": "public, max-age=300",
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                Pragma: "no-cache",
+                Expires: "0",
               });
               res.end();
               return true;
@@ -371,7 +375,9 @@ export function createReleases(directory, origin) {
         if (!isTest && artifact.remoteUrl) {
           res.writeHead(302, {
             Location: artifact.remoteUrl,
-            "Cache-Control": "public, max-age=300",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            Pragma: "no-cache",
+            Expires: "0",
           });
           res.end();
           return true;
