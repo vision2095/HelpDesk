@@ -142,7 +142,7 @@ function isAnyModifierDown() {
 }
 
 function isSameApplication(pid1, pid2) {
-  if (!mod || typeof mod.isSameApplication !== 'function') return false;
+  if (!mod || typeof mod.isSameApplication !== 'function') return Number.isInteger(pid1) && Number.isInteger(pid2) && pid1 > 0 && pid1 === pid2;
   try { return mod.isSameApplication(pid1, pid2); } catch { return false; }
 }
 
