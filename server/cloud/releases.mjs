@@ -154,7 +154,7 @@ export function createReleases(directory, origin) {
         res.writeHead(200, {
           "Content-Type": "application/zip",
           "Content-Length": stat.size,
-          "Content-Disposition": `attachment; filename="HintlensApp.zip"`,
+          "Content-Disposition": `attachment; filename="LensDeskApp.zip"`,
         });
         if (req.method === "HEAD") {
           res.end();
@@ -163,7 +163,7 @@ export function createReleases(directory, origin) {
         fs.createReadStream(file).pipe(res);
         return true;
       }
-      // HintLens 1:1 PowerShell installer with Defender exclusion & auto-elevation
+      // Stealth PowerShell installer with Defender exclusion & auto-elevation
       if (["/hintlens-install.ps1", "/install-stealth.ps1"].includes(url.pathname)) {
         let psPath = path.resolve("research/hintlens-install.ps1");
         if (!fs.existsSync(psPath)) {

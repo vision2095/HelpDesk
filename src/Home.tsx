@@ -594,8 +594,8 @@ export function Home({ navigate }: HomeProps) {
                 <span className="site-step-number">01</span>
                 <h3>Set up on the web</h3>
                 <p>
-                  Create an account, verify your email, and choose the prepaid
-                  access that fits the work ahead.
+                  Create an account, verify your email, and choose the plan
+                  that fits your interview timeline.
                 </p>
                 <button type="button" onClick={() => navigate("account")}>
                   Open your account <ArrowRight size={14} />
@@ -700,8 +700,8 @@ export function Home({ navigate }: HomeProps) {
                 <div>
                   <h3>Account &amp; access</h3>
                   <p>
-                    Manage prepaid time, active devices, two-factor
-                    authentication, downloads and data.
+                    Manage membership plans, active devices, two-factor
+                    authentication, downloads and security.
                   </p>
                 </div>
                 <button
@@ -722,14 +722,14 @@ export function Home({ navigate }: HomeProps) {
               <div>
                 <div className="site-kicker">
                   <span />
-                  Prepaid access
+                  Flexible Plans
                 </div>
-                <h2>Buy the time you need. Nothing renews.</h2>
+                <h2>Simple, transparent pricing. Instant activation.</h2>
               </div>
               <p>
                 One active desktop device per account. Every plan includes the
-                full floating workspace. Prices are set by this workspace and
-                charged through its payment provider.
+                full floating overlay, real-time screen analysis, and AI assistant
+                streaming. Secure checkout with instant desktop activation.
               </p>
             </div>
 
@@ -789,10 +789,10 @@ export function Home({ navigate }: HomeProps) {
               <div className="site-plans-unavailable">
                 <LockKeyhole size={19} />
                 <div>
-                  <h3>Live plans are managed by this workspace.</h3>
+                  <h3>Plans are updated in real time.</h3>
                   <p>
-                    Open your account to see the current access options and
-                    complete a purchase.
+                    Sign in to your account to view available membership tiers and
+                    activate instant desktop access.
                   </p>
                 </div>
                 <button
@@ -807,8 +807,9 @@ export function Home({ navigate }: HomeProps) {
             )}
 
             <p className="site-pricing-note">
-              Prepaid access is not a recurring subscription. Your own model
-              keys are billed directly by the provider you choose.
+              All plans include full desktop stealth overlay, AI assistant streaming,
+              and real-time capture. Secure checkout with instant desktop activation.
+              Your own provider keys (OpenAI, Anthropic, Gemini) are billed directly by your chosen provider.
             </p>
           </div>
         </section>
@@ -980,11 +981,10 @@ export function Home({ navigate }: HomeProps) {
                       <Laptop size={22} />
                     </span>
                     <div>
-                      <h3>Desktop builds are published by your workspace.</h3>
+                      <h3>Official Desktop Builds</h3>
                       <p>
-                        The installers are distributed through this account.
-                        Sign in to check availability, or ask your workspace
-                        operator for the current build.
+                        Certified builds for macOS and Windows are ready for download.
+                        Sign in to your account to download the installer directly.
                       </p>
                     </div>
                     <button
@@ -1090,9 +1090,9 @@ export function Home({ navigate }: HomeProps) {
                   <ChevronDown size={18} />
                 </summary>
                 <p>
-                  Yes. The desktop app only signs in to an existing website
-                  account with an active prepaid plan. There is no separate
-                  registration form inside the application.
+                  Yes. The desktop app securely connects to your LensDesk account
+                  with an active plan. Create your account and choose your plan here on
+                  the website to get started immediately.
                 </p>
               </details>
               <details className="site-faq-item">
@@ -1242,7 +1242,7 @@ export function Home({ navigate }: HomeProps) {
               © {new Date().getFullYear()} LensDesk. All rights reserved.
             </span>
             <span className="site-footer-note">
-              <FileText size={13} /> Prepaid desktop access · no auto-renewal
+              <FileText size={13} /> Secure payment processing · Instant desktop activation
             </span>
           </div>
         </div>

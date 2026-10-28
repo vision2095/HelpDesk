@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from "react";
 import {
   Download,
-  Monitor,
   Terminal,
   Copy,
   Check,
   ShieldCheck,
   Laptop,
+  Sparkles,
 } from "lucide-react";
 import { PageNav } from "./PageNav";
 import { cloud } from "./cloud";
@@ -89,14 +89,20 @@ export function HintLensDownloadsSection({
   };
 
   return (
-    <div className="content-page hl-downloads-page">
+    <div className="hl-downloads-page">
       <PageNav current="downloads" onNavigate={onNavigate} isDesktop={isDesktop} />
 
-      <div className="hl-downloads-header">
-        <h1 className="hl-downloads-title">Downloads</h1>
-        <p className="hl-downloads-subtitle">
-          Get the Hintlens desktop overlay and connect it to your account.
-        </p>
+      <div className="page-heading">
+        <div>
+          <div className="site-kicker">
+            <span />
+            OFFICIAL DESKTOP CLIENTS
+          </div>
+          <h1>One window. Wherever you work<span>.</span></h1>
+          <p>
+            Get the official LensDesk desktop application for macOS and Windows, featuring hardware-accelerated stealth overlay and instant activation.
+          </p>
+        </div>
       </div>
 
       {!currentUser && (
@@ -104,10 +110,10 @@ export function HintLensDownloadsSection({
           className="hl-auth-required-banner"
           style={{
             padding: "1rem 1.25rem",
-            marginBottom: "1.5rem",
-            background: "rgba(234, 179, 8, 0.12)",
-            border: "1px solid rgba(234, 179, 8, 0.35)",
-            borderRadius: "10px",
+            marginBottom: "1.75rem",
+            background: "rgba(216, 245, 107, 0.08)",
+            border: "1px solid rgba(216, 245, 107, 0.25)",
+            borderRadius: "12px",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -116,12 +122,12 @@ export function HintLensDownloadsSection({
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <ShieldCheck size={22} style={{ color: "#eab308", flexShrink: 0 }} />
+            <ShieldCheck size={22} style={{ color: "var(--site-accent, #d8f56b)", flexShrink: 0 }} />
             <div>
-              <strong style={{ color: "#fef08a", fontSize: "0.95rem" }}>
+              <strong style={{ color: "var(--site-paper, #f0f4e9)", fontSize: "0.95rem" }}>
                 Account Required to Download
               </strong>
-              <p style={{ margin: "3px 0 0", color: "#fef9c3", fontSize: "0.85rem" }}>
+              <p style={{ margin: "3px 0 0", color: "var(--site-dark-muted, #a5b09f)", fontSize: "0.85rem" }}>
                 Please create an account or sign in before downloading the desktop application.
               </p>
             </div>
@@ -129,7 +135,7 @@ export function HintLensDownloadsSection({
           <button
             type="button"
             className="hl-btn-download-primary"
-            style={{ padding: "0.5rem 1.1rem", fontSize: "0.85rem", whiteSpace: "nowrap" }}
+            style={{ padding: "0.55rem 1.2rem", fontSize: "0.85rem", whiteSpace: "nowrap" }}
             onClick={() => onNavigate("account")}
           >
             Create Account / Sign In
@@ -145,7 +151,7 @@ export function HintLensDownloadsSection({
           </div>
           <div className="hl-card-title-group">
             <h3>Manual Download (Windows)</h3>
-            <p>Native stealth overlay (64-bit).</p>
+            <p>Native stealth overlay (64-bit EXE / ZIP archive).</p>
           </div>
         </div>
 
@@ -153,7 +159,7 @@ export function HintLensDownloadsSection({
           <a
             href="/api/v1/download/windows"
             className="hl-btn-download-primary"
-            download="HintlensApp.zip"
+            download="LensDeskApp.zip"
             onClick={handleDownloadClick}
           >
             <Download size={16} />
@@ -163,7 +169,7 @@ export function HintLensDownloadsSection({
         </div>
 
         <p className="hl-card-note">
-          Windows 11, Windows 10 version 2004 or later is supported.
+          Windows 11 and Windows 10 version 2004 or later supported with native stealth capture exclusion.
         </p>
       </div>
 
@@ -205,41 +211,49 @@ export function HintLensDownloadsSection({
           macOS 12 Monterey or later supported with native stealth capture exclusion.
         </p>
 
-        <div className="hl-gatekeeper-helper" style={{ marginTop: "1rem", padding: "0.75rem 1rem", background: "rgba(255, 255, 255, 0.04)", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.1)" }}>
+        <div
+          className="hl-gatekeeper-helper"
+          style={{
+            marginTop: "1.25rem",
+            padding: "0.85rem 1.1rem",
+            background: "rgba(255, 255, 255, 0.03)",
+            borderRadius: "10px",
+            border: "1px solid rgba(255, 255, 255, 0.08)",
+          }}
+        >
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.4rem" }}>
-            <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "#93c5fd" }}>
-              macOS Gatekeeper Fix (If &ldquo;App is damaged / cannot open&rdquo;):
+            <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--site-accent, #d8f56b)" }}>
+              macOS Gatekeeper Verification (If &ldquo;App is damaged / cannot open&rdquo;):
             </span>
             <button
               type="button"
               className={`hl-copy-action-btn ${copiedGk ? "is-copied" : ""}`}
               onClick={() => copyText(gkCommand, "gk")}
-              style={{ fontSize: "0.75rem", padding: "0.2rem 0.6rem" }}
+              style={{ fontSize: "0.75rem", padding: "0.25rem 0.65rem" }}
             >
               {copiedGk ? <Check size={12} /> : <Copy size={12} />}
               {copiedGk ? "Copied!" : "Copy Command"}
             </button>
           </div>
-          <code style={{ display: "block", fontSize: "0.8rem", color: "#e2e8f0", background: "rgba(0,0,0,0.3)", padding: "0.4rem 0.6rem", borderRadius: "4px" }}>
+          <code style={{ display: "block", fontSize: "0.82rem", color: "#e2e8f0", background: "#090c0a", padding: "0.5rem 0.75rem", borderRadius: "6px" }}>
             {gkCommand}
           </code>
-          <p style={{ margin: "0.4rem 0 0", fontSize: "0.75rem", color: "#94a3b8" }}>
+          <p style={{ margin: "0.4rem 0 0", fontSize: "0.78rem", color: "var(--site-dark-muted, #9aa698)" }}>
             Open Terminal, paste this command, and press Enter to clear the browser download quarantine.
           </p>
         </div>
       </div>
 
-      {/* 3. Quick Install via PowerShell (Windows - EXACTLY LIKE HINTLENS) */}
+      {/* 3. Quick Install via PowerShell (Windows) */}
       <div className="hl-download-card">
         <div className="hl-card-header">
           <div className="hl-card-icon-box">
             <Terminal size={22} />
           </div>
           <div className="hl-card-title-group">
-            <h3>Quick Install via PowerShell (Recommended)</h3>
+            <h3>Quick Install via PowerShell (Windows - Recommended)</h3>
             <p>
-              Get HintLens running in under 10 seconds. No downloads page, no browser
-              warnings - just one command.
+              Get LensDesk running in under 10 seconds. No manual extraction, no browser warnings &mdash; just one command.
             </p>
           </div>
         </div>
@@ -248,12 +262,12 @@ export function HintLensDownloadsSection({
           <div className="hl-step-row">
             <div className="hl-step-num">1</div>
             <div className="hl-step-details">
-              <h4 className="hl-step-heading">Open Command Prompt</h4>
+              <h4 className="hl-step-heading">Open Command Prompt or PowerShell</h4>
               <p className="hl-step-desc">
                 Press <span className="hl-kbd-pill">Win</span> +{" "}
                 <span className="hl-kbd-pill">R</span>, type{" "}
-                <span className="hl-kbd-pill">cmd</span>, and hit Enter. Or search
-                for &ldquo;Command Prompt&rdquo; or powershell in the Start menu.
+                <span className="hl-kbd-pill">powershell</span>, and hit Enter. Or search
+                for &ldquo;PowerShell&rdquo; in the Start menu.
               </p>
             </div>
           </div>
@@ -263,8 +277,7 @@ export function HintLensDownloadsSection({
             <div className="hl-step-details">
               <h4 className="hl-step-heading">Paste the Command</h4>
               <p className="hl-step-desc">
-                Copy the command below and paste it into your Command Prompt window.
-                Right-click to paste.
+                Copy the command below and paste it into your PowerShell window. Right-click to paste:
               </p>
               <div className="hl-code-terminal">
                 <code>{psCommand}</code>
@@ -287,7 +300,7 @@ export function HintLensDownloadsSection({
               <h4 className="hl-step-heading">Press Enter &amp; Done!</h4>
               <p className="hl-step-desc">
                 Hit Enter. The installer will automatically download, extract, and
-                set up Hintlens on your Desktop. A folder named Hintlens-Software
+                set up LensDesk on your Desktop. A folder named LensDesk
                 will appear when it&apos;s done.
               </p>
             </div>
@@ -356,36 +369,6 @@ export function HintLensDownloadsSection({
               </p>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* 5. macOS Gatekeeper Note */}
-      <div className="hl-download-card" style={{ borderColor: "rgba(245, 158, 11, 0.3)" }}>
-        <div className="hl-card-header">
-          <div className="hl-card-icon-box" style={{ color: "#f59e0b" }}>
-            <ShieldCheck size={22} />
-          </div>
-          <div className="hl-card-title-group">
-            <h3 style={{ color: "#d97706" }}>macOS Gatekeeper Fix</h3>
-            <p>
-              If macOS ever displays &ldquo;LensDesk is damaged and can&apos;t be
-              opened&rdquo; or blocks it on first download, run this command in
-              Terminal:
-            </p>
-          </div>
-        </div>
-
-        <div className="hl-code-terminal">
-          <code>{gkCommand}</code>
-          <button
-            type="button"
-            className={`hl-copy-action-btn ${copiedGk ? "is-copied" : ""}`}
-            onClick={() => copyText(gkCommand, "gk")}
-            aria-label="Copy Gatekeeper command"
-          >
-            {copiedGk ? <Check size={14} /> : <Copy size={14} />}
-            {copiedGk ? "Copied!" : "Copy"}
-          </button>
         </div>
       </div>
     </div>

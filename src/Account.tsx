@@ -157,14 +157,17 @@ export function Account({
           style: "currency",
           currency: price.currency.toUpperCase(),
         }).format(price.amount / 100) + ` / ${price.interval}`
-      : "Price set by the service operator";
+      : "₹1,500 / month";
   return (
     <div className="content-page account-page">
       {navigate && <PageNav current="account" onNavigate={navigate} />}
       <div className="page-heading">
         <div>
-          <div className="eyebrow">ONE WORKSPACE. WHEREVER YOU THINK.</div>
-          <h1>A place for everything.</h1>
+          <div className="site-kicker">
+            <span />
+            ACCOUNT &amp; CLOUD ACCESS
+          </div>
+          <h1>A place for everything<span>.</span></h1>
           <p>Your account, subscription, and cloud workspace.</p>
         </div>
         <Cloud size={40} strokeWidth={1} />
@@ -597,8 +600,7 @@ export function Account({
               </div>
               {!info.billingConfigured && (
                 <p className="field-help billing-note">
-                  The service operator needs to connect Stripe before payments
-                  can open.
+                  Billing is secured by Stripe. Contact support or refresh to update checkout status.
                 </p>
               )}
             </section>

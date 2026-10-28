@@ -463,7 +463,7 @@ export function GateAccess({
                   </button>
                   {view.serverUrl && (
                     <p className="field-help">
-                      Use the HTTPS address provided by your LensDesk operator.
+                      Use the HTTPS address provided by your LensDesk administrator.
                     </p>
                   )}
                 </form>

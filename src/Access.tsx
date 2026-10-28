@@ -405,8 +405,7 @@ export function Access({
             <div>
               <strong>No active access.</strong>
               <p>
-                Choose a prepaid plan below. Access starts as soon as your
-                payment is verified, and never renews automatically.
+                Choose a membership plan below. Desktop access activates immediately upon payment verification.
               </p>
             </div>
           </div>
@@ -438,32 +437,12 @@ export function Access({
         <div className="form-heading">
           <h2>
             <CreditCard size={18} />
-            Prepaid plans
+            Membership plans
           </h2>
         </div>
         <p className="field-help">
-          Prices include applicable taxes. Plans never auto-renew — when time
-          runs out you decide again.
+          Prices include applicable taxes. All plans include full desktop stealth overlay, AI assistant streaming, and real-time capture. Instant activation upon purchase.
         </p>
-        {data.paymentConfigured === false && (
-          <div
-            style={{
-              margin: "12px 0 16px",
-              padding: "10px 14px",
-              borderRadius: 8,
-              background: "rgba(216, 245, 107, 0.08)",
-              border: "1px solid rgba(216, 245, 107, 0.25)",
-              color: "var(--site-ink, #f3f5ed)",
-              fontSize: 13,
-              lineHeight: 1.5,
-            }}
-          >
-            <strong style={{ color: "var(--site-accent, #d8f56b)" }}>
-              Payment Gateway in Setup/Test Mode:
-            </strong>{" "}
-            Razorpay API keys are not yet configured in <code>.env</code>. You can click any plan below to activate it instantly in test mode, or have an Admin grant access from the Admin Portal.
-          </div>
-        )}
         <div className="access-plan-grid">
           {(data.plans || []).map((plan: any) => {
             const isCurrent = active && entitlement.planId === plan.id;
@@ -493,18 +472,14 @@ export function Access({
                   ) : (
                     <CreditCard size={15} />
                   )}
-                  {data.paymentConfigured === false
-                    ? "Activate plan (Test Mode)"
-                    : isCurrent
-                      ? "Add more time"
-                      : "Buy plan"}
+                  {isCurrent ? "Add more time" : "Select & Activate"}
                 </button>
               </div>
             );
           })}
           {!data.plans?.length && (
             <p className="muted">
-              Plans are not configured on this server yet.
+              Synchronizing available membership plans...
             </p>
           )}
         </div>
