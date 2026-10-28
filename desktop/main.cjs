@@ -794,6 +794,12 @@ app.whenReady().then(async () => {
       directory,
       encrypt,
       decrypt,
+      defaultUrl:
+        process.env.LENSDESK_SERVER_URL ||
+        process.env.PUBLIC_URL ||
+        (app.isPackaged || process.env.NODE_ENV === "production"
+          ? "https://helpdesk-h44x.onrender.com"
+          : "http://127.0.0.1:4319"),
     });
     service = createService({
       directory,

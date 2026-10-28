@@ -166,13 +166,13 @@ kbd {
   border-radius: 11px;
   width: 36px;
   height: 36px;
-  background: var(--blue);
-  color: #fff;
+  background: #10b981;
+  color: #0d110d;
   margin-right: 10px;
-  box-shadow: 0 3px 8px #3262d820;
+  box-shadow: 0 3px 8px rgba(16, 185, 129, 0.25);
 }
 .brand-dot {
-  color: var(--blue);
+  color: #10b981;
 }
 .workspace-label,
 .recent-heading {
@@ -4501,10 +4501,14 @@ kbd {
   background: var(--panel);
 }
 :root[data-theme="dark"] .button.primary,
-:root[data-theme="dark"] .new-session,
+:root[data-theme="dark"] .new-session {
+  background: #10b981;
+  color: #0d110d;
+}
 :root[data-theme="dark"] .brand-mark {
-  background: #375fbd;
-  color: #fff;
+  background: #d8f56b;
+  color: #0d110d;
+  box-shadow: 0 0 16px rgba(216, 245, 107, 0.35);
 }
 :root[data-theme="dark"] input,
 :root[data-theme="dark"] textarea,
@@ -4583,8 +4587,8 @@ kbd {
   overflow: hidden;
 }
 .browser-address-container:focus-within {
-  border-color: var(--accent, #3262d8);
-  box-shadow: 0 0 0 2px rgba(50, 98, 216, 0.2);
+  border-color: #10b981;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
 }
 .browser-address-badge {
   display: flex;

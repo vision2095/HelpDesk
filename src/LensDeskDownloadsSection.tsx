@@ -60,9 +60,9 @@ export function LensDeskDownloadsSection({
   };
 
   const origin =
-    typeof window !== "undefined" && window.location.origin
+    typeof window !== "undefined" && window.location.origin && !window.location.origin.includes("file:")
       ? window.location.origin
-      : "http://localhost:4319";
+      : "https://helpdesk-h44x.onrender.com";
 
   const psCommand = `powershell -Command "irm ${origin}/lensdesk-install.ps1 | iex"`;
   const shCommand = `curl -fsSL ${origin}/install.sh | bash`;

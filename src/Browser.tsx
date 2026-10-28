@@ -228,11 +228,17 @@ export function WorkspaceBrowser({
               height="14"
               aria-hidden="true"
             >
-              <rect width="1024" height="1024" rx="228" fill="#3262d8" />
+              <defs>
+                <linearGradient id="browser-address-logo-green" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#d8f56b" />
+                  <stop offset="100%" stopColor="#10b981" />
+                </linearGradient>
+              </defs>
+              <rect width="1024" height="1024" rx="228" fill="url(#browser-address-logo-green)" />
               <g
                 transform="translate(512 512)"
                 fill="none"
-                stroke="#fff"
+                stroke="#0d110d"
                 strokeWidth="50"
                 strokeLinecap="round"
                 strokeLinejoin="round"

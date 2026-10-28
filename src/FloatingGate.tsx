@@ -166,6 +166,7 @@ export function FloatingGate({
         ) : (
           <GateAccess
             variant="floating"
+            allowServerConfig={true}
             onNotice={onNotice}
             onError={onError}
             onSignedIn={onSignedIn}

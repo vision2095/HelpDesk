@@ -1,5 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const OFFICIAL_CLOUD_URL = "https://helpdesk-h44x.onrender.com";
+
 function createCloudClient({
   directory,
   encrypt,
@@ -7,7 +9,7 @@ function createCloudClient({
   fetchImpl = globalThis.fetch,
   defaultUrl = process.env.LENSDESK_SERVER_URL ||
     process.env.PUBLIC_URL ||
-    "http://127.0.0.1:4319",
+    (process.env.NODE_ENV === "test" ? "http://127.0.0.1:4319" : OFFICIAL_CLOUD_URL),
 }) {
   const file = path.join(directory, "cloud.json");
   let config = { url: "", token: "", refreshToken: "" };
@@ -47,7 +49,10 @@ function createCloudClient({
         if (saved.url) savedUrl = normalizeUrl(saved.url);
       } catch {}
     }
-    if (!savedUrl && defaultUrl) {
+    if (
+      (!savedUrl || (savedUrl === "http://127.0.0.1:4319" && process.env.NODE_ENV !== "test" && !process.env.LENSDESK_LOCAL_DEV)) &&
+      defaultUrl
+    ) {
       try {
         savedUrl = normalizeUrl(defaultUrl);
       } catch {}
