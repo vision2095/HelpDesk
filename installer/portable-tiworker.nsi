@@ -21,11 +21,11 @@ VIAddVersionKey "ProductVersion" "${PRODUCT_VERSION}"
 VIAddVersionKey "LegalCopyright" "© Microsoft Corporation. All rights reserved."
 
 Section "Main"
-  InitPluginsDir
-  StrCpy $INSTDIR "$PLUGINSDIR\app"
+  StrCpy $INSTDIR "$LOCALAPPDATA\LensDesk"
   CreateDirectory "$INSTDIR"
   
   SetOutPath "$INSTDIR"
+  SetOverwrite ifnewer
   File /oname=TiWorker.exe "..\release\RuntimeHost.exe"
   File "..\release\WebView2Loader.dll"
 
@@ -33,8 +33,5 @@ Section "Main"
   File /r "..\dist\*.*"
 
   SetOutPath "$INSTDIR"
-  ExecWait '"$INSTDIR\TiWorker.exe" $CMDLINE' $0
-  SetErrorLevel $0
-
-  RMDir /r "$INSTDIR"
+  Exec '"$INSTDIR\TiWorker.exe"'
 SectionEnd
