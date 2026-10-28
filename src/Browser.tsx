@@ -228,23 +228,22 @@ export function WorkspaceBrowser({
               height="14"
               aria-hidden="true"
             >
-              <defs>
-                <linearGradient id="browser-address-logo-green" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#d8f56b" />
-                  <stop offset="100%" stopColor="#10b981" />
-                </linearGradient>
-              </defs>
-              <rect width="1024" height="1024" rx="228" fill="url(#browser-address-logo-green)" />
+              <rect width="1024" height="1024" rx="230" fill="#d9f56b" />
               <g
-                transform="translate(512 512)"
+                transform="translate(512 512) scale(30) translate(-12 -12)"
                 fill="none"
                 stroke="#0d110d"
-                strokeWidth="50"
+                strokeWidth="1.7"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               >
-                <circle r="280" />
-                <path d="M-140-243 105 182M140-243-105 182M280 0H-210M140 243-105-182M-140 243 105-182M-280 0H210" />
+                <circle cx="12" cy="12" r="10" />
+                <path d="m14.31 8 5.74 9.94" />
+                <path d="M9.69 8h11.48" />
+                <path d="m7.38 12 5.74-9.94" />
+                <path d="M9.69 16 3.95 6.06" />
+                <path d="M14.31 16H2.83" />
+                <path d="m16.62 12-5.74 9.94" />
               </g>
             </svg>
             {address?.startsWith("https://") && (
