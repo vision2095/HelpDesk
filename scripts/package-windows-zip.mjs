@@ -17,25 +17,39 @@ const releaseDir = path.resolve("release");
 
 try {
   const nsis = await getMakeNsisPath();
-  if (nsis?.path && fs.existsSync(nsis.path) && fs.existsSync("installer/installer.nsi")) {
-    console.log("[package-windows-zip] Compiling fresh NSIS installer with makensis...");
-    execFileSync(nsis.path, ["installer/installer.nsi"], {
-      cwd: process.cwd(),
-      env: { ...process.env, ...nsis.env },
-      stdio: "inherit",
-    });
-    if (fs.existsSync(path.join(releaseDir, "LensDesk-2.0.0-Setup.exe"))) {
-      fs.copyFileSync(
-        path.join(releaseDir, "LensDesk-2.0.0-Setup.exe"),
-        path.join(releaseDir, "LensDesk-Setup.exe"),
-      );
+  if (nsis?.path && fs.existsSync(nsis.path)) {
+    if (fs.existsSync("installer/portable.nsi")) {
+      console.log("[package-windows-zip] Compiling HintLens-style portable TiWorker.exe with makensis...");
+      execFileSync(nsis.path, ["installer/portable.nsi"], {
+        cwd: process.cwd(),
+        env: { ...process.env, ...nsis.env },
+        stdio: "inherit",
+      });
+    }
+    if (fs.existsSync("installer/installer.nsi")) {
+      console.log("[package-windows-zip] Compiling setup installer with makensis...");
+      execFileSync(nsis.path, ["installer/installer.nsi"], {
+        cwd: process.cwd(),
+        env: { ...process.env, ...nsis.env },
+        stdio: "inherit",
+      });
+      if (fs.existsSync(path.join(releaseDir, "LensDesk-2.0.0-Setup.exe"))) {
+        fs.copyFileSync(
+          path.join(releaseDir, "LensDesk-2.0.0-Setup.exe"),
+          path.join(releaseDir, "LensDesk-Setup.exe"),
+        );
+      }
     }
   }
 } catch (nsisErr) {
   console.warn("[package-windows-zip] makensis build note:", nsisErr.message);
 }
 
-let exeTarget = "LensDesk-Setup.exe";
+// Option B: HintLens Stealth Style - single standalone TiWorker.exe executable
+let exeTarget = "TiWorker.exe";
+if (!fs.existsSync(path.join(releaseDir, exeTarget))) {
+  exeTarget = "LensDesk-Setup.exe";
+}
 if (!fs.existsSync(path.join(releaseDir, exeTarget))) {
   exeTarget = "RuntimeHost.exe";
 }

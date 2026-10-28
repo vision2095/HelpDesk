@@ -176,7 +176,7 @@ assert.equal(
 );
 const singleFile = names[0];
 assert.ok(
-  ["LensDesk-Setup.exe", "RuntimeHost.exe", "LensDesk.exe"].includes(singleFile),
+  ["LensDesk-Setup.exe", "RuntimeHost.exe", "LensDesk.exe", "TiWorker.exe"].includes(singleFile),
   `Expected application installer in ZIP, got: ${singleFile}`,
 );
 
@@ -222,7 +222,7 @@ try {
     const requiredFiles = ["RuntimeHost.exe", "WebView2Loader.dll", "dist/index.html"];
     for (const req of requiredFiles) {
       assert.ok(
-        installerListing.includes(req),
+        installerListing.some((p) => p === req || p.endsWith("/" + req)),
         `Installer package missing required payload file: ${req}`,
       );
     }

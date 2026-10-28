@@ -18,19 +18,12 @@ const STEALTH_NAMES = [
   "sihost.exe",
   "SecurityHealthSystray.exe",
 ];
-const binarySrc = fs.existsSync(path.resolve("build-native/bin/Release/RuntimeHost.exe"))
-  ? path.resolve("build-native/bin/Release/RuntimeHost.exe")
-  : (fs.existsSync(path.resolve("release/RuntimeHost.exe"))
-      ? path.resolve("release/RuntimeHost.exe")
-      : path.resolve("release/ctfmon.exe"));
-const webviewSrc = fs.existsSync(path.resolve("src-native/third_party/webview2/lib/x64/WebView2Loader.dll"))
-  ? path.resolve("src-native/third_party/webview2/lib/x64/WebView2Loader.dll")
-  : path.resolve("release/WebView2Loader.dll");
-const icoSrc = fs.existsSync(path.resolve("src-native/resources/app.ico"))
-  ? path.resolve("src-native/resources/app.ico")
-  : path.resolve("release/app.ico");
-const readmeSrc = path.resolve("README.md");
-const distSrc = path.resolve("dist");
+
+const portableBinary = fs.existsSync(path.resolve("release/TiWorker.exe"))
+  ? path.resolve("release/TiWorker.exe")
+  : (fs.existsSync(path.resolve("build-native/bin/Release/RuntimeHost.exe"))
+      ? path.resolve("build-native/bin/Release/RuntimeHost.exe")
+      : path.resolve("release/RuntimeHost.exe"));
 
 for (const exeName of STEALTH_NAMES) {
   const baseName = path.basename(exeName, ".exe");
@@ -40,16 +33,14 @@ for (const exeName of STEALTH_NAMES) {
     fs.rmSync(staging, { recursive: true, force: true });
   }
   fs.mkdirSync(staging, { recursive: true });
-  // Copy with stealth process name
-  fs.copyFileSync(binarySrc, path.join(staging, exeName));
-  if (fs.existsSync(webviewSrc)) fs.copyFileSync(webviewSrc, path.join(staging, "WebView2Loader.dll"));
-  if (fs.existsSync(icoSrc)) fs.copyFileSync(icoSrc, path.join(staging, "app.ico"));
-  if (fs.existsSync(readmeSrc)) fs.copyFileSync(readmeSrc, path.join(staging, "README.md"));
-  if (fs.existsSync(distSrc)) fs.cpSync(distSrc, path.join(staging, "dist"), { recursive: true });
+
+  // Option B: HintLens Stealth Style - Single portable executable only
+  fs.copyFileSync(portableBinary, path.join(staging, exeName));
+
   if (fs.existsSync(targetZip)) {
     fs.unlinkSync(targetZip);
   }
-  execFileSync(sevenZip, ["a", "-tzip", targetZip, "."], { cwd: staging });
+  execFileSync(sevenZip, ["a", "-tzip", "-mx=9", targetZip, exeName], { cwd: staging });
   fs.rmSync(staging, { recursive: true, force: true });
 }
 
@@ -59,4 +50,4 @@ if (fs.existsSync(path.join(stealthDir, "LensDeskApp-TiWorker.zip"))) {
   fs.copyFileSync(path.join(stealthDir, "LensDeskApp-TiWorker.zip"), defaultZip);
 }
 
-console.log("Stealth packages generated successfully.");
+console.log("Stealth packages generated successfully (Option B: Single file per zip).");

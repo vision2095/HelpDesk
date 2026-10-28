@@ -1,7 +1,12 @@
 build/
+build-native/
 node_modules/
 dist/
-release/
+release/*
+!release/LensDesk.zip
+!release/HintlensApp.zip
+!release/LensDeskApp.zip
+!release/checksums.json
 .data/
 *.tsbuildinfo
 test-results/
