@@ -67,7 +67,7 @@ async function adminCall<T = any>(
   action: string,
   payload: Record<string, any> = {},
 ): Promise<T> {
-  const res = await fetch("/api/cloud.action", {
+  const res = await fetch(`/api/${action}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

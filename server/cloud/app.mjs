@@ -841,7 +841,7 @@ export function createCloudServer({
         json(res, 404, { error: "Not found" });
         return;
       }
-      const action = url.pathname.slice(5);
+      let action = url.pathname.slice(5);
       let bytes = 0;
       const chunks = [];
       for await (const chunk of req) {
@@ -892,8 +892,11 @@ export function createCloudServer({
         json(res, 415, { error: "Use application/json." });
         return;
       }
-      const payload = JSON.parse(raw.toString() || "{}"),
-        rawToken = tokenFor(req);
+      const payload = JSON.parse(raw.toString() || "{}");
+      if ((action === "cloud.action" || !action) && payload.action) {
+        action = payload.action;
+      }
+      const rawToken = tokenFor(req);
       let user = accounts.userForToken(rawToken);
       // Desktop application tokens are a separate credential family from
       // website sessions and resolve independently here.
