@@ -3,6 +3,9 @@
 
 namespace LensDesk {
 
+class DCompEngine;
+class FocusManager;
+
 struct BrowserTab {
     std::string id;
     std::string url;
@@ -38,7 +41,13 @@ public:
     BrowserTabsManager();
     ~BrowserTabsManager();
 
-    bool Initialize(HWND hwnd, ICoreWebView2Environment* env, IDCompositionVisual* browserVisual);
+    bool Initialize(
+        HWND hwnd,
+        ICoreWebView2Environment* env,
+        IDCompositionVisual* browserVisual,
+        DCompEngine* dcompEngine = nullptr,
+        FocusManager* focusMgr = nullptr
+    );
     void Shutdown();
 
     std::string CreateTab(const std::string& initialUrl);
@@ -60,6 +69,7 @@ public:
 
     void SetZoom(const std::string& id, float factor);
     void ClearData();
+    bool PasteBundle(const json& images, const std::string& note);
 
     json GetStateSnapshot() const;
     std::string GetActiveTabId() const { return m_activeTabId; }
@@ -89,6 +99,8 @@ private:
     void UpdateDownload(const std::string& id);
 
     HWND m_hwnd = nullptr;
+    DCompEngine* m_dcompEngine = nullptr;
+    FocusManager* m_focusMgr = nullptr;
     ComPtr<ICoreWebView2Environment> m_env;
     ComPtr<IDCompositionVisual> m_browserVisual;
     ComPtr<ICoreWebView2Controller> m_controller;

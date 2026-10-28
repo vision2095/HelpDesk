@@ -100,7 +100,8 @@ std::string CloudClient::DecryptSecret(const std::string& encoded) const {
 
 void CloudClient::Load() {
     const char* env = std::getenv("LENSDESK_SERVER_URL");
-    m_serverUrl = env && *env ? env : "http://127.0.0.1:4319";
+    const std::string defaultServer = "https://helpdesk-h44x.onrender.com";
+    m_serverUrl = env && *env ? env : defaultServer;
     m_phase = "signed_out";
     m_reason.clear();
     m_entitlement = nullptr;
@@ -122,10 +123,15 @@ void CloudClient::Load() {
 
     try {
         if (saved.contains("url") && saved["url"].is_string()) {
-            m_serverUrl = NormalizeServerUrl(saved["url"].get<std::string>());
+            std::string u = NormalizeServerUrl(saved["url"].get<std::string>());
+            if ((u.find("127.0.0.1") != std::string::npos || u.find("localhost") != std::string::npos) && (!env || !*env)) {
+                m_serverUrl = defaultServer;
+            } else {
+                m_serverUrl = u;
+            }
         }
     } catch (...) {
-        m_serverUrl = "http://127.0.0.1:4319";
+        m_serverUrl = defaultServer;
     }
     m_token = DecryptSecret(saved.value("token", ""));
     m_refreshToken = DecryptSecret(saved.value("refreshToken", ""));
@@ -205,112 +211,133 @@ CloudClient::HttpResult CloudClient::Request(
     path += Utf8ToWide(action);
 
     const bool secure = components.nScheme == INTERNET_SCHEME_HTTPS;
-    HINTERNET session = WinHttpOpen(
-        L"LensDesk/2.0 (Windows Native)",
-        WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
-        WINHTTP_NO_PROXY_NAME,
-        WINHTTP_NO_PROXY_BYPASS,
-        0
-    );
-    if (!session) {
-        result.networkError = true;
-        result.error = "Could not initialize the network client.";
-        return result;
-    }
-    WinHttpSetTimeouts(session, 4000, 4000, timeoutMs, timeoutMs);
+    const int effectiveTimeout = std::max(timeoutMs, 45000);
 
-    HINTERNET connection = WinHttpConnect(session, host.c_str(), components.nPort, 0);
-    if (!connection) {
-        result.networkError = true;
-        result.error = "Could not connect to the LensDesk server.";
-        WinHttpCloseHandle(session);
-        return result;
-    }
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        result = HttpResult{};
 
-    HINTERNET request = WinHttpOpenRequest(
-        connection,
-        L"POST",
-        path.c_str(),
-        nullptr,
-        WINHTTP_NO_REFERER,
-        WINHTTP_DEFAULT_ACCEPT_TYPES,
-        secure ? WINHTTP_FLAG_SECURE : 0
-    );
-    if (!request) {
-        result.networkError = true;
-        result.error = "Could not create the server request.";
-        WinHttpCloseHandle(connection);
-        WinHttpCloseHandle(session);
-        return result;
-    }
+        HINTERNET session = WinHttpOpen(
+            L"LensDesk/2.0 (Windows Native)",
+            WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+            WINHTTP_NO_PROXY_NAME,
+            WINHTTP_NO_PROXY_BYPASS,
+            0
+        );
+        if (!session) {
+            result.networkError = true;
+            result.error = "Could not initialize the network client.";
+            return result;
+        }
 
-    std::wstring headers =
-        L"Content-Type: application/json\r\n"
-        L"Accept: application/json\r\n"
-        L"X-LensDesk-Client: desktop\r\n";
-    if (!bearer.empty()) {
-        headers += L"Authorization: Bearer ";
-        headers += Utf8ToWide(bearer);
-        headers += L"\r\n";
-    }
+        if (secure) {
+            DWORD secProtocols = WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2 | WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_3;
+            WinHttpSetOption(session, WINHTTP_OPTION_SECURE_PROTOCOLS, &secProtocols, sizeof(secProtocols));
+        }
 
-    const std::string body = payload.dump();
-    BOOL sent = WinHttpSendRequest(
-        request,
-        headers.c_str(),
-        static_cast<DWORD>(-1L),
-        const_cast<char*>(body.data()),
-        static_cast<DWORD>(body.size()),
-        static_cast<DWORD>(body.size()),
-        0
-    );
-    if (!sent || !WinHttpReceiveResponse(request, nullptr)) {
-        result.networkError = true;
-        result.error = "Could not reach the LensDesk server. Check the address and your connection.";
+        WinHttpSetTimeouts(session, 30000, 45000, effectiveTimeout, effectiveTimeout);
+
+        HINTERNET connection = WinHttpConnect(session, host.c_str(), components.nPort, 0);
+        if (!connection) {
+            result.networkError = true;
+            result.error = "Could not connect to the LensDesk server.";
+            WinHttpCloseHandle(session);
+            if (attempt == 0 && action != "desktop.logout" && action != "auth.logout") {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+                continue;
+            }
+            return result;
+        }
+
+        HINTERNET request = WinHttpOpenRequest(
+            connection,
+            L"POST",
+            path.c_str(),
+            nullptr,
+            WINHTTP_NO_REFERER,
+            WINHTTP_DEFAULT_ACCEPT_TYPES,
+            secure ? WINHTTP_FLAG_SECURE : 0
+        );
+        if (!request) {
+            result.networkError = true;
+            result.error = "Could not create the server request.";
+            WinHttpCloseHandle(connection);
+            WinHttpCloseHandle(session);
+            return result;
+        }
+
+        std::wstring headers =
+            L"Content-Type: application/json\r\n"
+            L"Accept: application/json\r\n"
+            L"X-LensDesk-Client: desktop\r\n";
+        if (!bearer.empty()) {
+            headers += L"Authorization: Bearer ";
+            headers += Utf8ToWide(bearer);
+            headers += L"\r\n";
+        }
+
+        const std::string body = payload.dump();
+        BOOL sent = WinHttpSendRequest(
+            request,
+            headers.c_str(),
+            static_cast<DWORD>(-1L),
+            const_cast<char*>(body.data()),
+            static_cast<DWORD>(body.size()),
+            static_cast<DWORD>(body.size()),
+            0
+        );
+        if (!sent || !WinHttpReceiveResponse(request, nullptr)) {
+            result.networkError = true;
+            result.error = "Could not reach the LensDesk server. Check the address and your connection.";
+            WinHttpCloseHandle(request);
+            WinHttpCloseHandle(connection);
+            WinHttpCloseHandle(session);
+            if (attempt == 0 && action != "desktop.logout" && action != "auth.logout") {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+                continue;
+            }
+            return result;
+        }
+
+        DWORD status = 0;
+        DWORD statusSize = sizeof(status);
+        WinHttpQueryHeaders(
+            request,
+            WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+            WINHTTP_HEADER_NAME_BY_INDEX,
+            &status,
+            &statusSize,
+            WINHTTP_NO_HEADER_INDEX
+        );
+        result.status = static_cast<int>(status);
+
+        std::string responseBody;
+        char buffer[8192];
+        DWORD read = 0;
+        while (WinHttpReadData(request, buffer, sizeof(buffer), &read) && read > 0) {
+            responseBody.append(buffer, read);
+            if (responseBody.size() > 8 * 1024 * 1024) break;
+        }
+
         WinHttpCloseHandle(request);
         WinHttpCloseHandle(connection);
         WinHttpCloseHandle(session);
-        return result;
-    }
 
-    DWORD status = 0;
-    DWORD statusSize = sizeof(status);
-    WinHttpQueryHeaders(
-        request,
-        WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
-        WINHTTP_HEADER_NAME_BY_INDEX,
-        &status,
-        &statusSize,
-        WINHTTP_NO_HEADER_INDEX
-    );
-    result.status = static_cast<int>(status);
-
-    std::string responseBody;
-    char buffer[8192];
-    DWORD read = 0;
-    while (WinHttpReadData(request, buffer, sizeof(buffer), &read) && read > 0) {
-        responseBody.append(buffer, read);
-        if (responseBody.size() > 8 * 1024 * 1024) break;
-    }
-
-    WinHttpCloseHandle(request);
-    WinHttpCloseHandle(connection);
-    WinHttpCloseHandle(session);
-
-    if (responseBody.empty()) {
-        result.body = json::object();
-    } else {
-        try {
-            result.body = json::parse(responseBody);
-        } catch (...) {
+        if (responseBody.empty()) {
             result.body = json::object();
-            result.error = responseBody.substr(0, 400);
+        } else {
+            try {
+                result.body = json::parse(responseBody);
+            } catch (...) {
+                result.body = json::object();
+                result.error = responseBody.substr(0, 400);
+            }
         }
-    }
-    if (result.status < 200 || result.status >= 300) {
-        if (result.error.empty()) {
-            result.error = HttpErrorText(result.body, "The LensDesk server rejected the request.");
+        if (result.status < 200 || result.status >= 300) {
+            if (result.error.empty()) {
+                result.error = HttpErrorText(result.body, "The LensDesk server rejected the request.");
+            }
         }
+        break;
     }
     return result;
 }
@@ -673,6 +700,23 @@ std::string CloudClient::GetPurchaseUrl() const {
     if (!m_purchaseUrl.empty()) return m_purchaseUrl;
     if (m_serverUrl.empty()) return "";
     return m_serverUrl + "/dashboard";
+}
+
+json CloudClient::CloudRequest(const std::string& action, const json& payload) {
+    HttpResult res = Request(action, payload, 25000, m_token);
+    if (res.status == 401 && HasSession()) {
+        HttpResult ref = Refresh();
+        if (ref.status == 200) {
+            res = Request(action, payload, 25000, m_token);
+        }
+    }
+    if (res.networkError) {
+        throw std::runtime_error(res.error.empty() ? "Could not reach your cloud server. Check the server address and your connection." : res.error);
+    }
+    if (res.status >= 400) {
+        throw std::runtime_error(HttpErrorText(res.body, "Cloud request failed."));
+    }
+    return res.body;
 }
 
 } // namespace LensDesk

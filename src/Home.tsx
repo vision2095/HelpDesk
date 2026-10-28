@@ -951,11 +951,9 @@ export function Home({ navigate }: HomeProps) {
                           >
                             <Download size={15} />
                             Download{" "}
-                            {build.key === "windows"
-                              ? "Setup (.exe)"
-                              : build.key === "windows-portable"
-                                ? "ZIP (.zip)"
-                                : "DMG"}
+                            {build.key.startsWith("windows")
+                              ? "ZIP (.zip)"
+                              : "DMG"}
                           </a>
                         </article>
                       ))}

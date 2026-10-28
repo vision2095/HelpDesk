@@ -37,11 +37,21 @@ ShowUnInstDetails show
 RequestExecutionLevel user
 
 Function .onInit
-  ; Detect Microsoft Edge WebView2 Runtime
-  ReadRegStr $0 HKLM "SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" "pv"
+  ; Detect Microsoft Edge WebView2 Runtime across 64-bit and 32-bit registry hives
+  SetRegView 64
+  ReadRegStr $0 HKLM "SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" "pv"
   ${If} $0 == ""
     ReadRegStr $0 HKCU "SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" "pv"
   ${EndIf}
+  ${If} $0 == ""
+    SetRegView 32
+    ReadRegStr $0 HKLM "SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" "pv"
+  ${EndIf}
+  ${If} $0 == ""
+    ReadRegStr $0 HKCU "SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" "pv"
+  ${EndIf}
+  SetRegView default
+
   ${If} $0 == ""
     ${IfNot} ${Silent}
       MessageBox MB_ICONQUESTION|MB_YESNO|MB_DEFBUTTON1 "LensDesk 2.0 requires the Microsoft Edge WebView2 Runtime to render its interface.$\n$\nWould you like to open Microsoft's download page for the WebView2 Runtime bootstrapper now?" IDNO +2

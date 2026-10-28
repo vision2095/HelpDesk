@@ -76,7 +76,7 @@ function createUpdater({ getMainWindow, getServerUrl }) {
   const platform = process.platform === "win32" ? "windows" : process.arch === "arm64" ? "mac-arm64" : "mac-x64";
 
   async function check(overrideServerUrl) {
-    const base = overrideServerUrl || (typeof getServerUrl === "function" ? getServerUrl() : "http://localhost:4319");
+    const base = overrideServerUrl || (typeof getServerUrl === "function" ? getServerUrl() : "https://helpdesk-h44x.onrender.com");
     const checkUrl = `${base.replace(/\/+$/, "")}/api/v1/updates/check?version=${encodeURIComponent(currentVersion)}&platform=${encodeURIComponent(platform)}`;
 
     return new Promise((resolve, reject) => {
@@ -117,7 +117,7 @@ function createUpdater({ getMainWindow, getServerUrl }) {
         try { win?.webContents?.send("desktop.updater.progress", p); } catch {}
       };
 
-      const downloadUrl = artifact?.directUrl || artifact?.url || `${(serverUrl || "http://localhost:4319").replace(/\/+$/, "")}/downloads/${platform}`;
+      const downloadUrl = artifact?.directUrl || artifact?.url || `${(serverUrl || "https://helpdesk-h44x.onrender.com").replace(/\/+$/, "")}/downloads/${platform}`;
       const fileName = artifact?.name || (process.platform === "win32" ? "LensDesk-update.zip" : "LensDesk-update.dmg");
       const tempDir = app.getPath("temp");
       const destPath = path.join(tempDir, `lensdesk-update-${Date.now()}-${fileName}`);

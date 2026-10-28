@@ -184,9 +184,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
         dcompEngine.GetHudVisual(),
         distPath,
         &dispatcher,
-        [hwnd, &dcompEngine, &browserMgr](ICoreWebView2Environment* env) {
+        [hwnd, &dcompEngine, &browserMgr, &focusMgr](ICoreWebView2Environment* env) {
             LogInfo("WebView2 environment ready. Initializing browser manager tabs.");
-            browserMgr.Initialize(hwnd, env, dcompEngine.GetBrowserVisual());
+            browserMgr.Initialize(hwnd, env, dcompEngine.GetBrowserVisual(), &dcompEngine, &focusMgr);
         }
     );
     LogInfo("WebView2 Host initialization started.");

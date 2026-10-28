@@ -557,7 +557,7 @@ async function createWindow() {
   mainWindow.setAlwaysOnTop(true, "screen-saver");
   mainWindow.setContentProtection(true);
   mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  mainWindow.setIgnoreMouseEvents(false, { forward: true });
+  mainWindow.setIgnoreMouseEvents(false);
   mainWindow.setFocusable(true);
   if (isWin) {
     try { nativeWin.configureUIPI(mainWindow); } catch {}
@@ -842,7 +842,7 @@ app.whenReady().then(async () => {
             }
             mainWindow.setMinimumSize(420, 520);
             mainWindow.setFocusable(true);
-            mainWindow.setIgnoreMouseEvents(false, { forward: true });
+            mainWindow.setIgnoreMouseEvents(false);
           } else {
             mainWindow.setMinimumSize(360, 200);
             if (wasLocked) {

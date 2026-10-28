@@ -50,7 +50,7 @@ function createCloudClient({
       } catch {}
     }
     if (
-      (!savedUrl || (savedUrl === "http://127.0.0.1:4319" && process.env.NODE_ENV !== "test" && !process.env.LENSDESK_LOCAL_DEV)) &&
+      (!savedUrl || (savedUrl.includes("127.0.0.1") || savedUrl.includes("localhost")) && process.env.NODE_ENV !== "test" && !process.env.LENSDESK_LOCAL_DEV) &&
       defaultUrl
     ) {
       try {
@@ -242,33 +242,40 @@ function createCloudClient({
         }
       }
       let response;
-      try {
-        response = await fetchImpl(requested.url + "/api/" + action, {
-          method: "POST",
-          redirect: "error",
-          headers: {
-            "Content-Type": "application/json",
-            "X-LensDesk-Client": "desktop",
-            ...(requested.token
-              ? { Authorization: "Bearer " + requested.token }
-              : {}),
-          },
-          body: JSON.stringify({
-            ...payload,
-            ...(action === "chat" && options.onEvent ? { stream: true } : {}),
-          }),
-          signal: AbortSignal.any([
-            ...(options.signal ? [options.signal] : []),
-            AbortSignal.timeout(
-              ["cloud.state", "state"].includes(action) ? 5000 : 90000,
-            ),
-          ]),
-        });
-      } catch {
-        if (options.signal?.aborted) throw new Error("Request canceled.");
-        throw new Error(
-          "Could not reach your cloud server. Check the server address and your connection.",
-        );
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          response = await fetchImpl(requested.url + "/api/" + action, {
+            method: "POST",
+            redirect: "error",
+            headers: {
+              "Content-Type": "application/json",
+              "X-LensDesk-Client": "desktop",
+              ...(requested.token
+                ? { Authorization: "Bearer " + requested.token }
+                : {}),
+            },
+            body: JSON.stringify({
+              ...payload,
+              ...(action === "chat" && options.onEvent ? { stream: true } : {}),
+            }),
+            signal: AbortSignal.any([
+              ...(options.signal ? [options.signal] : []),
+              AbortSignal.timeout(
+                ["cloud.state", "state"].includes(action) ? 25000 : 90000,
+              ),
+            ]),
+          });
+          break;
+        } catch {
+          if (options.signal?.aborted) throw new Error("Request canceled.");
+          if (attempt === 0 && !["desktop.logout", "auth.logout"].includes(action)) {
+            await new Promise((r) => setTimeout(r, 1000));
+            continue;
+          }
+          throw new Error(
+            "Could not reach your cloud server. Check the server address and your connection.",
+          );
+        }
       }
       if (requestRevision !== revision)
         throw new Error(

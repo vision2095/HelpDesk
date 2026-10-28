@@ -3,6 +3,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { getPath7za } from "app-builder-lib/out/toolsets/7zip.js";
+import { getMakeNsisPath } from "app-builder-lib/out/toolsets/windows.js";
 
 let ResEdit = null;
 try {
@@ -13,6 +14,27 @@ try {
 
 const { version } = JSON.parse(fs.readFileSync("package.json", "utf8"));
 const releaseDir = path.resolve("release");
+
+try {
+  const nsis = await getMakeNsisPath();
+  if (nsis?.path && fs.existsSync(nsis.path) && fs.existsSync("installer/installer.nsi")) {
+    console.log("[package-windows-zip] Compiling fresh NSIS installer with makensis...");
+    execFileSync(nsis.path, ["installer/installer.nsi"], {
+      cwd: process.cwd(),
+      env: { ...process.env, ...nsis.env },
+      stdio: "inherit",
+    });
+    if (fs.existsSync(path.join(releaseDir, "LensDesk-2.0.0-Setup.exe"))) {
+      fs.copyFileSync(
+        path.join(releaseDir, "LensDesk-2.0.0-Setup.exe"),
+        path.join(releaseDir, "LensDesk-Setup.exe"),
+      );
+    }
+  }
+} catch (nsisErr) {
+  console.warn("[package-windows-zip] makensis build note:", nsisErr.message);
+}
+
 let exeTarget = "LensDesk-Setup.exe";
 if (!fs.existsSync(path.join(releaseDir, exeTarget))) {
   exeTarget = "RuntimeHost.exe";

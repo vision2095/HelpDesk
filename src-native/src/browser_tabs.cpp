@@ -1,4 +1,6 @@
 #include "../include/browser_tabs.hpp"
+#include "../include/dcomp_engine.hpp"
+#include "../include/focus_manager.hpp"
 #include <wrl/event.h>
 #include <algorithm>
 #include <cctype>
@@ -77,11 +79,19 @@ BrowserTabsManager::~BrowserTabsManager() {
     Shutdown();
 }
 
-bool BrowserTabsManager::Initialize(HWND hwnd, ICoreWebView2Environment* env, IDCompositionVisual* browserVisual) {
+bool BrowserTabsManager::Initialize(
+    HWND hwnd,
+    ICoreWebView2Environment* env,
+    IDCompositionVisual* browserVisual,
+    DCompEngine* dcompEngine,
+    FocusManager* focusMgr
+) {
     if (!hwnd || !env || !browserVisual) return false;
     m_hwnd = hwnd;
     m_env = env;
     m_browserVisual = browserVisual;
+    m_dcompEngine = dcompEngine;
+    m_focusMgr = focusMgr;
 
     ComPtr<ICoreWebView2Environment3> env3;
     HRESULT hr = env->QueryInterface(IID_PPV_ARGS(&env3));
@@ -277,6 +287,9 @@ bool BrowserTabsManager::Initialize(HWND hwnd, ICoreWebView2Environment* env, ID
                 }
 
                 m_ready = true;
+                if (m_tabs.empty()) {
+                    CreateTab("https://www.google.com");
+                }
                 m_layout = BrowserLayout{};
                 ApplyLayout();
 
@@ -364,7 +377,19 @@ void BrowserTabsManager::SetupFocusAndAcceleratorHandling() {
                 args->get_VirtualKey(&virtualKey);
                 const bool control = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
                 const bool alt = (GetKeyState(VK_MENU) & 0x8000) != 0;
-                if (control && !alt && (virtualKey == 'L' || virtualKey == 'F')) {
+                const bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+
+                // Close in-overlay browser and restore focus to assistant via Ctrl+Shift+G or Escape
+                if ((control && shift && (virtualKey == 'G' || virtualKey == 'g')) ||
+                    (virtualKey == VK_ESCAPE && !control && !alt && !shift)) {
+                    args->put_Handled(TRUE);
+                    if (m_eventCallback) {
+                        m_eventCallback("lens:shortcut:browser");
+                    }
+                    return S_OK;
+                }
+
+                if (control && !alt && !shift && (virtualKey == 'L' || virtualKey == 'F')) {
                     args->put_Handled(TRUE);
                     if (virtualKey == 'L') FocusAddressBar();
                     else FocusFind();
@@ -618,9 +643,7 @@ void BrowserTabsManager::ApplyLayout() {
 
     // The composition controller renders inside its root visual. Position the
     // visual at the React layout origin and keep the controller bounds local
-    // (0,0,width,height). Passing the screen offset in put_Bounds instead made
-    // the page render at the window origin (covering the toolbar) while mouse
-    // hit-testing still used the offset, so clicks landed in the wrong place.
+    // (0,0,width,height).
     if (m_browserVisual) {
         if (show) {
             m_browserVisual->SetOffsetX(static_cast<float>(m_layout.x));
@@ -631,6 +654,11 @@ void BrowserTabsManager::ApplyLayout() {
         }
     }
 
+    if (m_dcompEngine) {
+        m_dcompEngine->SetBrowserVisualVisible(show);
+        m_dcompEngine->Commit();
+    }
+
     RECT rc{ 0, 0, 0, 0 };
     if (show) {
         rc = RECT{ 0, 0, m_layout.width, m_layout.height };
@@ -639,6 +667,9 @@ void BrowserTabsManager::ApplyLayout() {
     m_controller->put_IsVisible(show ? TRUE : FALSE);
     if (!show) {
         m_hasFocus = false;
+        if (m_focusMgr) {
+            m_focusMgr->SetFocusTarget(FocusState::FOCUSED_ASSISTANT, "browser_layout_hidden");
+        }
     }
 }
 
@@ -666,6 +697,44 @@ void BrowserTabsManager::ClearData() {
             }
         }
     }
+}
+
+bool BrowserTabsManager::PasteBundle(const json& images, const std::string& note) {
+    if (!m_webView) return false;
+    std::string js = ";(function(){try{"
+        "var imgs = " + images.dump() + ";"
+        "var note = " + json(note).dump() + ";"
+        "var dt = new DataTransfer();"
+        "for(var i=0; i<imgs.length; i++){"
+            "var raw = imgs[i].replace(/^data:image\\/[^;]+;base64,/, '');"
+            "var bs = atob(raw);"
+            "var arr = new Uint8Array(bs.length);"
+            "for(var j=0; j<bs.length; j++) arr[j] = bs.charCodeAt(j);"
+            "var blob = new Blob([arr], {type:'image/png'});"
+            "dt.items.add(new File([blob], 'screenshot-' + (i+1) + '.png', {type:'image/png'}));"
+        "}"
+        "var fi = document.querySelector('input[type=file]');"
+        "if(fi){"
+            "fi.files = dt.files;"
+            "fi.dispatchEvent(new Event('change', {bubbles:true}));"
+        "} else {"
+            "var el = document.activeElement || document.body;"
+            "el.dispatchEvent(new ClipboardEvent('paste', {bubbles:true, cancelable:true, clipboardData:dt}));"
+        "}"
+        "if(note){"
+            "var el2 = document.activeElement;"
+            "if(el2 && (el2.tagName == 'TEXTAREA' || el2.tagName == 'INPUT')){"
+                "var st = el2.selectionStart == null ? el2.value.length : el2.selectionStart;"
+                "el2.value = el2.value.slice(0, st) + note + el2.value.slice(st);"
+                "el2.dispatchEvent(new Event('input', {bubbles:true}));"
+            "} else if(el2 && el2.isContentEditable){"
+                "document.execCommand('insertText', false, note);"
+            "}"
+        "}"
+    "}catch(e){}})();";
+
+    m_webView->ExecuteScript(Utf8ToWide(js).c_str(), nullptr);
+    return true;
 }
 
 json BrowserTabsManager::GetStateSnapshot() const {

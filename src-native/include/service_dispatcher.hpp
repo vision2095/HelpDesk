@@ -56,6 +56,7 @@ private:
     CloudClient m_cloud;
     std::mutex m_cloudMutex;
     HWND m_hwnd = nullptr;
+    DWORD m_uiThreadId = 0;
     std::mutex m_uiMutex;
     std::vector<std::function<void()>> m_uiQueue;
     std::vector<std::thread> m_workers;

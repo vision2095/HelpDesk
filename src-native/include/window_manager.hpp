@@ -39,6 +39,7 @@ public:
     WindowBounds GetBounds() const;
     void SetBounds(const WindowBounds& bounds);
     void CenterOnPrimaryMonitor(int width, int height);
+    void DockToTopCenter(int width, int height);
 
     void UpdateDpi(UINT dpi);
     UINT GetDpi() const { return m_dpi; }

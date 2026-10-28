@@ -106,7 +106,11 @@ export function WorkspaceBrowser({
     );
     if (!initializing.current) {
       initializing.current = true;
-      void command("state");
+      void command("state").then((res: any) => {
+        if (!res?.tabs || res.tabs.length === 0) {
+          void command("open", { url: "" });
+        }
+      });
     }
     return () => {
       mounted.current = false;
@@ -128,6 +132,7 @@ export function WorkspaceBrowser({
       void api("browser.layout", {
         visible: Boolean(tab),
         bounds: { x: r.x, y: r.y, width: r.width, height: r.height },
+        dpr: window.devicePixelRatio || 1,
       }).catch(onError);
     };
     const observer = new ResizeObserver(update);
@@ -161,7 +166,15 @@ export function WorkspaceBrowser({
             </button>
             <button
               aria-label={"Close tab " + t.title}
-              onClick={() => command("close", { id: t.id })}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (state.tabs.length <= 1) {
+                  void api("browser.layout", { visible: false }).catch(() => {});
+                  onClose?.();
+                } else {
+                  void command("close", { id: t.id });
+                }
+              }}
             >
               <X size={13} />
             </button>
@@ -175,21 +188,20 @@ export function WorkspaceBrowser({
         >
           <Plus size={18} />
         </button>
-        {onClose && (
-          <button
-            type="button"
-            className="icon-button browser-exit-button"
-            aria-label="Close browser mode (Ctrl+Shift+G)"
-            title="Close browser mode (Ctrl+Shift+G)"
-            onClick={() => {
-              void api("browser.layout", { visible: false }).catch(() => {});
-              onClose();
-            }}
-            style={{ marginLeft: "auto", color: "#f87171" }}
-          >
-            <X size={18} />
-          </button>
-        )}
+        <button
+          type="button"
+          className="icon-button browser-exit-button"
+          aria-label="Close browser mode (Ctrl+Shift+G)"
+          title="Close browser mode (Ctrl+Shift+G)"
+          onClick={() => {
+            void api("browser.layout", { visible: false }).catch(() => {});
+            if (onClose) onClose();
+            else void command("layout", { visible: false });
+          }}
+          style={{ marginLeft: "auto", color: "#f87171" }}
+        >
+          <X size={18} />
+        </button>
       </div>
       <form
         className="browser-toolbar"

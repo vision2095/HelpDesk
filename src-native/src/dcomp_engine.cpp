@@ -41,9 +41,11 @@ bool DCompEngine::Initialize(HWND hwnd, ID3D11Device* d3dDevice, IDXGISwapChain1
     m_rootVisual->AddVisual(m_hudVisual.Get(), TRUE, m_d3dVisual.Get());
 
     // 7. Create Browser WebView2 Visual (hosts embedded web browser tabs)
+    // Kept out of the composition tree initially so it never sits at (0,0) or covers the HUD.
+    // SetBrowserVisualVisible(true) adds it when the browser is opened.
     hr = m_dcompDevice->CreateVisual(&m_browserVisual);
     if (FAILED(hr)) return false;
-    m_rootVisual->AddVisual(m_browserVisual.Get(), TRUE, m_hudVisual.Get());
+    m_browserVisible = false;
 
     Commit();
     return true;
@@ -59,6 +61,7 @@ void DCompEngine::Shutdown() {
     m_rootVisual.Reset();
     m_dcompTarget.Reset();
     m_dcompDevice.Reset();
+    m_browserVisible = false;
 }
 
 void DCompEngine::Commit() {
@@ -82,7 +85,8 @@ void DCompEngine::SetBrowserVisualBounds(float x, float y, float width, float he
 }
 
 void DCompEngine::SetBrowserVisualVisible(bool visible) {
-    if (m_browserVisible == visible || !m_rootVisual || !m_browserVisual) return;
+    if (!m_rootVisual || !m_browserVisual) return;
+    if (m_browserVisible == visible) return;
     m_browserVisible = visible;
     if (visible) {
         m_rootVisual->AddVisual(m_browserVisual.Get(), TRUE, m_hudVisual.Get());

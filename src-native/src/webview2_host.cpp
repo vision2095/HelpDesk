@@ -322,7 +322,11 @@ void WebView2Host::InjectLensDeskBridge() {
     shortcut: new Set(),
     overlay: new Set(),
     clickThrough: new Set(),
-    globalKey: new Set()
+    opacity: new Set(),
+    globalKey: new Set(),
+    updaterProgress: new Set(),
+    updaterAvailable: new Set(),
+    custom: new Map()
   };
 
   window.chrome.webview.addEventListener('message', function(event) {
@@ -347,7 +351,15 @@ void WebView2Host::InjectLensDeskBridge() {
       else if (evName === 'lens:shortcut') listeners.shortcut.forEach(function(fn) { fn(typeof data === 'object' && data && data.action ? data.action : data); });
       else if (evName === 'lens:overlay') listeners.overlay.forEach(function(fn) { fn(data); });
       else if (evName === 'lens:clickThrough') listeners.clickThrough.forEach(function(fn) { fn(data); });
+      else if (evName === 'lens:opacity-changed') listeners.opacity.forEach(function(fn) { fn(typeof data === 'number' ? data : (data && data.opacity != null ? data.opacity : 1)); });
       else if (evName === 'gkey') listeners.globalKey.forEach(function(fn) { fn(data); });
+      else if (evName === 'desktop.updater.progress') listeners.updaterProgress.forEach(function(fn) { fn(data); });
+      else if (evName === 'desktop.updater.available') listeners.updaterAvailable.forEach(function(fn) { fn(data); });
+
+      var customSet = listeners.custom.get(evName);
+      if (customSet) {
+        customSet.forEach(function(fn) { fn(data); });
+      }
     }
   });
 
@@ -360,6 +372,21 @@ void WebView2Host::InjectLensDeskBridge() {
         window.chrome.webview.postMessage({ id: id, action: action, payload: payload || {} });
       });
     },
+    capture: function(payload) {
+      return window.lens.invoke('desktop.capture', payload || {});
+    },
+    relaunch: function() {
+      return window.lens.invoke('desktop.restart', {});
+    },
+    openScreenSettings: function() {
+      return window.lens.invoke('desktop.openScreenSettings', {});
+    },
+    openAccessibilitySettings: function() {
+      return window.lens.invoke('desktop.openAccessibilitySettings', {});
+    },
+    openSettings: function() {
+      return window.lens.invoke('desktop.openSettings', {});
+    },
     onGate: function(fn) { listeners.gate.add(fn); return function() { listeners.gate.delete(fn); }; },
     onPreferences: function(fn) { listeners.preferences.add(fn); return function() { listeners.preferences.delete(fn); }; },
     onBrowserState: function(fn) { listeners.browserState.add(fn); return function() { listeners.browserState.delete(fn); }; },
@@ -369,7 +396,21 @@ void WebView2Host::InjectLensDeskBridge() {
     onShortcut: function(fn) { listeners.shortcut.add(fn); return function() { listeners.shortcut.delete(fn); }; },
     onOverlay: function(fn) { listeners.overlay.add(fn); return function() { listeners.overlay.delete(fn); }; },
     onClickThrough: function(fn) { listeners.clickThrough.add(fn); return function() { listeners.clickThrough.delete(fn); }; },
-    onGlobalKey: function(fn) { listeners.globalKey.add(fn); return function() { listeners.globalKey.delete(fn); }; }
+    onOpacityChanged: function(fn) { listeners.opacity.add(fn); return function() { listeners.opacity.delete(fn); }; },
+    onGlobalKey: function(fn) { listeners.globalKey.add(fn); return function() { listeners.globalKey.delete(fn); }; },
+    onUpdaterProgress: function(fn) { listeners.updaterProgress.add(fn); return function() { listeners.updaterProgress.delete(fn); }; },
+    onUpdaterAvailable: function(fn) { listeners.updaterAvailable.add(fn); return function() { listeners.updaterAvailable.delete(fn); }; },
+    on: function(channel, listener) {
+      if (channel === 'desktop.updater.available') return window.lens.onUpdaterAvailable(listener);
+      if (channel === 'desktop.updater.progress') return window.lens.onUpdaterProgress(listener);
+      if (channel === 'gkey') return window.lens.onGlobalKey(listener);
+      if (!listeners.custom.has(channel)) {
+        listeners.custom.set(channel, new Set());
+      }
+      var set = listeners.custom.get(channel);
+      set.add(listener);
+      return function() { set.delete(listener); };
+    }
   };
 })();
 )JS";

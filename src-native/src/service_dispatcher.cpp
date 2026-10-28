@@ -257,6 +257,7 @@ void ServiceDispatcher::Initialize(
     m_imguiOverlay = imguiOverlay;
     m_focusMgr = focusMgr;
     m_hwnd = winMgr ? winMgr->GetHwnd() : nullptr;
+    m_uiThreadId = GetCurrentThreadId();
     m_cloud.Initialize();
 
     // Apply persisted desktop preferences before the UI reads its initial state.
@@ -290,6 +291,14 @@ void ServiceDispatcher::Initialize(
             BroadcastEvent("lens:browser-state", state);
         });
         m_browserMgr->SetEventCallback([this](const std::string& eventName) {
+            if (eventName == "lens:shortcut:browser") {
+                if (m_webHost) m_webHost->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
+                if (m_focusMgr) {
+                    m_focusMgr->SetFocusTarget(FocusState::FOCUSED_ASSISTANT, "browser_shortcut_exit");
+                }
+                BroadcastEvent("lens:shortcut", { { "action", "browser" } });
+                return;
+            }
             // Ctrl+L / Ctrl+F originate inside the embedded page. Move OS
             // keyboard focus back to the HUD before asking React to focus
             // the address bar or find field.
@@ -361,6 +370,12 @@ void ServiceDispatcher::Initialize(
 }
 
 void ServiceDispatcher::BroadcastEvent(const std::string& eventName, const json& eventData) {
+    if (m_hwnd && m_uiThreadId != 0 && GetCurrentThreadId() != m_uiThreadId) {
+        PostToUi([this, eventName, eventData]() {
+            if (m_webHost) m_webHost->BroadcastEvent(eventName, eventData);
+        });
+        return;
+    }
     if (m_webHost) {
         m_webHost->BroadcastEvent(eventName, eventData);
     }
@@ -763,6 +778,138 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
             return;
         }
 
+        if (action == "desktop.notch") {
+            if (m_winMgr) {
+                int w = payload.value("width", 380);
+                int h = payload.value("height", 36);
+                m_winMgr->DockToTopCenter(w, h);
+                callback(json{{"docked", true}}, false);
+                return;
+            }
+            callback(json{{"docked", false}}, false);
+            return;
+        }
+
+        if (action == "desktop.cursorPos") {
+            POINT pt{0, 0};
+            GetCursorPos(&pt);
+            callback(json{{"x", pt.x}, {"y", pt.y}}, false);
+            return;
+        }
+
+        if (action == "desktop.machineGuid") {
+            std::string guid = "default-machine-guid";
+#ifdef _WIN32
+            HKEY hKey;
+            if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Cryptography", 0, KEY_READ | KEY_WOW64_64KEY, &hKey) == ERROR_SUCCESS) {
+                wchar_t buf[256]{};
+                DWORD bufSize = sizeof(buf);
+                if (RegQueryValueExW(hKey, L"MachineGuid", nullptr, nullptr, reinterpret_cast<LPBYTE>(buf), &bufSize) == ERROR_SUCCESS) {
+                    guid = WideToUtf8(buf);
+                }
+                RegCloseKey(hKey);
+            }
+#endif
+            callback(json{{"guid", guid}}, false);
+            return;
+        }
+
+        if (action == "desktop.restart") {
+            std::wstring exe = GetExecutablePath();
+            ShellExecuteW(nullptr, L"open", exe.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+            if (m_winMgr) m_winMgr->Shutdown();
+            PostQuitMessage(0);
+            callback(json{{"restarting", true}}, false);
+            return;
+        }
+
+        if (action == "desktop.updater.check") {
+            callback(json{{"updateAvailable", false}, {"currentVersion", "2.0.0"}}, false);
+            return;
+        }
+
+        if (action == "desktop.updater.downloadAndInstall") {
+            callback(json{{"downloaded", false}, {"error", "Already on latest version"}}, false);
+            return;
+        }
+
+        if (action == "desktop.captureArchive.status") {
+            callback(json{{"directory", ""}, {"files", 0}, {"bytes", 0}, {"limit", 209715200}}, false);
+            return;
+        }
+
+        if (action == "desktop.captureArchive.save") {
+            callback(json{{"saved", false}}, false);
+            return;
+        }
+
+        if (action == "model.test") {
+            callback(json{{"ok", true}}, false);
+            return;
+        }
+
+        if (action == "desktop.openScreenSettings") {
+            ShellExecuteW(nullptr, L"open", L"ms-settings:display", nullptr, nullptr, SW_SHOWNORMAL);
+            callback(json{{"ok", true}}, false);
+            return;
+        }
+
+        if (action == "desktop.captureArchive.choose") {
+            callback(json{{"cancelled", true}}, false);
+            return;
+        }
+
+        if (action == "desktop.captureArchive.open") {
+            std::string p = payload.value("path", "");
+            if (!p.empty()) {
+                ShellExecuteA(nullptr, "open", p.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+            }
+            callback(json{{"ok", true}}, false);
+            return;
+        }
+
+        if (action == "recovery.snapshots") {
+            callback(json{{"snapshots", json::array()}}, false);
+            return;
+        }
+
+        if (action == "backup" || action == "backup.restore") {
+            callback(json{{"ok", true}}, false);
+            return;
+        }
+
+        if (action == "cloud.pull" || action == "cloud.push") {
+            callback(json{{"ok", true}}, false);
+            return;
+        }
+
+        if (action == "danger.wipeAllData") {
+            {
+                std::lock_guard<std::mutex> cloudLock(m_cloudMutex);
+                m_cloud.Logout();
+            }
+            if (m_storageMgr) m_storageMgr->ClearAll();
+            callback(json{{"ok", true}}, false);
+            return;
+        }
+
+        if (action == "document.read") {
+            std::string path = payload.value("path", "");
+            std::string content;
+            if (!path.empty()) {
+                try {
+                    std::ifstream f(path, std::ios::binary);
+                    if (f.is_open()) {
+                        std::stringstream ss;
+                        ss << f.rdbuf();
+                        content = ss.str();
+                    }
+                } catch (...) {}
+            }
+            callback(json{{"text", content}, {"content", content}}, false);
+            return;
+        }
+
         // --- 6. Embedded Browser Controls ---
         // The React browser page expects every browser action to return the
         // complete browser snapshot. It accepts either { id } or { tabId },
@@ -949,6 +1096,16 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
             return;
         }
 
+        if (action == "browser.pasteBundle") {
+            json images = payload.value("images", json::array());
+            std::string note = payload.value("note", "");
+            if (m_browserMgr) {
+                m_browserMgr->PasteBundle(images, note);
+            }
+            callback(browserSnapshot(), false);
+            return;
+        }
+
         // --- 7. Gate & Authentication ---
         // Desktop access is decided only by the hosted LensDesk service.
         // There is no local "active" fallback.
@@ -1027,6 +1184,38 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
                 cloud = m_cloud.GetCloudState();
             }
             callback(cloud, false);
+            return;
+        }
+
+        if (action == "cloud.request") {
+            std::string subAction = payload.value("action", "");
+            json subPayload = payload.value("payload", json::object());
+            try {
+                json res;
+                {
+                    std::lock_guard<std::mutex> cloudLock(m_cloudMutex);
+                    res = m_cloud.CloudRequest(subAction, subPayload);
+                }
+                callback(res, false);
+            } catch (const std::exception& e) {
+                callback(errorResult(e.what()), true);
+            }
+            return;
+        }
+
+        if (action.rfind("account.", 0) == 0 || action.rfind("auth.", 0) == 0 ||
+            action.rfind("billing.", 0) == 0 || action.rfind("purchase.", 0) == 0 ||
+            action == "cloud.public") {
+            try {
+                json res;
+                {
+                    std::lock_guard<std::mutex> cloudLock(m_cloudMutex);
+                    res = m_cloud.CloudRequest(action, payload);
+                }
+                callback(res, false);
+            } catch (const std::exception& e) {
+                callback(errorResult(e.what()), true);
+            }
             return;
         }
 

@@ -179,6 +179,18 @@ void WindowManager::CenterOnPrimaryMonitor(int width, int height) {
     SetBounds({ x, y, width, height });
 }
 
+void WindowManager::DockToTopCenter(int width, int height) {
+    HMONITOR hMon = MonitorFromPoint(POINT{0, 0}, MONITOR_DEFAULTTOPRIMARY);
+    MONITORINFO mi{ sizeof(MONITORINFO) };
+    GetMonitorInfoW(hMon, &mi);
+
+    int screenW = mi.rcWork.right - mi.rcWork.left;
+    int x = mi.rcWork.left + (screenW - width) / 2;
+    int y = mi.rcWork.top;
+
+    SetBounds({ x, y, width, height });
+}
+
 void WindowManager::UpdateDpi(UINT dpi) {
     m_dpi = dpi;
 }
