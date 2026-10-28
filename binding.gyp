@@ -27,7 +27,8 @@
               "-framework CoreGraphics",
               "-framework ApplicationServices",
               "-framework AppKit",
-              "-framework CoreFoundation"
+              "-framework CoreFoundation",
+              "-framework Carbon"
             ]
           },
           "link_settings": {
@@ -35,7 +36,8 @@
               "-framework CoreGraphics",
               "-framework ApplicationServices",
               "-framework AppKit",
-              "-framework CoreFoundation"
+              "-framework CoreFoundation",
+              "-framework Carbon"
             ]
           }
         }]

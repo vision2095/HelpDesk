@@ -146,6 +146,11 @@ function isSameApplication(pid1, pid2) {
   try { return mod.isSameApplication(pid1, pid2); } catch { return false; }
 }
 
+function isSecureEventInputEnabled() {
+  if (!mod || typeof mod.isSecureEventInputEnabled !== 'function') return false;
+  try { return mod.isSecureEventInputEnabled(); } catch { return false; }
+}
+
 module.exports = {
   available,
   info,
@@ -173,4 +178,5 @@ module.exports = {
   sendNativePaste,
   isAnyModifierDown,
   isSameApplication,
+  isSecureEventInputEnabled,
 };

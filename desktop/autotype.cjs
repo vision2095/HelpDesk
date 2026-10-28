@@ -193,7 +193,7 @@ async function typeMac(text, options, signal) {
       if (mistakesRate > 0 && Math.random() < mistakesRate) {
         const wrongKey = getAdjacentKey(char);
         if (wrongKey) {
-          nativeMod.safeAutoType("0", wrongKey, 10);
+          nativeMod.safeAutoType(String(targetPid), wrongKey, 10);
           await sleep(Math.floor(80 + Math.random() * 70), signal);
           // macOS Delete/Backspace is keycode 51 (0x33)
           nativeMod.sendHardwareScancode(51, 20);
@@ -207,7 +207,7 @@ async function typeMac(text, options, signal) {
       } else if (char === "\t") {
         nativeMod.sendHardwareScancode(48, 20); // macOS Tab
       } else {
-        nativeMod.safeAutoType("0", char, 10);
+        nativeMod.safeAutoType(String(targetPid), char, 10);
       }
 
       // Caret nudge for delimiter brackets (prevents auto-closing bracket expansion)
@@ -591,24 +591,49 @@ async function autoType({
   const target = extractCode(text, codeOnly);
   if (!target.trim()) throw new Error("No text is available to type.");
   await sleep(delaySeconds * 1000, signal);
+  let actualMethod = method || "keystroke";
   if (process.platform === "darwin") {
-    if (method === "clipboard") {
+    let nativeMod = null;
+    try {
+      nativeMod = require("../native/index.cjs");
+      if (!nativeMod.available) nativeMod = null;
+    } catch {}
+
+    const isSecureActive =
+      nativeMod &&
+      typeof nativeMod.isSecureEventInputEnabled === "function" &&
+      nativeMod.isSecureEventInputEnabled();
+
+    if (method === "clipboard" || isSecureActive) {
       await paste(target, signal);
+      actualMethod = "clipboard";
     } else {
-      await typeMac(target, timing, signal);
+      try {
+        await typeMac(target, timing, signal);
+        actualMethod = "keystroke";
+      } catch (err) {
+        if (
+          signal?.aborted ||
+          err.message?.includes("Destination changed") ||
+          err.message?.includes("Focus drifted")
+        ) {
+          throw err;
+        }
+        // HintLens Dual-Pipeline Fallback: If hardware keystroke fails in sandboxed/protected editor, transparently paste
+        await paste(target, signal);
+        actualMethod = "clipboard";
+      }
     }
   } else if (method === "keystroke") {
     await typeWindows(target, timing, signal);
+    actualMethod = "keystroke";
   } else {
     await paste(target, signal);
+    actualMethod = "clipboard";
   }
   return {
     ok: true,
-    method:
-      (process.platform === "darwin" && method !== "clipboard") ||
-      method === "keystroke"
-        ? "keystroke"
-        : "clipboard",
+    method: actualMethod,
   };
 }
 module.exports = {

@@ -219,6 +219,8 @@ test("native module exports isSameApplication and startForegroundHook", () => {
   assert.equal(typeof nativeMod.startForegroundHook, "function");
   assert.equal(typeof nativeMod.stopForegroundHook, "function");
   assert.equal(typeof nativeMod.getLastForegroundHwnd, "function");
+  assert.equal(typeof nativeMod.isSecureEventInputEnabled, "function");
+  assert.equal(typeof nativeMod.isSecureEventInputEnabled(), "boolean");
   // Reflexivity check: same pid is always same application
   assert.equal(nativeMod.isSameApplication(1234, 1234), true);
   // Zero / negative pids are false

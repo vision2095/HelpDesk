@@ -645,6 +645,10 @@ Napi::Value IsAnyModifierDown(const Napi::CallbackInfo& info) {
   return Napi::Boolean::New(env, down);
 }
 
+Napi::Value IsSecureEventInputActive(const Napi::CallbackInfo& info) {
+  return Napi::Boolean::New(info.Env(), false);
+}
+
 Napi::Value IsSameApplication(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (info.Length() < 2) return Napi::Boolean::New(env, false);
@@ -659,15 +663,92 @@ Napi::Value IsSameApplication(const Napi::CallbackInfo& info) {
 #include <CoreGraphics/CoreGraphics.h>
 #include <ApplicationServices/ApplicationServices.h>
 #include <CoreFoundation/CoreFoundation.h>
+#include <Carbon/Carbon.h>
+#include <libproc.h>
 #include <malloc/malloc.h>
 #include <mach/mach.h>
 #include <unistd.h>
 #include <objc/objc.h>
 #include <objc/runtime.h>
 #include <objc/message.h>
+#include <string>
+#include <vector>
+#include <algorithm>
 
 namespace {
 static uint32_t g_lastReportedFrontPid = 0;
+
+struct DarwinKeycodeMapping {
+  CGKeyCode keyCode;
+  bool shift;
+};
+
+static DarwinKeycodeMapping GetDarwinKeycode(UniChar ch) {
+  switch (ch) {
+    case 'a': return { 0, false }; case 'A': return { 0, true };
+    case 'b': return { 11, false }; case 'B': return { 11, true };
+    case 'c': return { 8, false }; case 'C': return { 8, true };
+    case 'd': return { 2, false }; case 'D': return { 2, true };
+    case 'e': return { 14, false }; case 'E': return { 14, true };
+    case 'f': return { 3, false }; case 'F': return { 3, true };
+    case 'g': return { 5, false }; case 'G': return { 5, true };
+    case 'h': return { 4, false }; case 'H': return { 4, true };
+    case 'i': return { 34, false }; case 'I': return { 34, true };
+    case 'j': return { 38, false }; case 'J': return { 38, true };
+    case 'k': return { 40, false }; case 'K': return { 40, true };
+    case 'l': return { 37, false }; case 'L': return { 37, true };
+    case 'm': return { 46, false }; case 'M': return { 46, true };
+    case 'n': return { 45, false }; case 'N': return { 45, true };
+    case 'o': return { 31, false }; case 'O': return { 31, true };
+    case 'p': return { 35, false }; case 'P': return { 35, true };
+    case 'q': return { 12, false }; case 'Q': return { 12, true };
+    case 'r': return { 15, false }; case 'R': return { 15, true };
+    case 's': return { 1, false }; case 'S': return { 1, true };
+    case 't': return { 17, false }; case 'T': return { 17, true };
+    case 'u': return { 32, false }; case 'U': return { 32, true };
+    case 'v': return { 9, false }; case 'V': return { 9, true };
+    case 'w': return { 13, false }; case 'W': return { 13, true };
+    case 'x': return { 7, false }; case 'X': return { 7, true };
+    case 'y': return { 16, false }; case 'Y': return { 16, true };
+    case 'z': return { 6, false }; case 'Z': return { 6, true };
+
+    case '1': return { 18, false }; case '!': return { 18, true };
+    case '2': return { 19, false }; case '@': return { 19, true };
+    case '3': return { 20, false }; case '#': return { 20, true };
+    case '4': return { 21, false }; case '$': return { 21, true };
+    case '5': return { 23, false }; case '%': return { 23, true };
+    case '6': return { 22, false }; case '^': return { 22, true };
+    case '7': return { 26, false }; case '&': return { 26, true };
+    case '8': return { 28, false }; case '*': return { 28, true };
+    case '9': return { 25, false }; case '(': return { 25, true };
+    case '0': return { 29, false }; case ')': return { 29, true };
+
+    case '-': return { 27, false }; case '_': return { 27, true };
+    case '=': return { 24, false }; case '+': return { 24, true };
+    case '[': return { 33, false }; case '{': return { 33, true };
+    case ']': return { 30, false }; case '}': return { 30, true };
+    case '\\': return { 42, false }; case '|': return { 42, true };
+    case ';': return { 41, false }; case ':': return { 41, true };
+    case '\'': return { 39, false }; case '"': return { 39, true };
+    case ',': return { 43, false }; case '<': return { 43, true };
+    case '.': return { 47, false }; case '>': return { 47, true };
+    case '/': return { 44, false }; case '?': return { 44, true };
+    case '`': return { 50, false }; case '~': return { 50, true };
+    case ' ': return { 49, false };
+    case '\t': return { 48, false };
+    case '\n': return { 36, false };
+    default: return { 0, false };
+  }
+}
+
+static void PostDarwinEvent(CGEventRef event, pid_t targetPid) {
+  if (!event) return;
+  if (targetPid > 0) {
+    CGEventPostToPid(targetPid, event);
+  }
+  // Session tap delivers directly to session window server (accepted by Sandboxed/Hardened apps)
+  CGEventPost(kCGSessionEventTap, event);
+}
 
 static void UpdateFrontmostApp() {
   Class wsClass = objc_getClass("NSWorkspace");
@@ -837,6 +918,25 @@ Napi::Value ActivateWindow(const Napi::CallbackInfo& info) {
     ActivateFn doActivate = (ActivateFn)objc_msgSend;
     // 3 = NSApplicationActivateAllWindows (1) | NSApplicationActivateIgnoringOtherApps (2)
     BOOL ok = doActivate(app, activateSel, 3);
+
+    // HintLens Accessibility parity: ensure window & text caret have active focus
+    if (AXIsProcessTrusted()) {
+      AXUIElementRef axApp = AXUIElementCreateApplication(targetPid);
+      if (axApp) {
+        AXUIElementRef focusedWindow = NULL;
+        if (AXUIElementCopyAttributeValue(axApp, kAXFocusedWindowAttribute, (CFTypeRef*)&focusedWindow) == kAXErrorSuccess && focusedWindow) {
+          AXUIElementSetAttributeValue(focusedWindow, kAXMainAttribute, kCFBooleanTrue);
+          AXUIElementRef focusedElement = NULL;
+          if (AXUIElementCopyAttributeValue(focusedWindow, kAXFocusedUIElementAttribute, (CFTypeRef*)&focusedElement) == kAXErrorSuccess && focusedElement) {
+            AXUIElementSetAttributeValue(focusedElement, kAXFocusedAttribute, kCFBooleanTrue);
+            CFRelease(focusedElement);
+          }
+          CFRelease(focusedWindow);
+        }
+        CFRelease(axApp);
+      }
+    }
+
     return Napi::Boolean::New(env, ok != NO);
   }
 
@@ -916,6 +1016,21 @@ Napi::Value SafeAutoType(const Napi::CallbackInfo& info) {
     return env.Null();
   }
 
+  pid_t targetPid = 0;
+  if (info.Length() > 0) {
+    if (info[0].IsNumber()) {
+      targetPid = static_cast<pid_t>(info[0].As<Napi::Number>().Uint32Value());
+    } else if (info[0].IsString()) {
+      std::string s = info[0].As<Napi::String>().Utf8Value();
+      if (!s.empty()) {
+        try { targetPid = static_cast<pid_t>(std::stoul(s)); } catch (...) {}
+      }
+    }
+  }
+  if (targetPid <= 0 && g_lastReportedFrontPid > 0) {
+    targetPid = static_cast<pid_t>(g_lastReportedFrontPid);
+  }
+
   std::string utf8Text = info[1].As<Napi::String>().Utf8Value();
   int delayMs = info.Length() > 2 ? info[2].As<Napi::Number>().Int32Value() : 5;
 
@@ -932,38 +1047,23 @@ Napi::Value SafeAutoType(const Napi::CallbackInfo& info) {
     UniChar ch = buffer[i];
     if (ch == '\r') continue;
 
-    if (ch == '\n') {
-      CGEventRef down = CGEventCreateKeyboardEvent(NULL, 36, true);
-      CGEventRef up = CGEventCreateKeyboardEvent(NULL, 36, false);
-      if (down && up) {
-        CGEventPost(kCGHIDEventTap, down);
-        usleep(18000);
-        CGEventPost(kCGHIDEventTap, up);
-        CFRelease(down);
-        CFRelease(up);
+    DarwinKeycodeMapping km = GetDarwinKeycode(ch);
+    CGEventRef down = CGEventCreateKeyboardEvent(NULL, km.keyCode, true);
+    CGEventRef up = CGEventCreateKeyboardEvent(NULL, km.keyCode, false);
+    if (down && up) {
+      if (km.shift) {
+        CGEventSetFlags(down, kCGEventFlagMaskShift);
+        CGEventSetFlags(up, kCGEventFlagMaskShift);
       }
-    } else if (ch == '\t') {
-      CGEventRef down = CGEventCreateKeyboardEvent(NULL, 48, true);
-      CGEventRef up = CGEventCreateKeyboardEvent(NULL, 48, false);
-      if (down && up) {
-        CGEventPost(kCGHIDEventTap, down);
-        usleep(18000);
-        CGEventPost(kCGHIDEventTap, up);
-        CFRelease(down);
-        CFRelease(up);
-      }
-    } else {
-      CGEventRef down = CGEventCreateKeyboardEvent(NULL, 0, true);
-      CGEventRef up = CGEventCreateKeyboardEvent(NULL, 0, false);
-      if (down && up) {
-        CGEventKeyboardSetUnicodeString(down, 1, &ch);
-        CGEventKeyboardSetUnicodeString(up, 1, &ch);
-        CGEventPost(kCGHIDEventTap, down);
-        usleep(18000);
-        CGEventPost(kCGHIDEventTap, up);
-        CFRelease(down);
-        CFRelease(up);
-      }
+      CGEventKeyboardSetUnicodeString(down, 1, &ch);
+      CGEventKeyboardSetUnicodeString(up, 1, &ch);
+
+      PostDarwinEvent(down, targetPid);
+      usleep(18000);
+      PostDarwinEvent(up, targetPid);
+
+      CFRelease(down);
+      CFRelease(up);
     }
     typedCount++;
 
@@ -1035,9 +1135,9 @@ Napi::Value SendHardwareScancode(const Napi::CallbackInfo& info) {
   CGEventRef down = CGEventCreateKeyboardEvent(NULL, keyCode, true);
   CGEventRef up = CGEventCreateKeyboardEvent(NULL, keyCode, false);
   if (down && up) {
-    CGEventPost(kCGHIDEventTap, down);
+    PostDarwinEvent(down, static_cast<pid_t>(g_lastReportedFrontPid));
     if (holdMs > 0) usleep(holdMs * 1000);
-    CGEventPost(kCGHIDEventTap, up);
+    PostDarwinEvent(up, static_cast<pid_t>(g_lastReportedFrontPid));
     CFRelease(down);
     CFRelease(up);
     return Napi::Boolean::New(env, true);
@@ -1057,9 +1157,9 @@ Napi::Value SendCaretNudge(const Napi::CallbackInfo& info) {
   CGEventRef leftDown = CGEventCreateKeyboardEvent(NULL, 123, true);
   CGEventRef leftUp = CGEventCreateKeyboardEvent(NULL, 123, false);
   if (leftDown && leftUp) {
-    CGEventPost(kCGHIDEventTap, leftDown);
+    PostDarwinEvent(leftDown, static_cast<pid_t>(g_lastReportedFrontPid));
     usleep(10000);
-    CGEventPost(kCGHIDEventTap, leftUp);
+    PostDarwinEvent(leftUp, static_cast<pid_t>(g_lastReportedFrontPid));
     usleep(10000);
     CFRelease(leftDown);
     CFRelease(leftUp);
@@ -1068,9 +1168,9 @@ Napi::Value SendCaretNudge(const Napi::CallbackInfo& info) {
   CGEventRef rightDown = CGEventCreateKeyboardEvent(NULL, 124, true);
   CGEventRef rightUp = CGEventCreateKeyboardEvent(NULL, 124, false);
   if (rightDown && rightUp) {
-    CGEventPost(kCGHIDEventTap, rightDown);
+    PostDarwinEvent(rightDown, static_cast<pid_t>(g_lastReportedFrontPid));
     usleep(10000);
-    CGEventPost(kCGHIDEventTap, rightUp);
+    PostDarwinEvent(rightUp, static_cast<pid_t>(g_lastReportedFrontPid));
     CFRelease(rightDown);
     CFRelease(rightUp);
   }
@@ -1170,29 +1270,80 @@ Napi::Value IsSameApplication(const Napi::CallbackInfo& info) {
   if (pid1 <= 0 || pid2 <= 0) return Napi::Boolean::New(env, false);
   if (pid1 == pid2) return Napi::Boolean::New(env, true);
 
-  Class appClass = objc_getClass("NSRunningApplication");
-  if (!appClass) return Napi::Boolean::New(env, false);
+  // 1. Process tree parent/child check via libproc (Renderer helper process is child of main process)
+  struct proc_bsdinfo bsd1, bsd2;
+  int r1 = proc_pidinfo(pid1, PROC_PIDTBSDINFO, 0, &bsd1, sizeof(bsd1));
+  int r2 = proc_pidinfo(pid2, PROC_PIDTBSDINFO, 0, &bsd2, sizeof(bsd2));
+  if (r1 > 0 && bsd1.pbi_ppid == (uint32_t)pid2) return Napi::Boolean::New(env, true);
+  if (r2 > 0 && bsd2.pbi_ppid == (uint32_t)pid1) return Napi::Boolean::New(env, true);
+  if (r1 > 0 && r2 > 0 && bsd1.pbi_ppid > 1 && bsd1.pbi_ppid == bsd2.pbi_ppid) return Napi::Boolean::New(env, true);
 
-  SEL runningWithPidSel = sel_registerName("runningApplicationWithProcessIdentifier:");
-  typedef id (*RunningWithPidFn)(id, SEL, pid_t);
-  RunningWithPidFn getApp = (RunningWithPidFn)objc_msgSend;
-
-  id app1 = getApp((id)appClass, runningWithPidSel, pid1);
-  id app2 = getApp((id)appClass, runningWithPidSel, pid2);
-  if (app1 && app2) {
-    SEL bundleSel = sel_registerName("bundleIdentifier");
-    typedef id (*BundleFn)(id, SEL);
-    BundleFn getBundle = (BundleFn)objc_msgSend;
-    id b1 = getBundle(app1, bundleSel);
-    id b2 = getBundle(app2, bundleSel);
-    if (b1 && b2) {
-      SEL isEqSel = sel_registerName("isEqualToString:");
-      typedef BOOL (*IsEqFn)(id, SEL, id);
-      IsEqFn doIsEq = (IsEqFn)objc_msgSend;
-      BOOL eq = doIsEq(b1, isEqSel, b2);
-      return Napi::Boolean::New(env, eq != NO);
+  // 2. Application bundle path check (Chrome Helper.app lives inside Google Chrome.app)
+  char pbuf1[PROC_PIDPATHINFO_MAXSIZE] = {0};
+  char pbuf2[PROC_PIDPATHINFO_MAXSIZE] = {0};
+  int plen1 = proc_pidpath(pid1, pbuf1, sizeof(pbuf1));
+  int plen2 = proc_pidpath(pid2, pbuf2, sizeof(pbuf2));
+  if (plen1 > 0 && plen2 > 0) {
+    std::string s1(pbuf1);
+    std::string s2(pbuf2);
+    size_t app1 = s1.rfind(".app/");
+    size_t app2 = s2.rfind(".app/");
+    if (app1 != std::string::npos && app2 != std::string::npos) {
+      if (s1.substr(0, app1 + 5) == s2.substr(0, app2 + 5)) {
+        return Napi::Boolean::New(env, true);
+      }
     }
   }
+
+  // 3. NSRunningApplication bundle identifier comparison & helper prefix grouping
+  Class appClass = objc_getClass("NSRunningApplication");
+  if (appClass) {
+    SEL runningWithPidSel = sel_registerName("runningApplicationWithProcessIdentifier:");
+    typedef id (*RunningWithPidFn)(id, SEL, pid_t);
+    RunningWithPidFn getApp = (RunningWithPidFn)objc_msgSend;
+
+    id a1 = getApp((id)appClass, runningWithPidSel, pid1);
+    id a2 = getApp((id)appClass, runningWithPidSel, pid2);
+    if (a1 && a2) {
+      SEL bundleSel = sel_registerName("bundleIdentifier");
+      typedef id (*BundleFn)(id, SEL);
+      BundleFn getBundle = (BundleFn)objc_msgSend;
+      id b1 = getBundle(a1, bundleSel);
+      id b2 = getBundle(a2, bundleSel);
+      if (b1 && b2) {
+        SEL utf8Sel = sel_registerName("UTF8String");
+        typedef const char* (*Utf8Fn)(id, SEL);
+        Utf8Fn getUtf8 = (Utf8Fn)objc_msgSend;
+        const char* c1 = getUtf8(b1, utf8Sel);
+        const char* c2 = getUtf8(b2, utf8Sel);
+        if (c1 && c2) {
+          std::string str1(c1);
+          std::string str2(c2);
+          if (str1 == str2) return Napi::Boolean::New(env, true);
+
+          auto stripHelper = [](std::string s) {
+            std::string low = s;
+            std::transform(low.begin(), low.end(), low.begin(), ::tolower);
+            size_t h = low.find(".helper");
+            if (h != std::string::npos) return s.substr(0, h);
+            return s;
+          };
+          std::string base1 = stripHelper(str1);
+          std::string base2 = stripHelper(str2);
+          if (base1 == base2 || str1.rfind(str2, 0) == 0 || str2.rfind(str1, 0) == 0) {
+            return Napi::Boolean::New(env, true);
+          }
+
+          // Safari & WebKit pairing
+          if ((str1 == "com.apple.Safari" && str2.find("WebKit") != std::string::npos) ||
+              (str2 == "com.apple.Safari" && str1.find("WebKit") != std::string::npos)) {
+            return Napi::Boolean::New(env, true);
+          }
+        }
+      }
+    }
+  }
+
   return Napi::Boolean::New(env, false);
 }
 
@@ -1209,9 +1360,9 @@ Napi::Value SendNativePaste(const Napi::CallbackInfo& info) {
   if (down && up) {
     CGEventSetFlags(down, kCGEventFlagMaskCommand);
     CGEventSetFlags(up, kCGEventFlagMaskCommand);
-    CGEventPost(kCGHIDEventTap, down);
+    PostDarwinEvent(down, static_cast<pid_t>(g_lastReportedFrontPid));
     usleep(20000);
-    CGEventPost(kCGHIDEventTap, up);
+    PostDarwinEvent(up, static_cast<pid_t>(g_lastReportedFrontPid));
     CFRelease(down);
     CFRelease(up);
     return Napi::Boolean::New(env, true);
@@ -1226,6 +1377,11 @@ Napi::Value IsAnyModifierDown(const Napi::CallbackInfo& info) {
   CGEventFlags flags = CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
   bool down = (flags & (kCGEventFlagMaskShift | kCGEventFlagMaskControl | kCGEventFlagMaskAlternate | kCGEventFlagMaskCommand)) != 0;
   return Napi::Boolean::New(env, down);
+}
+
+Napi::Value IsSecureEventInputActive(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  return Napi::Boolean::New(env, ::IsSecureEventInputEnabled() != 0);
 }
 
 #else
@@ -1393,6 +1549,10 @@ Napi::Value IsAnyModifierDown(const Napi::CallbackInfo& info) {
   return Napi::Boolean::New(info.Env(), false);
 }
 
+Napi::Value IsSecureEventInputActive(const Napi::CallbackInfo& info) {
+  return Napi::Boolean::New(info.Env(), false);
+}
+
 #endif  // _WIN32
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
@@ -1421,6 +1581,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("sendNativePaste", Napi::Function::New(env, SendNativePaste));
   exports.Set("isAnyModifierDown", Napi::Function::New(env, IsAnyModifierDown));
   exports.Set("isSameApplication", Napi::Function::New(env, IsSameApplication));
+  exports.Set("isSecureEventInputEnabled", Napi::Function::New(env, IsSecureEventInputActive));
   return exports;
 }
 
