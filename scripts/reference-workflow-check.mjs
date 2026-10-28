@@ -229,7 +229,7 @@ try {
     await window.lens.invoke("desktop.preferences.save", prefs);
   });
   await page.getByRole("button", { name: "Capture", exact: true }).click();
-  await page.getByAltText("Capture 4", { exact: true }).waitFor();
+  await page.getByAltText("Capture 4", { exact: true }).first().waitFor();
   const all = await page.evaluate(() =>
     window.lens.invoke("desktop.capture", {
       mode: "specific",
