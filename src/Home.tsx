@@ -186,6 +186,13 @@ export function Home({ navigate }: HomeProps) {
     navigate("workspace");
   }
 
+  const handleDownloadClick = (e: React.MouseEvent) => {
+    if (!signedIn) {
+      e.preventDefault();
+      navigate("account");
+    }
+  };
+
   return (
     <div className="lensdesk-site">
       <header className="site-nav">
@@ -343,6 +350,7 @@ export function Home({ navigate }: HomeProps) {
                   className="site-button site-button-primary"
                   href="/downloads/windows"
                   download="LensDesk-2.0.0-Windows-x64.zip"
+                  onClick={handleDownloadClick}
                 >
                   <Download size={16} />
                   Download for Windows
@@ -352,6 +360,7 @@ export function Home({ navigate }: HomeProps) {
                   style={{ background: "#1868db", color: "#fff" }}
                   href="/downloads/mac-arm64"
                   download="LensDesk-2.0.0-macOS-Apple-Silicon-arm64.dmg"
+                  onClick={handleDownloadClick}
                 >
                   <Download size={16} />
                   Download for MacOS
@@ -867,6 +876,43 @@ export function Home({ navigate }: HomeProps) {
               </p>
             </div>
 
+            {!signedIn && (
+              <div
+                style={{
+                  padding: "1rem 1.25rem",
+                  marginBottom: "2rem",
+                  background: "rgba(234, 179, 8, 0.12)",
+                  border: "1px solid rgba(234, 179, 8, 0.35)",
+                  borderRadius: "10px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "1rem",
+                  flexWrap: "wrap",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                  <ShieldCheck size={22} style={{ color: "#eab308", flexShrink: 0 }} />
+                  <div>
+                    <strong style={{ color: "#fef08a", fontSize: "0.95rem" }}>
+                      Account Required to Download
+                    </strong>
+                    <p style={{ margin: "3px 0 0", color: "#fef9c3", fontSize: "0.85rem" }}>
+                      Please create an account or sign in before downloading the desktop application.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="site-button site-button-light"
+                  style={{ padding: "0.5rem 1.1rem", fontSize: "0.85rem", whiteSpace: "nowrap" }}
+                  onClick={() => navigate("account")}
+                >
+                  Create Account / Sign In
+                </button>
+              </div>
+            )}
+
             <div className="site-download-layout">
               <div className="site-download-main">
                 {!publicReady ? (
@@ -908,6 +954,7 @@ export function Home({ navigate }: HomeProps) {
                             className="site-button site-button-light"
                             href={build.artifact.url}
                             download
+                            onClick={handleDownloadClick}
                           >
                             <Download size={15} />
                             Download{" "}

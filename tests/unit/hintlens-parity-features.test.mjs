@@ -36,7 +36,9 @@ test("HintLens Parity Preferences: validates chatLayout, restrictedNetwork, and 
     assert.equal(updated.restrictedNetwork, true);
     assert.equal(updated.localOcr, true);
   } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    } catch {}
   }
 });
 

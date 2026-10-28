@@ -16,7 +16,9 @@ async function fixture(t, stripe) {
   });
   t.after(() => {
     accounts.close();
-    fs.rmSync(directory, { recursive: true, force: true });
+    try {
+      fs.rmSync(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    } catch {}
   });
   const registered = await accounts.register({
     email: "billing@example.com",

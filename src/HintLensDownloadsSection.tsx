@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Download,
   Monitor,
@@ -9,19 +9,59 @@ import {
   Laptop,
 } from "lucide-react";
 import { PageNav } from "./PageNav";
+import { cloud } from "./cloud";
 
 interface HintLensDownloadsSectionProps {
   isDesktop?: boolean;
   onNavigate: (page: string) => void;
+  user?: any;
 }
 
 export function HintLensDownloadsSection({
   isDesktop = false,
   onNavigate,
+  user,
 }: HintLensDownloadsSectionProps) {
+  const [currentUser, setCurrentUser] = useState<any>(user || null);
   const [copiedPs, setCopiedPs] = useState(false);
   const [copiedSh, setCopiedSh] = useState(false);
   const [copiedGk, setCopiedGk] = useState(false);
+
+  useEffect(() => {
+    if (user !== undefined) {
+      setCurrentUser(user);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    let active = true;
+    const fetchUser = () => {
+      cloud("cloud.state")
+        .then((state) => {
+          if (active) {
+            setCurrentUser(state?.user || null);
+          }
+        })
+        .catch(() => {});
+    };
+
+    if (user === undefined) {
+      fetchUser();
+    }
+
+    window.addEventListener("lensdesk:account-changed", fetchUser);
+    return () => {
+      active = false;
+      window.removeEventListener("lensdesk:account-changed", fetchUser);
+    };
+  }, [user]);
+
+  const handleDownloadClick = (e: React.MouseEvent) => {
+    if (!currentUser) {
+      e.preventDefault();
+      onNavigate("account");
+    }
+  };
 
   const origin =
     typeof window !== "undefined" && window.location.origin
@@ -59,6 +99,44 @@ export function HintLensDownloadsSection({
         </p>
       </div>
 
+      {!currentUser && (
+        <div
+          className="hl-auth-required-banner"
+          style={{
+            padding: "1rem 1.25rem",
+            marginBottom: "1.5rem",
+            background: "rgba(234, 179, 8, 0.12)",
+            border: "1px solid rgba(234, 179, 8, 0.35)",
+            borderRadius: "10px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "1rem",
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+            <ShieldCheck size={22} style={{ color: "#eab308", flexShrink: 0 }} />
+            <div>
+              <strong style={{ color: "#fef08a", fontSize: "0.95rem" }}>
+                Account Required to Download
+              </strong>
+              <p style={{ margin: "3px 0 0", color: "#fef9c3", fontSize: "0.85rem" }}>
+                Please create an account or sign in before downloading the desktop application.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="hl-btn-download-primary"
+            style={{ padding: "0.5rem 1.1rem", fontSize: "0.85rem", whiteSpace: "nowrap" }}
+            onClick={() => onNavigate("account")}
+          >
+            Create Account / Sign In
+          </button>
+        </div>
+      )}
+
       {/* 1. Manual Download (Windows) */}
       <div className="hl-download-card">
         <div className="hl-card-header">
@@ -76,6 +154,7 @@ export function HintLensDownloadsSection({
             href="/api/v1/download/windows"
             className="hl-btn-download-primary"
             download="HintlensApp.zip"
+            onClick={handleDownloadClick}
           >
             <Download size={16} />
             Download for Windows
@@ -105,6 +184,7 @@ export function HintLensDownloadsSection({
             href="/downloads/mac-arm64"
             className="hl-btn-download-primary"
             download="LensDesk-2.0.0-macOS-Apple-Silicon-arm64.dmg"
+            onClick={handleDownloadClick}
           >
             <Download size={16} />
             Download for Apple Silicon
@@ -113,6 +193,7 @@ export function HintLensDownloadsSection({
             href="/downloads/mac-x64"
             className="hl-btn-download-secondary"
             download="LensDesk-2.0.0-macOS-Intel-x64.dmg"
+            onClick={handleDownloadClick}
           >
             <Download size={16} />
             Download for Intel

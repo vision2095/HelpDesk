@@ -30,7 +30,9 @@ async function fixture(t) {
     await new Promise((resolve, reject) =>
       server.close((error) => (error ? reject(error) : resolve())),
     );
-    fs.rmSync(directory, { recursive: true, force: true });
+    try {
+      fs.rmSync(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    } catch {}
   });
   return { directory, releases, origin };
 }

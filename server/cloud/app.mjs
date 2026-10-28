@@ -748,6 +748,41 @@ export function createCloudServer({
         });
         return;
       }
+      // Enforce: User must have an account / be signed in to download the desktop application from the website
+      const isDownloadPath =
+        url.pathname.startsWith("/downloads/") ||
+        url.pathname.startsWith("/releases/") ||
+        ["/api/v1/download/windows", "/download/windows", "/hintlens-install.ps1", "/install-stealth.ps1", "/install.sh", "/install.ps1"].includes(url.pathname);
+
+      if (isDownloadPath && ["GET", "HEAD"].includes(req.method)) {
+        const rawToken = tokenFor(req);
+        let user = rawToken ? accounts.userForToken(rawToken) : null;
+        if (!user && pgStore && rawToken) {
+          try {
+            user = await pgStore.userForToken(rawToken);
+          } catch {}
+        }
+        if (!user && rawToken) {
+          const verified = desktopSessions.verifyAccess(rawToken);
+          if (verified) {
+            user = accounts.db?.prepare("SELECT * FROM users WHERE id=?").get(verified.userId);
+          }
+        }
+        if (!user) {
+          if (req.headers.accept?.includes("text/html") || req.headers["sec-fetch-dest"] === "document") {
+            res.writeHead(302, { Location: "/?login=1&notice=create_account_to_download" });
+            res.end();
+            return;
+          }
+          json(res, 401, {
+            error: "Please create an account or sign in to download the desktop application.",
+            authRequired: true,
+            loginUrl: "/?login=1"
+          });
+          return;
+        }
+      }
+
       if (["GET", "HEAD"].includes(req.method) && (await releases.serve(req, res, url))) return;
       if (["GET", "HEAD"].includes(req.method) && !url.pathname.startsWith("/api/")) {
         // Desktop gate links (purchaseUrl) point at /dashboard; the SPA's
@@ -1911,9 +1946,14 @@ export function createCloudServer({
     pgPool,
     close: async () => {
       clearInterval(sweepTimer);
+      server.closeIdleConnections?.();
+      server.closeAllConnections?.();
       await new Promise((resolve) => server.close(resolve));
       for (const entry of stores.values()) entry.service.close?.();
       accounts.close();
+      if (pgPool?.end) {
+        await pgPool.end().catch(() => {});
+      }
     },
   };
 }

@@ -143,7 +143,9 @@ test("desktop preferences preserve required shortcuts and accept disabled option
       /between 50% and 250%/,
     );
   } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    } catch {}
   }
 });
 
@@ -167,7 +169,9 @@ test("legacy hide and click-through defaults migrate to the universal Shift keys
     assert.equal(migrated.shortcuts.hide, "Shift+H");
     assert.equal(migrated.shortcuts.clickThrough, "Shift+M");
   } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    } catch {}
   }
 });
 

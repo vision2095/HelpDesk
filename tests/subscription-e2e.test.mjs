@@ -103,7 +103,9 @@ async function fixture(t) {
   t.after(async () => {
     await app.close();
     gateway.close();
-    fs.rmSync(directory, { recursive: true, force: true });
+    try {
+      fs.rmSync(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    } catch {}
   });
 
   // clientHeader "desktop" mirrors the desktop app, "web" acts as the

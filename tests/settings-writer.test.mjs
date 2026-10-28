@@ -10,7 +10,9 @@ async function fixture(t) {
   const service = createService({ directory });
   t.after(() => {
     service.close();
-    fs.rmSync(directory, { recursive: true, force: true });
+    try {
+      fs.rmSync(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    } catch {}
   });
   let cached = await service.dispatch("state");
   const writer = createSettingsWriter({

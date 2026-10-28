@@ -16,7 +16,11 @@ function fixture(t, fetchImpl, options = {}) {
   const directory = fs.mkdtempSync(
     path.join(os.tmpdir(), "lensdesk-cloud-client-"),
   );
-  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  t.after(() => {
+    try {
+      fs.rmSync(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    } catch {}
+  });
   const params = {
     directory,
     encrypt: (text) => Buffer.from("sealed:" + text),

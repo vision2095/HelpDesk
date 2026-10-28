@@ -16,7 +16,9 @@ function fixture(t, fetchImpl) {
   };
   t.after(() => {
     for (const service of services) service.close();
-    fs.rmSync(directory, { recursive: true, force: true });
+    try {
+      fs.rmSync(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    } catch {}
   });
   return { directory, service: open(), open };
 }

@@ -11,7 +11,9 @@ test("desktop without a local key uses hosted credentials and retains answers lo
   t.after(() => {
     local.close();
     hosted.close();
-    fs.rmSync(dir, { recursive: true, force: true });
+    try {
+      fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    } catch {}
   });
   const local = createService({ directory: path.join(dir, "local") }),
     hosted = createService({
@@ -63,7 +65,9 @@ test("desktop falls back to local key error when cloud is signed out", async (t)
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lensdesk-offline-"));
   t.after(() => {
     local.close();
-    fs.rmSync(dir, { recursive: true, force: true });
+    try {
+      fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    } catch {}
   });
   const local = createService({ directory: dir }),
     now = new Date().toISOString(),

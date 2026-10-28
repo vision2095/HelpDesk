@@ -225,7 +225,9 @@ test("canceling a partial answer commits no phantom messages and releases chat l
   });
   t.after(() => {
     service.close();
-    fs.rmSync(directory, { recursive: true, force: true });
+    try {
+      fs.rmSync(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    } catch {}
   });
   const s = await service.dispatch("session.save", {
     id: randomUUID(),

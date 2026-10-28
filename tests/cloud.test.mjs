@@ -25,7 +25,9 @@ async function fixture(t, options = {}) {
   const url = "http://127.0.0.1:" + app.server.address().port;
   t.after(async () => {
     await app.close();
-    fs.rmSync(directory, { recursive: true, force: true });
+    try {
+      fs.rmSync(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    } catch {}
   });
   async function call(action, payload = {}, token, headers = {}) {
     const response = await fetch(url + "/api/" + action, {
@@ -757,4 +759,30 @@ test("hosted AI rejects local-model endpoints instead of making server-side netw
   assert.equal(detection.status, 400);
   assert.match(detection.body.error, /Unknown action/);
   assert.equal(upstreamCalls, 0);
+});
+
+test("desktop downloads require authentication and reject unauthenticated requests with 401 or redirect", async (t) => {
+  const f = await fixture(t);
+  const unauthApi = await fetch(f.url + "/downloads/windows");
+  assert.equal(unauthApi.status, 401);
+  const body = await unauthApi.json();
+  assert.equal(body.authRequired, true);
+
+  const unauthHtml = await fetch(f.url + "/downloads/windows", {
+    headers: { Accept: "text/html" },
+    redirect: "manual",
+  });
+  assert.equal(unauthHtml.status, 302);
+  await unauthHtml.text();
+  assert.match(unauthHtml.headers.get("location") || "", /\/\?login=1/);
+
+  const user = await f.register("downloader@example.com");
+  const authReq = await fetch(f.url + "/downloads/windows", {
+    headers: { Authorization: "Bearer " + user.token },
+    redirect: "manual",
+  });
+  await authReq.text();
+  // Since user is authenticated, it passes the 401 download gate (and reaches release manager)
+  assert.notEqual(authReq.status, 401);
+  assert.notEqual(authReq.status, 302);
 });
