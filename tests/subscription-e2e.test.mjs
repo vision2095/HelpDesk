@@ -102,7 +102,9 @@ async function fixture(t) {
 
   t.after(async () => {
     await app.close();
-    gateway.close();
+    gateway.closeIdleConnections?.();
+    gateway.closeAllConnections?.();
+    await new Promise((resolve) => gateway.close(resolve));
     try {
       fs.rmSync(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     } catch {}

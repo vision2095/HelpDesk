@@ -216,14 +216,14 @@ export function createCloudServer({
   function safeAdminCompare(req, secret, identity) {
     const provided = String(req.headers.authorization || "");
     if (!provided.startsWith("Bearer ")) return false;
-    // God-level brute-force protection: strict limit of 5 attempts per 15-minute window per IP
-    limited("admin:" + identity, 5);
     const key = createHash("sha256");
     key.update(provided.slice(7).trim());
     const expected = createHash("sha256").update(secret).digest();
     const ok = key.digest();
     const matches = expected.length === ok.length && timingSafeEqual(expected, ok);
     if (!matches) {
+      // Brute-force protection: rate-limit failed admin token attempts
+      limited("admin:fail:" + identity, 10);
       logger?.({
         event: "security.admin_access_rejected",
         ip: req.socket?.remoteAddress || identity,
@@ -1260,6 +1260,7 @@ export function createCloudServer({
           json(res, 404, { error: "Not found" });
           return;
         }
+        limited("admin:" + identity, 120);
         json(res, 200, await adminDispatch(action, payload, identity));
         return;
       }
@@ -1960,9 +1961,6 @@ export function createCloudServer({
       await new Promise((resolve) => server.close(resolve));
       for (const entry of stores.values()) entry.service.close?.();
       accounts.close();
-      if (pgPool?.end) {
-        await pgPool.end().catch(() => {});
-      }
     },
   };
 }
