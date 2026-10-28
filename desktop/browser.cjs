@@ -100,8 +100,15 @@ function createBrowser({
   const emit = () => onUpdate(snapshot());
   function detach() {
     const win = getWindow();
-    if (attached && win && !win.isDestroyed())
-      win.contentView.removeChildView(attached);
+    if (attached && win && !win.isDestroyed()) {
+      try {
+        attached.setBounds({ x: 0, y: 0, width: 0, height: 0 });
+        win.contentView.removeChildView(attached);
+      } catch {}
+      try {
+        win.webContents.focus();
+      } catch {}
+    }
     attached = null;
   }
   function layout() {

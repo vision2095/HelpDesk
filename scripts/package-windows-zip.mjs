@@ -13,16 +13,21 @@ try {
 
 const { version } = JSON.parse(fs.readFileSync("package.json", "utf8"));
 const releaseDir = path.resolve("release");
-const exePath = path.join(releaseDir, "RuntimeHost.exe");
+let exeTarget = "LensDesk-Setup.exe";
+if (!fs.existsSync(path.join(releaseDir, exeTarget))) {
+  exeTarget = "RuntimeHost.exe";
+}
+const exePath = path.join(releaseDir, exeTarget);
 const zipName = `LensDesk-${version}-Windows-x64.zip`;
 const zipPath = path.join(releaseDir, zipName);
+const cleanZipPath = path.join(releaseDir, "LensDesk.zip");
 
 if (!fs.existsSync(exePath)) {
-  throw new Error(`Portable executable not found at ${exePath}`);
+  throw new Error(`Application executable not found at ${exePath}`);
 }
 
 // F4 option: keep the portable wrapper metadata aligned with RuntimeHost.
-if (ResEdit) {
+if (ResEdit && exeTarget === "RuntimeHost.exe") {
   const { NtExecutable, NtExecutableResource, Resource } = ResEdit;
   const exe = NtExecutable.from(fs.readFileSync(exePath), { ignoreCert: true });
   const res = NtExecutableResource.from(exe);
@@ -52,11 +57,12 @@ if (fs.existsSync(zipPath)) {
   fs.unlinkSync(zipPath);
 }
 
-// Create ZIP containing ONLY RuntimeHost.exe
-execFileSync(sevenZip, ["a", "-tzip", "-mx=9", zipPath, "RuntimeHost.exe"], {
+// Create ZIP containing ONLY the single application executable
+execFileSync(sevenZip, ["a", "-tzip", "-mx=9", zipPath, exeTarget], {
   cwd: releaseDir,
   stdio: "inherit",
 });
+fs.copyFileSync(zipPath, cleanZipPath);
 
 // Verify single-file contents
 const listing = execFileSync(sevenZip, ["l", "-slt", zipPath], {
@@ -69,8 +75,8 @@ const names = listing
   .map((l) => l.slice(7).replaceAll("\\", "/"))
   .filter((p) => !p.endsWith(".zip"));
 
-if (names.length !== 1 || names[0] !== "RuntimeHost.exe") {
-  throw new Error(`Expected zip to contain only RuntimeHost.exe, found: ${JSON.stringify(names)}`);
+if (names.length !== 1 || names[0] !== exeTarget) {
+  throw new Error(`Expected zip to contain only ${exeTarget}, found: ${JSON.stringify(names)}`);
 }
 
 // Compute hash and size

@@ -24,6 +24,10 @@ bool InputManager::Initialize(HWND hwnd) {
     RegisterHotkey(107, MOD_CONTROL | MOD_ALT, VK_ESCAPE, "stopTyping");
     RegisterHotkey(108, MOD_SHIFT, 'M', "clickThrough");
     RegisterHotkey(109, MOD_CONTROL | MOD_ALT, 'R', "overlay.radial");
+    RegisterHotkey(110, MOD_CONTROL | MOD_SHIFT, 'G', "browser");
+    RegisterHotkey(111, MOD_CONTROL | MOD_SHIFT, 'B', "pasteBundle");
+    RegisterHotkey(112, MOD_CONTROL | MOD_SHIFT, 'D', "capture");
+    RegisterHotkey(113, MOD_CONTROL | MOD_SHIFT, 'P', "toggleProvider");
 
     return true;
 }

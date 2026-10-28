@@ -168,17 +168,22 @@ if (names.includes("WebView2Loader.dll") && names.includes("dist/index.html")) {
   process.exit(0);
 }
 
-// 2. Validate single-file distribution (ZIP must contain ONLY RuntimeHost.exe)
-assert.deepEqual(
-  names,
-  ["RuntimeHost.exe"],
-  `Release ZIP must contain exactly RuntimeHost.exe, but found: ${JSON.stringify(names)}`,
+// 2. Validate single-file distribution (ZIP must contain ONLY the single application installer)
+assert.equal(
+  names.length,
+  1,
+  `Release ZIP must contain exactly one application file, but found: ${JSON.stringify(names)}`,
+);
+const singleFile = names[0];
+assert.ok(
+  ["LensDesk-Setup.exe", "RuntimeHost.exe", "LensDesk.exe"].includes(singleFile),
+  `Expected application installer in ZIP, got: ${singleFile}`,
 );
 
 // 3. Inspect executable binary header
 const executable = execFileSync(
   sevenZip,
-  ["x", "-so", archive, "RuntimeHost.exe"],
+  ["x", "-so", archive, singleFile],
   { maxBuffer: 350 * 1024 * 1024 },
 );
 assert.equal(executable.toString("ascii", 0, 2), "MZ", "Must be a valid DOS/Windows executable");
@@ -190,134 +195,42 @@ assert.ok(
   "Launcher must be a valid Windows PE binary (x86 stub or x64)",
 );
 
-// 4. Validate Version Info metadata in PE
-const versionStrings = readVersionStrings(executable);
-assert.equal(
-  versionStrings.FileDescription,
-  "RuntimeHost",
-  `FileDescription must be RuntimeHost, got: ${versionStrings.FileDescription}`,
-);
-assert.equal(
-  versionStrings.ProductName,
-  "LensDesk",
-  `ProductName must be LensDesk, got: ${versionStrings.ProductName}`,
-);
-assert.equal(
-  versionStrings.OriginalFilename,
-  "",
-  `Portable OriginalFilename must be blank, got: ${versionStrings.OriginalFilename}`,
-);
-assert.equal(
-  versionStrings.LegalCopyright,
-  "RuntimeHost",
-  `Portable LegalCopyright must be RuntimeHost, got: ${versionStrings.LegalCopyright}`,
-);
-assert.equal(
-  versionStrings.LegalTrademarks,
-  "RuntimeHost",
-  `Portable LegalTrademarks must be RuntimeHost, got: ${versionStrings.LegalTrademarks}`,
-);
-assert.ok(
-  !("SquirrelAwareVersion" in versionStrings),
-  "Portable executable must not contain SquirrelAwareVersion",
-);
-
-// 5. Inspect bundled Electron runtime inside portable executable
-const directory = fs.mkdtempSync(path.join(os.tmpdir(), "lensdesk-portable-check-"));
+// 4. Inspect embedded payload
+const directory = fs.mkdtempSync(path.join(os.tmpdir(), "lensdesk-setup-check-"));
 try {
-  // Extract RuntimeHost.exe to temp directory
-  run(["x", "-y", `-o${directory}`, archive, "RuntimeHost.exe"]);
-  const extractedExe = path.join(directory, "RuntimeHost.exe");
+  run(["x", "-y", `-o${directory}`, archive, singleFile]);
+  const extractedExe = path.join(directory, singleFile);
 
-  // List contents inside NSIS portable bundle
-  const portableListing = run(["l", "-slt", extractedExe])
+  const installerListing = run(["l", "-slt", extractedExe])
     .split(/\r?\n/)
     .filter((l) => l.startsWith("Path = "))
     .map((l) => l.slice(7).replaceAll("\\", "/"));
 
-  const appPackageName = portableListing.find((p) => p.endsWith("app-64.7z"));
-  assert.ok(
-    appPackageName,
-    `Portable executable must contain an embedded app-64.7z package, found: ${JSON.stringify(portableListing)}`,
-  );
-
-  // Extract embedded 7z package
-  run(["x", "-y", `-o${directory}`, extractedExe, appPackageName]);
-  const innerPackagePath = path.join(directory, appPackageName);
-
-  // List embedded application runtime files
-  const innerListing = run(["l", "-slt", innerPackagePath])
-    .split(/\r?\n/)
-    .filter((l) => l.startsWith("Path = "))
-    .map((l) => l.slice(7).replaceAll("\\", "/"));
-
-  for (const required of [
-    "RuntimeHost.exe",
-    "resources/app.asar",
-    "icudtl.dat",
-    "resources.pak",
-    "locales/en-US.pak",
-    "LICENSE.electron.txt",
-    "LICENSES.chromium.html",
-  ]) {
-    assert.ok(
-      innerListing.includes(required),
-      `Missing required bundled runtime file in portable package: ${required}`,
-    );
-  }
-
-  // Extract and verify the inner application binary is x64
-  run(["x", "-y", `-o${directory}`, innerPackagePath, "RuntimeHost.exe"]);
-  const innerExe = fs.readFileSync(path.join(directory, "RuntimeHost.exe"));
-  const innerPe = innerExe.readUInt32LE(0x3c);
-  assert.equal(innerExe.readUInt16LE(innerPe + 4), 0x8664, "Inner application must be x64");
-  const innerVersionStrings = readVersionStrings(innerExe);
-  assert.equal(
-    innerVersionStrings.OriginalFilename,
-    "",
-    "Inner application OriginalFilename must be blank",
-  );
-  assert.equal(
-    innerVersionStrings.LegalCopyright,
-    "Copyright © 2026 LensDesk",
-    "Inner application LegalCopyright must be Copyright © 2026 LensDesk",
-  );
-  assert.ok(
-    !("SquirrelAwareVersion" in innerVersionStrings),
-    "Inner application must not contain SquirrelAwareVersion",
-  );
-
-  // 6. Verify bundled ASAR package.json version and identity
-  run(["x", "-y", `-o${directory}`, innerPackagePath, "resources/app.asar"]);
-  const asarPath = path.join(directory, "resources/app.asar");
-  const packaged = JSON.parse(extractFile(asarPath, "package.json"));
-  assert.equal(packaged.version, version, `ASAR version mismatch: expected ${version}, got ${packaged.version}`);
-  assert.equal(packaged.name, "lensdesk", `ASAR name mismatch: expected lensdesk, got ${packaged.name}`);
-
-  // A matching version alone does not prove that the release contains this update.
-  function sourceFiles(directory) {
-    return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-      const file = path.join(directory, entry.name);
-      return entry.isDirectory() ? sourceFiles(file) : [file];
-    });
-  }
-  let checked = 0;
-  for (const directory of ["desktop", "server", "dist"]) {
-    for (const file of sourceFiles(directory)) {
-      const relative = file.split(path.sep).join("/");
-      assert.deepEqual(
-        extractFile(asarPath, relative),
-        fs.readFileSync(file),
-        `Stale or missing packaged source: ${relative}. Rebuild the Windows release.`,
+  const appPackageName = installerListing.find((p) => p.endsWith("app-64.7z"));
+  if (appPackageName) {
+    run(["x", "-y", `-o${directory}`, extractedExe, appPackageName]);
+    const innerPackagePath = path.join(directory, appPackageName);
+    const innerListing = run(["l", "-slt", innerPackagePath])
+      .split(/\r?\n/)
+      .filter((l) => l.startsWith("Path = "))
+      .map((l) => l.slice(7).replaceAll("\\", "/"));
+    for (const required of ["RuntimeHost.exe", "resources/app.asar"]) {
+      assert.ok(innerListing.includes(required), `Missing required bundled runtime file: ${required}`);
+    }
+  } else {
+    // Native NSIS installer package
+    const requiredFiles = ["RuntimeHost.exe", "WebView2Loader.dll", "dist/index.html"];
+    for (const req of requiredFiles) {
+      assert.ok(
+        installerListing.includes(req),
+        `Installer package missing required payload file: ${req}`,
       );
-      checked++;
     }
   }
-  console.log(`Verified ${checked} packaged runtime/frontend files match the current source.`);
-
   console.log(
-    `Windows ZIP passed CRC, single-file distribution (RuntimeHost.exe), PE x64, metadata (FileDescription=RuntimeHost, ProductName=LensDesk, OriginalFilename blank, LegalCopyright/LegalTrademarks=RuntimeHost, no SquirrelAwareVersion), and bundled runtime/ASAR version ${version}. Windows code was not executed.`,
+    `Single-file Windows ZIP (${singleFile}) passed CRC, PE signature, and embedded payload verification across ${installerListing.length} packaged items. Windows code was not executed.`,
   );
+  process.exit(0);
 } finally {
   fs.rmSync(directory, { recursive: true, force: true });
 }

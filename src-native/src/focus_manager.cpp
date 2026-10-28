@@ -114,6 +114,10 @@ void FocusManager::OnWindowActivated(bool activated) {
     if (activated) {
         TransitionTo(FocusState::ACTIVATING, "wm_activate_true");
         TransitionTo(FocusState::RESTORING, "restoring_active_target");
+        if (m_lastActiveTarget == FocusState::FOCUSED_BROWSER &&
+            (!m_browserMgr || !m_browserMgr->HasActiveTab() || !m_browserMgr->GetLayout().visible)) {
+            m_lastActiveTarget = FocusState::FOCUSED_ASSISTANT;
+        }
         SetFocusTarget(m_lastActiveTarget, "window_activated_restore");
     } else {
         TransitionTo(FocusState::FOCUS_LOST, "wm_activate_false");
@@ -175,7 +179,8 @@ LRESULT FocusManager::RouteMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         bool inBrowser = false;
         if (m_browserMgr && m_browserMgr->HasActiveTab()) {
             const BrowserLayout bl = m_browserMgr->GetLayout();
-            if (pt.x >= bl.x && pt.x < (bl.x + bl.width) &&
+            if (bl.visible && bl.width > 0 && bl.height > 0 &&
+                pt.x >= bl.x && pt.x < (bl.x + bl.width) &&
                 pt.y >= bl.y && pt.y < (bl.y + bl.height)) {
                 inBrowser = true;
             }

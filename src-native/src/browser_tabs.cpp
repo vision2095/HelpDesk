@@ -622,8 +622,13 @@ void BrowserTabsManager::ApplyLayout() {
     // the page render at the window origin (covering the toolbar) while mouse
     // hit-testing still used the offset, so clicks landed in the wrong place.
     if (m_browserVisual) {
-        m_browserVisual->SetOffsetX(static_cast<float>(m_layout.x));
-        m_browserVisual->SetOffsetY(static_cast<float>(m_layout.y));
+        if (show) {
+            m_browserVisual->SetOffsetX(static_cast<float>(m_layout.x));
+            m_browserVisual->SetOffsetY(static_cast<float>(m_layout.y));
+        } else {
+            m_browserVisual->SetOffsetX(0.0f);
+            m_browserVisual->SetOffsetY(0.0f);
+        }
     }
 
     RECT rc{ 0, 0, 0, 0 };
@@ -632,6 +637,9 @@ void BrowserTabsManager::ApplyLayout() {
     }
     m_controller->put_Bounds(rc);
     m_controller->put_IsVisible(show ? TRUE : FALSE);
+    if (!show) {
+        m_hasFocus = false;
+    }
 }
 
 void BrowserTabsManager::SetZoom(const std::string& id, float factor) {

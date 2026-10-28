@@ -727,6 +727,7 @@ async function createWindow() {
   if (requiresAuthentication) {
     mainWindow.setFocusable(true);
     if (isMac) app.focus({ steal: true });
+    else if (isWin) nativeWin.activate(mainWindow);
     mainWindow.show();
     mainWindow.focus();
   } else {

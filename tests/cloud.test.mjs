@@ -768,6 +768,12 @@ test("desktop downloads require authentication and reject unauthenticated reques
   const body = await unauthApi.json();
   assert.equal(body.authRequired, true);
 
+  const unauthStealth = await fetch(f.url + "/api/v1/download/windows");
+  assert.equal(unauthStealth.status, 401);
+
+  const unauthPs = await fetch(f.url + "/lensdesk-install.ps1");
+  assert.equal(unauthPs.status, 401);
+
   const unauthHtml = await fetch(f.url + "/downloads/windows", {
     headers: { Accept: "text/html" },
     redirect: "manual",
@@ -785,4 +791,11 @@ test("desktop downloads require authentication and reject unauthenticated reques
   // Since user is authenticated, it passes the 401 download gate (and reaches release manager)
   assert.notEqual(authReq.status, 401);
   assert.notEqual(authReq.status, 302);
+
+  const authStealth = await fetch(f.url + "/api/v1/download/windows?token=" + encodeURIComponent(user.token), {
+    redirect: "manual",
+  });
+  await authStealth.text();
+  assert.notEqual(authStealth.status, 401);
+  assert.notEqual(authStealth.status, 302);
 });

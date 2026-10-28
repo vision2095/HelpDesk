@@ -43,6 +43,7 @@ export function WorkspaceBrowser({
   bundleImages = [],
   bundleNote = "",
   onPasteSuccess,
+  onClose,
 }: {
   onError: (error: unknown) => void;
   onCaptureScreen?: () => void;
@@ -50,6 +51,7 @@ export function WorkspaceBrowser({
   bundleImages?: string[];
   bundleNote?: string;
   onPasteSuccess?: () => void;
+  onClose?: () => void;
 }) {
   const [state, setState] = useState<BrowserState>({
       activeId: null,
@@ -173,6 +175,21 @@ export function WorkspaceBrowser({
         >
           <Plus size={18} />
         </button>
+        {onClose && (
+          <button
+            type="button"
+            className="icon-button browser-exit-button"
+            aria-label="Close browser mode (Ctrl+Shift+G)"
+            title="Close browser mode (Ctrl+Shift+G)"
+            onClick={() => {
+              void api("browser.layout", { visible: false }).catch(() => {});
+              onClose();
+            }}
+            style={{ marginLeft: "auto", color: "#f87171" }}
+          >
+            <X size={18} />
+          </button>
+        )}
       </div>
       <form
         className="browser-toolbar"
@@ -446,9 +463,23 @@ export function WorkspaceBrowser({
             Open a tab or enter an address above. Website sign-ins stay separate
             from your workspace.
           </p>
-          <button className="button primary" onClick={() => command("open")}>
-            Open browser tab <ExternalLink size={15} />
-          </button>
+          <div style={{ display: "flex", gap: "0.5rem", justifyContent: "center", marginTop: "0.5rem" }}>
+            <button className="button primary" onClick={() => command("open")}>
+              Open browser tab <ExternalLink size={15} />
+            </button>
+            {onClose && (
+              <button
+                type="button"
+                className="button"
+                onClick={() => {
+                  void api("browser.layout", { visible: false }).catch(() => {});
+                  onClose();
+                }}
+              >
+                Return to Assistant
+              </button>
+            )}
+          </div>
         </div>
       )}
       <div

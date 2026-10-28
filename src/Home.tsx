@@ -125,7 +125,7 @@ export function Home({ navigate }: HomeProps) {
         name: "LensDesk.zip",
         url: "/downloads/windows",
         version: "2.0.0",
-        size: 1574800,
+        size: 1136372,
       },
     },
     {
@@ -178,8 +178,11 @@ export function Home({ navigate }: HomeProps) {
     navigate("workspace");
   }
 
-  const handleDownloadClick = () => {
-    // Direct instant download without blocking
+  const handleDownloadClick = (e: React.MouseEvent) => {
+    if (!signedIn) {
+      e.preventDefault();
+      navigate("account");
+    }
   };
 
   return (

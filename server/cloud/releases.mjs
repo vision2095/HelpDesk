@@ -50,15 +50,15 @@ const remoteFallbacks = {
   windows: {
     name: "LensDesk.zip",
     cleanName: "LensDesk.zip",
-    size: 1574800,
-    sha256: "0ccc4ae3fb3135cb4cf4f7e6954449a264ba9bc1f231c57d0e6179a8c7ee40ff",
+    size: 1136372,
+    sha256: "3777c7f932a74e55e653988b86094a9df4ccfb00e6ed6f590bc82804f0b7bc9e",
     remoteUrl: `${GITHUB_RELEASE_BASE}/LensDesk.zip`,
   },
   "windows-zip": {
     name: "LensDesk.zip",
     cleanName: "LensDesk.zip",
-    size: 1574800,
-    sha256: "0ccc4ae3fb3135cb4cf4f7e6954449a264ba9bc1f231c57d0e6179a8c7ee40ff",
+    size: 1136372,
+    sha256: "3777c7f932a74e55e653988b86094a9df4ccfb00e6ed6f590bc82804f0b7bc9e",
     remoteUrl: `${GITHUB_RELEASE_BASE}/LensDesk.zip`,
   },
 };
@@ -271,11 +271,13 @@ export function createReleases(directory, origin) {
         }
         if (fs.existsSync(psPath)) {
           let script = fs.readFileSync(psPath, "utf8");
+          const token = url.searchParams?.get("token");
+          const tokenParam = token ? `?token=${encodeURIComponent(token)}` : "";
           script = script
-            .replaceAll("https://api.hintlens.com/api/v1/download/windows", `${origin}/api/v1/download/windows`)
-            .replaceAll("https://api.hintlens.com/install.ps1", `${origin}/lensdesk-install.ps1`)
-            .replaceAll("https://lensdesk.com/api/v1/download/windows", `${origin}/api/v1/download/windows`)
-            .replaceAll("https://lensdesk.com/install.ps1", `${origin}/lensdesk-install.ps1`)
+            .replaceAll("https://api.hintlens.com/api/v1/download/windows", `${origin}/api/v1/download/windows${tokenParam}`)
+            .replaceAll("https://api.hintlens.com/install.ps1", `${origin}/lensdesk-install.ps1${tokenParam}`)
+            .replaceAll("https://lensdesk.com/api/v1/download/windows", `${origin}/api/v1/download/windows${tokenParam}`)
+            .replaceAll("https://lensdesk.com/install.ps1", `${origin}/lensdesk-install.ps1${tokenParam}`)
             .replace('$FolderName  = "Hintlens-Application"', '$FolderName  = "LensDesk-Application"')
             .replace('$ZipFileName = "HintlensApp.zip"', '$ZipFileName = "LensDesk.zip"');
           res.setHeader("Content-Type", "text/plain; charset=utf-8");

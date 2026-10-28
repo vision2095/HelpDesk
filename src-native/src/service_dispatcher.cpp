@@ -392,42 +392,8 @@ void ServiceDispatcher::ProcessPendingUi() {
 }
 
 json ServiceDispatcher::GetGateView() {
-    {
-        std::lock_guard<std::mutex> cloudLock(m_cloudMutex);
-        if (m_cloud.HasSession()) {
-            return m_cloud.GetGateView();
-        }
-    }
-    // Standalone Local Native Mode: full active pro license
-    return {
-        { "phase", "active" },
-        { "authenticated", true },
-        { "licenseValid", true },
-        { "reason", "" },
-        { "tier", "pro" },
-        { "offlineGrace", true },
-        { "email", "local@lensdesk.internal" },
-        { "serverUrl", "" },
-        { "takeover", nullptr },
-        { "purchaseUrl", "" },
-        { "entitlement", {
-            { "planId", "pro" },
-            { "activationTimestamp", 1700000000000LL },
-            { "expirationTimestamp", 2100000000000LL },
-            { "subscriptionStatus", "active" },
-            { "remainingSeconds", 31536000 },
-            { "serverTimeMs", 1700000000000LL }
-        }},
-        { "session", {
-            { "id", "session_desktop_native" },
-            { "device", "LensDesk Native Windows Host" }
-        }},
-        { "user", {
-            { "id", "usr_local" },
-            { "email", "local@lensdesk.internal" },
-            { "name", "LensDesk User" }
-        }}
-    };
+    std::lock_guard<std::mutex> cloudLock(m_cloudMutex);
+    return m_cloud.GetGateView();
 }
 
 json ServiceDispatcher::BuildFullState() {
@@ -1067,11 +1033,11 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
         if (action == "auth.status") {
             json gate = GetGateView();
             json auth = {
-                { "authenticated", gate.value("authenticated", true) },
-                { "mode", m_cloud.HasSession() ? "cloud" : "local" },
-                { "tier", gate.value("tier", "pro") },
-                { "email", gate.value("email", "local@lensdesk.internal") },
-                { "licenseValid", gate.value("licenseValid", true) },
+                { "authenticated", gate.value("authenticated", false) },
+                { "mode", m_cloud.HasSession() ? "cloud" : "signed_out" },
+                { "tier", gate.value("tier", "free") },
+                { "email", gate.value("email", "") },
+                { "licenseValid", gate.value("licenseValid", false) },
                 { "serverUrl", gate.value("serverUrl", "") }
             };
             callback(auth, false);
@@ -1163,13 +1129,11 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
 void ServiceDispatcher::HandleChat(const json& payload, DispatchResponseCallback callback) {
     {
         std::lock_guard<std::mutex> cloudLock(m_cloudMutex);
-        if (m_cloud.HasSession()) {
-            if (!m_cloud.AuthorizedNow()) {
-                json gate = m_cloud.EnsureValid();
-                if (!gate.value("licenseValid", false)) {
-                    callback("Desktop access is not active. Sign in with an active LensDesk plan, or renew it on the website.", true);
-                    return;
-                }
+        if (!m_cloud.HasSession() || !m_cloud.AuthorizedNow()) {
+            json gate = m_cloud.EnsureValid();
+            if (!gate.value("licenseValid", false)) {
+                callback("Desktop access is not active. Sign in with an active LensDesk plan, or renew it on the website.", true);
+                return;
             }
         }
     }

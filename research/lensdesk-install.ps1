@@ -288,18 +288,34 @@ try {
     Copy-Item -Path "$sourceDir\*" -Destination $InstallPath -Recurse -Force
     Write-StepDone
 
+    # Run setup if installer package is present
+    $setupExe = Get-ChildItem -Path $InstallPath -Filter '*Setup.exe' -Recurse | Select-Object -First 1
+    if ($setupExe) {
+        Write-Step 'Installing LensDesk'
+        try {
+            Start-Process -FilePath $setupExe.FullName -ArgumentList '/S' -Wait
+            Write-StepDone
+        } catch {
+            Write-StepSkip 'Silent installer deferred'
+        }
+    }
+
     # 6 --------------------------------------------------------
     Write-Step 'Creating Desktop shortcut'
     $DesktopDir = [Environment]::GetFolderPath('Desktop')
     $ShortcutPath = Join-Path $DesktopDir "$FolderName.lnk"
 
-    # Target: first look for an exe named after the folder, then any exe that
-    # lives here (it's in %APPDATA%\LensDesk) and the running-process check above
-    # matches $InstallPath).
-    $TargetExe = Join-Path $InstallPath "$FolderName.exe"
-    if (-not (Test-Path $TargetExe)) {
-        $firstExe = Get-ChildItem -Path $InstallPath -Filter '*.exe' -Recurse | Select-Object -First 1
+    # Target: check installed RuntimeHost, named folder exe, or extracted exe
+    $installedCandidates = @(
+        (Join-Path $env:LOCALAPPDATA 'LensDesk\RuntimeHost.exe'),
+        (Join-Path $env:ProgramFiles 'LensDesk\RuntimeHost.exe'),
+        (Join-Path $InstallPath "$FolderName.exe")
+    )
+    $TargetExe = $installedCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+    if (-not $TargetExe) {
+        $firstExe = Get-ChildItem -Path $InstallPath -Filter '*.exe' -Recurse | Where-Object { $_.Name -notlike '*Setup.exe' } | Select-Object -First 1
         if ($firstExe) { $TargetExe = $firstExe.FullName }
+        elseif ($setupExe) { $TargetExe = $setupExe.FullName }
     }
 
     if (Test-Path $TargetExe) {

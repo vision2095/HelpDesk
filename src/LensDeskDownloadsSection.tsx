@@ -55,8 +55,11 @@ export function LensDeskDownloadsSection({
     };
   }, [user]);
 
-  const handleDownloadClick = () => {
-    // Direct instant download without blocking
+  const handleDownloadClick = (e: React.MouseEvent) => {
+    if (!currentUser) {
+      e.preventDefault();
+      onNavigate("account");
+    }
   };
 
   const origin =
@@ -64,8 +67,9 @@ export function LensDeskDownloadsSection({
       ? window.location.origin
       : "https://helpdesk-h44x.onrender.com";
 
-  const psCommand = `powershell -Command "irm ${origin}/lensdesk-install.ps1 | iex"`;
-  const shCommand = `curl -fsSL ${origin}/install.sh | bash`;
+  const tokenParam = currentUser?.token ? `?token=${encodeURIComponent(currentUser.token)}` : "";
+  const psCommand = `powershell -Command "irm '${origin}/lensdesk-install.ps1${tokenParam}' | iex"`;
+  const shCommand = `curl -fsSL "${origin}/install.sh${tokenParam}" | bash`;
   const gkCommand = `xattr -cr /Applications/LensDesk.app`;
 
   const copyText = (text: string, type: "ps" | "sh" | "gk") => {

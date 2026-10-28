@@ -344,7 +344,7 @@ void WebView2Host::InjectLensDeskBridge() {
       else if (evName === 'lens:browser-focus-address') listeners.browserFocusAddress.forEach(function(fn) { fn(); });
       else if (evName === 'lens:browser-focus-find') listeners.browserFocusFind.forEach(function(fn) { fn(); });
       else if (evName === 'lens:chat') listeners.chat.forEach(function(fn) { fn(data); });
-      else if (evName === 'lens:shortcut') listeners.shortcut.forEach(function(fn) { fn(data); });
+      else if (evName === 'lens:shortcut') listeners.shortcut.forEach(function(fn) { fn(typeof data === 'object' && data && data.action ? data.action : data); });
       else if (evName === 'lens:overlay') listeners.overlay.forEach(function(fn) { fn(data); });
       else if (evName === 'lens:clickThrough') listeners.clickThrough.forEach(function(fn) { fn(data); });
       else if (evName === 'gkey') listeners.globalKey.forEach(function(fn) { fn(data); });

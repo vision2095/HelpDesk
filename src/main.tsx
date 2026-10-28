@@ -861,7 +861,11 @@ function App() {
     }
   };
 
-  shortcutHandlerRef.current = (action) => {
+  shortcutHandlerRef.current = (rawAction) => {
+    const action =
+      typeof rawAction === "object" && rawAction && "action" in rawAction
+        ? (rawAction as any).action
+        : rawAction;
     if (action === "getAnswer" && !chatBusyRef.current) run(snapAndSolve);
     if (action === "capture") run(quickCaptureScreen);
     if (action === "regionSnip") run(() => captureRegion(true));
@@ -2624,6 +2628,7 @@ function App() {
         bundleImages={images}
         bundleNote={current?.notes || ""}
         onPasteSuccess={() => notify("Pasted screenshot into the page")}
+        onClose={() => setFloatingView("assistant")}
       />
     ),
     onToggleInterviewLayout: () => {
@@ -2720,6 +2725,7 @@ function App() {
               bundleImages={images}
               bundleNote={current?.notes || ""}
               onPasteSuccess={() => notify("Pasted screenshot into the page")}
+              onClose={() => setFloatingView("assistant")}
             />
           }
         />
@@ -2937,6 +2943,7 @@ function App() {
             bundleImages={images}
             bundleNote={current?.notes || ""}
             onPasteSuccess={() => notify("Pasted screenshot into the page")}
+            onClose={() => navigate("workspace")}
           />
         )}
         {page === "workspace" && (
