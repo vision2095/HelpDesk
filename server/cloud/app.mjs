@@ -69,9 +69,29 @@ export function createCloudServer({
   production = false,
   trustProxy = false,
 } = {}) {
-  const origin = new URL(publicUrl).origin;
-  if (production && !origin.startsWith("https://"))
-    throw new Error("Production PUBLIC_URL must use HTTPS.");
+  let effectivePublicUrl = publicUrl;
+  if (
+    process.env.RENDER_EXTERNAL_URL &&
+    (!effectivePublicUrl ||
+      effectivePublicUrl.startsWith("http://127.0.0.1") ||
+      effectivePublicUrl.startsWith("http://localhost"))
+  ) {
+    effectivePublicUrl = process.env.RENDER_EXTERNAL_URL;
+  }
+  let origin = new URL(effectivePublicUrl).origin;
+  if (production && !origin.startsWith("https://")) {
+    if (process.env.RENDER_EXTERNAL_URL) {
+      origin = new URL(process.env.RENDER_EXTERNAL_URL).origin;
+    } else if (
+      origin.startsWith("http://") &&
+      !origin.includes("127.0.0.1") &&
+      !origin.includes("localhost")
+    ) {
+      origin = origin.replace("http://", "https://");
+    } else {
+      throw new Error("Production PUBLIC_URL must use HTTPS.");
+    }
+  }
   const accounts = createAccounts(directory),
     vault = createVault(encryptionKey),
     stripe =
@@ -1935,7 +1955,10 @@ export async function startCloud() {
     directory,
     production,
     trustProxy: process.env.TRUST_PROXY === "1",
-    publicUrl: process.env.PUBLIC_URL || "http://127.0.0.1:4319",
+    publicUrl:
+      process.env.PUBLIC_URL ||
+      process.env.RENDER_EXTERNAL_URL ||
+      (production ? "https://helpdesk.onrender.com" : "http://127.0.0.1:4319"),
     encryptionKey: key,
     stripeSecret: process.env.STRIPE_SECRET_KEY,
     stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET,

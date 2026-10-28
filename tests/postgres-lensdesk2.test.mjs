@@ -4,15 +4,32 @@ import { getDatabasePool, transaction } from "../server/cloud/postgres-db.mjs";
 import { createPostgresStore } from "../server/cloud/postgres-store.mjs";
 import { runPostgresMigrations } from "../server/cloud/postgres-migrations.mjs";
 
-const pool = getDatabasePool("postgres://localhost:5432/lensdesk");
+let pool = null;
+let pgAvailable = false;
+try {
+  const connStr = process.env.DATABASE_URL || "postgres://localhost:5432/lensdesk";
+  pool = getDatabasePool(connStr);
+  const client = await pool.connect();
+  client.release();
+  pgAvailable = true;
+} catch (err) {
+  pgAvailable = false;
+}
 
-test.before(async () => {
-  await runPostgresMigrations(pool);
-});
+if (!pgAvailable) {
+  test("PostgreSQL integration suite (skipped: PostgreSQL not reachable on localhost:5432 or DATABASE_URL)", (t) => {
+    t.skip("No live PostgreSQL server reachable at postgres://localhost:5432/lensdesk");
+  });
+} else {
+  test.before(async () => {
+    await runPostgresMigrations(pool);
+  });
 
-test.after(async () => {
-  await pool.end();
-});
+  test.after(async () => {
+    if (pool) {
+      try { await pool.end(); } catch {}
+    }
+  });
 
 test("01. Website registration and authentication", async () => {
   const store = createPostgresStore({ pool });
@@ -518,3 +535,4 @@ test("20. Unauthorized API access and session replay attempts", async () => {
   const sqlInjection = await store.userForToken("' OR '1'='1");
   assert.equal(sqlInjection, null);
 });
+}
