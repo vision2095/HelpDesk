@@ -119,19 +119,7 @@ export function Home({ navigate }: HomeProps) {
     {
       key: "windows",
       platform: "Windows",
-      variant: "Setup Installer (Recommended)",
-      detail: "Windows 10 & 11 · 64-bit EXE",
-      artifact: {
-        name: "LensDesk-Setup.exe",
-        url: "/downloads/windows",
-        version: "2.0.0",
-        size: 1155422,
-      },
-    },
-    {
-      key: "windows-portable",
-      platform: "Windows",
-      variant: "Portable Archive",
+      variant: "Portable ZIP (Recommended)",
       detail: "Windows 10 & 11 · 64-bit ZIP",
       artifact: {
         name: "LensDesk.zip",
@@ -350,11 +338,11 @@ export function Home({ navigate }: HomeProps) {
                 <a
                   className="site-button site-button-primary"
                   href="/downloads/windows"
-                  download="LensDesk-Setup.exe"
+                  download="LensDesk.zip"
                   onClick={handleDownloadClick}
                 >
                   <Download size={16} />
-                  Download for Windows
+                  Download for Windows (.ZIP)
                 </a>
                 <a
                   className="site-button site-button-primary"

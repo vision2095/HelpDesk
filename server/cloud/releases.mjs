@@ -24,7 +24,7 @@ const legacyNames = {
 const cleanNames = {
   "mac-arm64": "LensDesk.dmg",
   "mac-x64": "LensDesk-Intel.dmg",
-  windows: "LensDesk-Setup.exe",
+  windows: "LensDesk.zip",
   "windows-zip": "LensDesk.zip",
 };
 
@@ -48,11 +48,11 @@ const remoteFallbacks = {
     remoteUrl: `${GITHUB_RELEASE_BASE}/LensDesk-Intel.dmg`,
   },
   windows: {
-    name: "LensDesk-Setup.exe",
-    cleanName: "LensDesk-Setup.exe",
-    size: 1155422,
-    sha256: "30e60f7efd8134d43b72f6da7caea1712a806963503f268b8e053d1000bb7056",
-    remoteUrl: `${GITHUB_RELEASE_BASE}/LensDesk-Setup.exe`,
+    name: "LensDesk.zip",
+    cleanName: "LensDesk.zip",
+    size: 1574800,
+    sha256: "0ccc4ae3fb3135cb4cf4f7e6954449a264ba9bc1f231c57d0e6179a8c7ee40ff",
+    remoteUrl: `${GITHUB_RELEASE_BASE}/LensDesk.zip`,
   },
   "windows-zip": {
     name: "LensDesk.zip",

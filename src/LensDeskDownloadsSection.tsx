@@ -147,7 +147,7 @@ export function LensDeskDownloadsSection({
           </div>
           <div className="hl-card-title-group">
             <h3>Manual Download (Windows)</h3>
-            <p>Native stealth overlay (64-bit EXE / ZIP archive).</p>
+            <p>Native stealth overlay (Portable 64-bit ZIP archive).</p>
           </div>
         </div>
 
@@ -155,26 +155,17 @@ export function LensDeskDownloadsSection({
           <a
             href="/downloads/windows"
             className="hl-btn-download-primary"
-            download="LensDesk-Setup.exe"
-            onClick={handleDownloadClick}
-          >
-            <Download size={16} />
-            Download Installer (.exe)
-          </a>
-          <a
-            href="/api/v1/download/windows"
-            className="hl-btn-download-secondary"
             download="LensDesk.zip"
             onClick={handleDownloadClick}
           >
             <Download size={16} />
-            Portable (.zip)
+            Download for Windows (.zip)
           </a>
           <span className="hl-badge-available">Available</span>
         </div>
 
         <p className="hl-card-note">
-          Windows 11 and Windows 10 version 2004 or later supported with native stealth capture exclusion.
+          Windows 11 and Windows 10 version 2004 or later supported with native stealth capture exclusion. Extract ZIP and run LensDesk.exe.
         </p>
       </div>
 
