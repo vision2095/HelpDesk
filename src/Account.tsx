@@ -396,6 +396,7 @@ export function Account({
                 run(async () => {
                   const result = await cloud("auth.logout");
                   setInfo(await cloud("cloud.state"));
+                  setMode("login");
                   onLogout();
                   onNotice(
                     result.serverRevoked === false

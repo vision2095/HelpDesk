@@ -101,7 +101,14 @@ try {
     .getByRole("button", { name: "Account & cloud", exact: true })
     .click();
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
-  await page.getByRole("heading", { name: "Welcome back" }).waitFor();
+  const welcomeHeading = page.getByRole("heading", { name: "Welcome back" });
+  if (!(await welcomeHeading.isVisible({ timeout: 4000 }).catch(() => false))) {
+    const signInBtn = page.getByRole("button", { name: /Already have an account\? Sign in/i });
+    if (await signInBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await signInBtn.click();
+    }
+  }
+  await welcomeHeading.waitFor();
   await page
     .getByLabel("Email address", { exact: true })
     .fill("cloud-ui@example.com");
