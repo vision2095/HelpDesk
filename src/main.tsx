@@ -465,11 +465,26 @@ function App() {
     // entitlement pushed by the main-process arbitraritor.
     if (!window.lens?.onGate) return;
     let alive = true;
+    const OFFICIAL_SERVER = "https://helpdesk-h44x.onrender.com";
+    const sanitize = (v: any) => {
+      if (!v) return v;
+      if (
+        !v.serverUrl ||
+        v.serverUrl.includes("example.com") ||
+        v.serverUrl.includes("example.org")
+      ) {
+        window.lens?.invoke("cloud.configure", { url: OFFICIAL_SERVER }).then((next) => {
+          if (alive && next) setGate(next);
+        }).catch(() => {});
+        return { ...v, serverUrl: OFFICIAL_SERVER };
+      }
+      return v;
+    };
     window.lens
       .invoke("gate.state")
-      .then((v) => alive && setGate(v))
+      .then((v) => alive && setGate(sanitize(v)))
       .catch(() => {});
-    const off = window.lens.onGate((v) => alive && setGate(v));
+    const off = window.lens.onGate((v) => alive && setGate(sanitize(v)));
     return () => {
       alive = false;
       off();

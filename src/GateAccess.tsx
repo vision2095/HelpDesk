@@ -16,6 +16,8 @@ import {
 // application only signs in, enforces the single active device session,
 // and defers purchases to the website's checkout.
 
+const OFFICIAL_SERVER_URL = "https://helpdesk-h44x.onrender.com";
+
 type GateView = {
   phase: string;
   reason: string;
@@ -73,17 +75,32 @@ export function GateAccess({
 
   useEffect(() => {
     let alive = true;
+    const sanitizeGate = (v: any) => {
+      if (!v) return v;
+      if (
+        !v.serverUrl ||
+        v.serverUrl.includes("example.com") ||
+        v.serverUrl.includes("example.org")
+      ) {
+        window.lens?.invoke("cloud.configure", { url: OFFICIAL_SERVER_URL }).catch(() => {});
+        return { ...v, serverUrl: OFFICIAL_SERVER_URL };
+      }
+      return v;
+    };
+
     window.lens!
       .invoke("gate.state")
-      .then((v) => {
+      .then((raw) => {
         if (!alive) return;
+        const v = sanitizeGate(raw);
         setView(v);
         if (v?.serverUrl) setServerDraft(v.serverUrl);
       })
       .catch(() => {});
     const off =
-      window.lens!.onGate?.((v) => {
+      window.lens!.onGate?.((raw) => {
         if (!alive) return;
+        const v = sanitizeGate(raw);
         setView(v);
         if (v?.serverUrl) setServerDraft(v.serverUrl);
       }) ?? (() => {});
@@ -119,8 +136,12 @@ export function GateAccess({
     setServerBusy(true);
     setFormError("");
     try {
+      let target = serverDraft.trim();
+      if (!target || target.includes("example.com") || target.includes("example.org")) {
+        target = OFFICIAL_SERVER_URL;
+      }
       await window.lens!.invoke("cloud.configure", {
-        url: serverDraft.trim(),
+        url: target,
       });
       await reloadGate();
       setEditingServer(false);
@@ -153,10 +174,32 @@ export function GateAccess({
     setBusy(true);
     setFormError("");
     try {
-      const result = await window.lens!.invoke("gate.login", {
-        email,
-        password,
-      });
+      if (
+        !view?.serverUrl ||
+        view.serverUrl.includes("example.com") ||
+        view.serverUrl.includes("example.org")
+      ) {
+        await window.lens!.invoke("cloud.configure", { url: OFFICIAL_SERVER_URL }).catch(() => {});
+      }
+      let result: any = null;
+      try {
+        result = await window.lens!.invoke("gate.login", {
+          email,
+          password,
+        });
+      } catch (loginErr) {
+        const msg = message(loginErr);
+        if (msg.includes("example.com") || msg.includes("Could not reach")) {
+          // Auto-heal by ensuring connection to official cloud server and retrying
+          await window.lens!.invoke("cloud.configure", { url: OFFICIAL_SERVER_URL });
+          result = await window.lens!.invoke("gate.login", {
+            email,
+            password,
+          });
+        } else {
+          throw loginErr;
+        }
+      }
       if (result?.mfaRequired) {
         setChallenge(result.challenge);
         setPassword("");
@@ -444,7 +487,7 @@ export function GateAccess({
                       type="url"
                       required
                       autoComplete="url"
-                      placeholder="https://your-workspace.example"
+                      placeholder="https://helpdesk-h44x.onrender.com"
                       value={serverDraft}
                       onChange={(e) => setServerDraft(e.target.value)}
                     />

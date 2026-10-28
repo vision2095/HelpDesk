@@ -50,7 +50,13 @@ function createCloudClient({
       } catch {}
     }
     if (
-      (!savedUrl || (savedUrl.includes("127.0.0.1") || savedUrl.includes("localhost")) && process.env.NODE_ENV !== "test" && !process.env.LENSDESK_LOCAL_DEV) &&
+      (!savedUrl ||
+        ((savedUrl.includes("127.0.0.1") ||
+          savedUrl.includes("localhost") ||
+          savedUrl.includes("example.com") ||
+          savedUrl.includes("example.org")) &&
+          process.env.NODE_ENV !== "test" &&
+          !process.env.LENSDESK_LOCAL_DEV)) &&
       defaultUrl
     ) {
       try {

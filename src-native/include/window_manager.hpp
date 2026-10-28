@@ -54,10 +54,21 @@ public:
 
 private:
     static LRESULT CALLBACK StaticWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+    static void CALLBACK StaticWinEventProc(
+        HWINEVENTHOOK hWinEventHook,
+        DWORD event,
+        HWND hwnd,
+        LONG idObject,
+        LONG idChild,
+        DWORD idEventThread,
+        DWORD dwmsEventTime
+    );
     LRESULT HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
     HWND m_hwnd = nullptr;
     HINSTANCE m_hInstance = nullptr;
+    HWINEVENTHOOK m_hForegroundHook = nullptr;
+    static WindowManager* s_instance;
     bool m_isVisible = true;
     bool m_alwaysOnTop = true;
     bool m_clickThrough = false;

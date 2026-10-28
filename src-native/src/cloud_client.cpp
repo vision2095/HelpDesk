@@ -101,7 +101,11 @@ std::string CloudClient::DecryptSecret(const std::string& encoded) const {
 void CloudClient::Load() {
     const char* env = std::getenv("LENSDESK_SERVER_URL");
     const std::string defaultServer = "https://helpdesk-h44x.onrender.com";
-    m_serverUrl = env && *env ? env : defaultServer;
+    if (env && *env && std::string(env).find("example") == std::string::npos) {
+        m_serverUrl = env;
+    } else {
+        m_serverUrl = defaultServer;
+    }
     m_phase = "signed_out";
     m_reason.clear();
     m_entitlement = nullptr;
@@ -124,7 +128,12 @@ void CloudClient::Load() {
     try {
         if (saved.contains("url") && saved["url"].is_string()) {
             std::string u = NormalizeServerUrl(saved["url"].get<std::string>());
-            if ((u.find("127.0.0.1") != std::string::npos || u.find("localhost") != std::string::npos) && (!env || !*env)) {
+            bool isInvalidOrDummy = (u.empty() ||
+                                    u.find("example.com") != std::string::npos ||
+                                    u.find("example.org") != std::string::npos ||
+                                    u.find("127.0.0.1") != std::string::npos ||
+                                    u.find("localhost") != std::string::npos);
+            if (isInvalidOrDummy && (!env || !*env || std::string(env).find("example") != std::string::npos)) {
                 m_serverUrl = defaultServer;
             } else {
                 m_serverUrl = u;
@@ -480,6 +489,12 @@ json CloudClient::Login(const json& payload) {
     if (!body.contains("appVersion")) body["appVersion"] = "2.0.0";
 
     HttpResult result = Request("desktop.login", body, 15000);
+    const std::string defaultServer = "https://helpdesk-h44x.onrender.com";
+    if (result.networkError && m_serverUrl != defaultServer) {
+        m_serverUrl = defaultServer;
+        Save();
+        result = Request("desktop.login", body, 15000);
+    }
     if (result.networkError) {
         throw std::runtime_error("Could not reach the LensDesk server at " + m_serverUrl +
                                  ". Start the server or configure a reachable address.");
@@ -542,6 +557,12 @@ json CloudClient::CompleteMfa(const json& payload) {
     if (!body.contains("appVersion")) body["appVersion"] = "2.0.0";
 
     HttpResult result = Request("desktop.mfa", body, 15000);
+    const std::string defaultServer = "https://helpdesk-h44x.onrender.com";
+    if (result.networkError && m_serverUrl != defaultServer) {
+        m_serverUrl = defaultServer;
+        Save();
+        result = Request("desktop.mfa", body, 15000);
+    }
     if (result.networkError) {
         throw std::runtime_error("Could not reach the LensDesk server at " + m_serverUrl + ".");
     }

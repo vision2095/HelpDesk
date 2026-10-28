@@ -3,6 +3,8 @@
 
 namespace LensDesk {
 
+WindowManager* WindowManager::s_instance = nullptr;
+
 WindowManager::WindowManager() = default;
 
 WindowManager::~WindowManager() {
@@ -77,6 +79,22 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
     // 7. Setup system tray icon
     SetupTrayIcon();
 
+    s_instance = this;
+
+    // 8. Foreground Event Hook for absolute 1:1 HintLens Z-order topmost parity
+    m_hForegroundHook = SetWinEventHook(
+        EVENT_SYSTEM_FOREGROUND,
+        EVENT_SYSTEM_FOREGROUND,
+        nullptr,
+        StaticWinEventProc,
+        0,
+        0,
+        WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS
+    );
+
+    // 9. Watchdog heartbeat timer (200ms) to ensure DWM does not bury overlay
+    SetTimer(m_hwnd, 1002, 200, nullptr);
+
     ShowWindow(m_hwnd, nCmdShow);
     UpdateWindow(m_hwnd);
 
@@ -84,6 +102,16 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
 }
 
 void WindowManager::Shutdown() {
+    if (m_hwnd) {
+        KillTimer(m_hwnd, 1002);
+    }
+    if (m_hForegroundHook) {
+        UnhookWinEvent(m_hForegroundHook);
+        m_hForegroundHook = nullptr;
+    }
+    if (s_instance == this) {
+        s_instance = nullptr;
+    }
     RemoveTrayIcon();
     if (m_hwnd) {
         DestroyWindow(m_hwnd);
@@ -92,6 +120,27 @@ void WindowManager::Shutdown() {
     if (m_hInstance) {
         UnregisterClassW(WINDOW_CLASS_NAME, m_hInstance);
         m_hInstance = nullptr;
+    }
+}
+
+void CALLBACK WindowManager::StaticWinEventProc(
+    HWINEVENTHOOK,
+    DWORD event,
+    HWND,
+    LONG,
+    LONG,
+    DWORD,
+    DWORD
+) {
+    if (event == EVENT_SYSTEM_FOREGROUND && s_instance) {
+        if (s_instance->m_hwnd && s_instance->m_alwaysOnTop && s_instance->m_isVisible) {
+            SetWindowPos(
+                s_instance->m_hwnd,
+                HWND_TOPMOST,
+                0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
+            );
+        }
     }
 }
 
@@ -243,6 +292,42 @@ LRESULT WindowManager::HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
     }
 
     switch (msg) {
+        case WM_WINDOWPOSCHANGING: {
+            if (m_alwaysOnTop && m_isVisible) {
+                auto* pwp = reinterpret_cast<WINDOWPOS*>(lParam);
+                if (pwp) {
+                    pwp->hwndInsertAfter = HWND_TOPMOST;
+                    pwp->flags &= ~SWP_NOZORDER;
+                }
+            }
+            return 0;
+        }
+
+        case WM_TIMER: {
+            if (wParam == 1002 && m_alwaysOnTop && m_isVisible && m_hwnd) {
+                SetWindowPos(
+                    m_hwnd,
+                    HWND_TOPMOST,
+                    0, 0, 0, 0,
+                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
+                );
+            }
+            return 0;
+        }
+
+        case WM_ACTIVATEAPP:
+        case WM_NCACTIVATE: {
+            if (m_alwaysOnTop && m_isVisible && m_hwnd) {
+                SetWindowPos(
+                    m_hwnd,
+                    HWND_TOPMOST,
+                    0, 0, 0, 0,
+                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
+                );
+            }
+            break;
+        }
+
         case WM_DPICHANGED: {
             m_dpi = HIWORD(wParam);
             auto* prc = reinterpret_cast<RECT*>(lParam);
