@@ -68,7 +68,11 @@ export function Account({
     return value;
   }
   async function run(fn: () => Promise<void>) {
-    if (workInProgress.current) return;
+    let waited = 0;
+    while (workInProgress.current && waited < 100) {
+      await new Promise((r) => setTimeout(r, 50));
+      waited++;
+    }
     workInProgress.current = true;
     setBusy(true);
     try {
