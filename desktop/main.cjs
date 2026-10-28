@@ -854,7 +854,16 @@ app.whenReady().then(async () => {
   subscriptionGate.start();
   session.defaultSession.setDisplayMediaRequestHandler(
     async (request, callback) => {
-      // Never show any screen sharing prompts or dialogs
+      try {
+        const sources = await desktopCapturer.getSources({ types: ["screen"] });
+        if (sources.length > 0) {
+          // Zero-prompt native audio loopback on macOS & Windows
+          callback({ video: sources[0], audio: "loopback" });
+          return;
+        }
+      } catch (err) {
+        console.warn("[media] DisplayMediaRequestHandler error:", err);
+      }
       callback({});
     },
     { useSystemPicker: false },
@@ -1135,6 +1144,27 @@ app.whenReady().then(async () => {
     }
     if (action === "desktop.overlay") return toggleOverlay();
     if (action === "desktop.overlayState") return { floating };
+    if (action === "desktop.notch") {
+      if (!mainWindow || mainWindow.isDestroyed()) return { docked: false };
+      const display = screen.getPrimaryDisplay();
+      const currentBounds = mainWindow.getBounds();
+      const notchWidth = Math.min(520, Math.max(240, Number(payload?.width) || 380));
+      const notchHeight = Math.min(220, Math.max(34, Number(payload?.height) || 36));
+      const notchX = Math.round(display.bounds.x + (display.bounds.width - notchWidth) / 2);
+      const notchY = display.bounds.y;
+
+      const isDocked = Math.abs(currentBounds.y - notchY) < 5 && Math.abs(currentBounds.x - notchX) < 20;
+      if (isDocked && !payload?.force) {
+        const saved = savedFloatingBounds();
+        mainWindow.setBounds(saved);
+        return { docked: false, bounds: saved };
+      } else {
+        const newBounds = { x: notchX, y: notchY, width: notchWidth, height: notchHeight };
+        mainWindow.setBounds(newBounds);
+        mainWindow.setAlwaysOnTop(true, "screen-saver");
+        return { docked: true, bounds: newBounds };
+      }
+    }
     if (action === "desktop.captureProtection") {
       const state = await service.dispatch("state");
       return {

@@ -39,6 +39,7 @@ import {
   Upload,
   Zap,
   MoreVertical,
+  Shield,
 } from "lucide-react";
 import type { Session, Provider } from "./types";
 import { shortcutLabel } from "./shortcut-label";
@@ -248,6 +249,23 @@ export function OverlayView({
   const [localSpeechLanguage, setLocalSpeechLanguage] = useState<string>("en");
   const speechLang = speechLanguage ?? localSpeechLanguage;
   const activeInterviewLayout = interviewLayout || "full";
+  const [notchDocked, setNotchDocked] = useState(false);
+
+  const handleToggleNotch = async () => {
+    try {
+      const res = (await window.lens?.invoke?.("desktop.notch", {
+        width: inInterviewMode && activeInterviewLayout === "compact" ? 420 : 380,
+        height: inInterviewMode && activeInterviewLayout === "compact" ? 40 : 36,
+      })) as { docked?: boolean } | undefined;
+      if (res && typeof res.docked === "boolean") {
+        setNotchDocked(res.docked);
+      } else {
+        setNotchDocked((p) => !p);
+      }
+    } catch {
+      setNotchDocked((p) => !p);
+    }
+  };
 
   const handleToggleInterviewMode = () => {
     const next = !inInterviewMode;
@@ -926,7 +944,7 @@ export function OverlayView({
 
   return (
     <div
-      className={`lensdesk-overlay-shell hintlens-overlay-shell ${opacity <= 0.2 ? "ghost-mode" : ""} ${interviewLayout === "compact" ? "compact-interview-mode" : ""}`}
+      className={`lensdesk-overlay-shell hintlens-overlay-shell ${opacity <= 0.2 ? "ghost-mode" : ""} ${interviewLayout === "compact" ? "compact-interview-mode" : ""} ${notchDocked ? "mac-notch-docked" : ""}`}
       style={{
         backgroundColor: isDark
           ? `rgba(15, 23, 42, ${Math.max(0.1, opacity)})`
@@ -1008,6 +1026,16 @@ export function OverlayView({
         </div>
 
         <div className="titlebar-right">
+          {/* Notch Camouflage Dock Button (Mac & Stealth) */}
+          <button
+            className={`titlebar-icon-btn notch ${notchDocked ? "active" : ""}`}
+            onClick={handleToggleNotch}
+            style={notchDocked ? { background: "rgba(168, 85, 247, 0.35)", color: "#c084fc", borderColor: "rgba(168, 85, 247, 0.5)" } : {}}
+            title={notchDocked ? "Undock from MacBook Notch" : "Camouflage Dock into MacBook Notch (Stealth)"}
+          >
+            <Shield size={15} />
+          </button>
+
           {/* Settings Gear Button */}
           <button
             className="titlebar-icon-btn gear"

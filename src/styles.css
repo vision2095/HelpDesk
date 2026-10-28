@@ -5242,6 +5242,31 @@ kbd {
   border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+/* MacBook Hardware Notch & Camouflage Docking (LensDesk God-Level Mac Stealth) */
+.lensdesk-overlay-shell.mac-notch-docked {
+  border-radius: 0 0 16px 16px !important;
+  background: #000000 !important;
+  border-top: none !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.98), 0 0 0 1px rgba(0, 0, 0, 1) !important;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.lensdesk-overlay-shell.mac-notch-docked .lensdesk-titlebar,
+.lensdesk-overlay-shell.mac-notch-docked .hintlens-titlebar {
+  padding: 2px 8px !important;
+  min-height: 28px !important;
+  background: #000000 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+
+.lensdesk-overlay-shell.mac-notch-docked .app-title {
+  font-size: 11px !important;
+  color: #94a3b8 !important;
+}
+
 .compact-interview-mode .lensdesk-bundle-column,
 .compact-interview-mode .hintlens-bundle-column {
   flex: 0 0 clamp(110px, 18%, 180px);

@@ -62,6 +62,7 @@ const actions = new Set([
   "desktop.openSettings",
   "desktop.overlay",
   "desktop.overlayState",
+  "desktop.notch",
   "desktop.appearance",
   "desktop.captureProtection",
   "desktop.export",
