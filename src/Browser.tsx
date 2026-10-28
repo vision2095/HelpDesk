@@ -12,6 +12,7 @@ import {
   House,
   Camera,
   ClipboardPaste,
+  Lock,
 } from "lucide-react";
 import { api } from "./api";
 type BrowserTab = {
@@ -218,14 +219,43 @@ export function WorkspaceBrowser({
         >
           <RotateCw size={17} />
         </button>
-        <input
-          ref={addressInput}
-          aria-label="Browser address or search"
-          placeholder="Search or enter a web address"
-          value={address}
-          onChange={(event) => setAddress(event.target.value)}
-          onFocus={(event) => event.target.select()}
-        />
+        <div className="browser-address-container">
+          <span className="browser-address-badge" title={address?.startsWith("https://") ? "Secure HTTPS connection" : "LensDesk Secure Browser"}>
+            <svg
+              className="browser-address-logo"
+              viewBox="0 0 1024 1024"
+              width="14"
+              height="14"
+              aria-hidden="true"
+            >
+              <rect width="1024" height="1024" rx="228" fill="#3262d8" />
+              <g
+                transform="translate(512 512)"
+                fill="none"
+                stroke="#fff"
+                strokeWidth="50"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle r="280" />
+                <path d="M-140-243 105 182M140-243-105 182M280 0H-210M140 243-105-182M-140 243 105-182M-280 0H210" />
+              </g>
+            </svg>
+            {address?.startsWith("https://") && (
+              <span title="Secure connection" className="browser-address-lock-wrap">
+                <Lock size={11} className="browser-address-lock" />
+              </span>
+            )}
+          </span>
+          <input
+            ref={addressInput}
+            aria-label="Browser address or search"
+            placeholder="Search or enter a web address"
+            value={address}
+            onChange={(event) => setAddress(event.target.value)}
+            onFocus={(event) => event.target.select()}
+          />
+        </div>
         <button className="button" type="submit">
           Go
         </button>

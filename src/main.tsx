@@ -667,6 +667,19 @@ function App() {
     };
   }, []);
   useEffect(() => {
+    const pageTitles: Record<string, string> = {
+      home: "LensDesk — Your thinking space",
+      admin: "LensDesk — Admin Command Center",
+      account: "LensDesk — Account & Billing",
+      downloads: "LensDesk — Download Desktop App",
+      workspace: "LensDesk — Workspace",
+      settings: "LensDesk — Settings",
+      profiles: "LensDesk — Assistant Profiles",
+      sessions: "LensDesk — Session History",
+    };
+    if (pageTitles[page]) {
+      document.title = pageTitles[page];
+    }
     if (desktop) return;
     const targetUrl = getPathForPage(page);
     if (window.location.pathname !== targetUrl) {

@@ -4571,14 +4571,49 @@ kbd {
   border-block: 1px solid var(--line);
   flex-shrink: 0;
 }
-.browser-toolbar input {
+.browser-address-container {
   flex: 1;
   min-width: 80px;
+  display: flex;
+  align-items: center;
   background: var(--surface-muted);
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 9px 12px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  overflow: hidden;
+}
+.browser-address-container:focus-within {
+  border-color: var(--accent, #3262d8);
+  box-shadow: 0 0 0 2px rgba(50, 98, 216, 0.2);
+}
+.browser-address-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding-left: 10px;
+  padding-right: 4px;
+  flex-shrink: 0;
+  user-select: none;
+}
+.browser-address-logo {
+  display: block;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.browser-address-lock {
+  color: #10b981;
+  flex-shrink: 0;
+}
+.browser-address-container input {
+  flex: 1;
+  min-width: 60px;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  padding: 9px 12px 9px 4px !important;
   color: var(--ink);
+  font-size: 13px;
 }
 .browser-toolbar select {
   background: var(--panel);
@@ -4614,9 +4649,19 @@ kbd {
   padding: 6px 10px !important;
   gap: 5px !important;
 }
+.floating-browser-container .browser-address-container input,
 .floating-browser-container .browser-toolbar input {
-  padding: 5px 8px !important;
+  padding: 5px 8px 5px 3px !important;
   font-size: 12px !important;
+}
+.floating-browser-container .browser-address-badge {
+  padding-left: 6px;
+  padding-right: 2px;
+  gap: 3px;
+}
+.floating-browser-container .browser-address-logo {
+  width: 12px;
+  height: 12px;
 }
 .floating-browser-container .browser-tabs {
   padding: 6px 8px 0 !important;

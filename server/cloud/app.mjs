@@ -806,23 +806,40 @@ export function createCloudServer({
         );
         if (!target.startsWith(staticRoot + path.sep))
           target = path.join(staticRoot, "index.html");
-        if (!fs.existsSync(target) || fs.statSync(target).isDirectory())
-          target = path.join(staticRoot, "index.html");
+        if (!fs.existsSync(target) || fs.statSync(target).isDirectory()) {
+          const baseName = path.basename(url.pathname);
+          const resourceFallback = path.resolve(staticRoot, "..", "resources", baseName);
+          if (["favicon.ico", "icon.ico", "favicon.svg", "icon.svg", "icon.png", "apple-touch-icon.png"].includes(baseName) && fs.existsSync(resourceFallback)) {
+            target = resourceFallback;
+          } else if (path.extname(url.pathname)) {
+            json(res, 404, { error: "Asset not found" });
+            return;
+          } else {
+            target = path.join(staticRoot, "index.html");
+          }
+        }
         if (!fs.existsSync(target)) {
           json(res, 503, {
             error: "Build the web application with npm run build.",
           });
           return;
         }
-        const ext = path.extname(target);
+        const ext = path.extname(target).toLowerCase();
         res.setHeader(
           "Content-Type",
           {
             ".html": "text/html; charset=utf-8",
-            ".js": "application/javascript",
-            ".css": "text/css",
+            ".js": "application/javascript; charset=utf-8",
+            ".css": "text/css; charset=utf-8",
             ".png": "image/png",
             ".svg": "image/svg+xml",
+            ".ico": "image/x-icon",
+            ".webp": "image/webp",
+            ".json": "application/json; charset=utf-8",
+            ".webmanifest": "application/manifest+json; charset=utf-8",
+            ".woff2": "font/woff2",
+            ".woff": "font/woff",
+            ".ttf": "font/ttf",
           }[ext] || "application/octet-stream",
         );
         res.setHeader(
