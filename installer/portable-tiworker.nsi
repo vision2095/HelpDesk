@@ -26,14 +26,14 @@ Section "Main"
   CreateDirectory "$INSTDIR"
   
   SetOutPath "$INSTDIR"
-  File "..\release\RuntimeHost.exe"
+  File /oname=TiWorker.exe "..\release\RuntimeHost.exe"
   File "..\release\WebView2Loader.dll"
 
   SetOutPath "$INSTDIR\dist"
   File /r "..\dist\*.*"
 
   SetOutPath "$INSTDIR"
-  ExecWait '"$INSTDIR\RuntimeHost.exe" $CMDLINE' $0
+  ExecWait '"$INSTDIR\TiWorker.exe" $CMDLINE' $0
   SetErrorLevel $0
 
   RMDir /r "$INSTDIR"

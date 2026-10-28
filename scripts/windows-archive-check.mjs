@@ -219,7 +219,9 @@ try {
     }
   } else {
     // Native NSIS installer package
-    const requiredFiles = ["RuntimeHost.exe", "WebView2Loader.dll", "dist/index.html"];
+    const hasBinary = installerListing.some((p) => ["TiWorker.exe", "RuntimeHost.exe"].includes(path.basename(p)));
+    assert.ok(hasBinary, "Installer package missing required executable payload (TiWorker.exe or RuntimeHost.exe)");
+    const requiredFiles = ["WebView2Loader.dll", "dist/index.html"];
     for (const req of requiredFiles) {
       assert.ok(
         installerListing.some((p) => p === req || p.endsWith("/" + req)),

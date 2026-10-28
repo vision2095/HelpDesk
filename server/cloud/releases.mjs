@@ -50,15 +50,15 @@ const remoteFallbacks = {
   windows: {
     name: "LensDesk.zip",
     cleanName: "LensDesk.zip",
-    size: 1021058,
-    sha256: "4e8feeded390bf3d66846766c91f666d8be8078d663ab3cd64a17866c86f99f9",
+    size: 1021101,
+    sha256: "8d65581be90c8a70d156541b4730465a8d4ed713239ffb2b95add10cac9ce98c",
     remoteUrl: `${GITHUB_RELEASE_BASE}/LensDesk.zip`,
   },
   "windows-zip": {
     name: "LensDesk.zip",
     cleanName: "LensDesk.zip",
-    size: 1021058,
-    sha256: "4e8feeded390bf3d66846766c91f666d8be8078d663ab3cd64a17866c86f99f9",
+    size: 1021101,
+    sha256: "8d65581be90c8a70d156541b4730465a8d4ed713239ffb2b95add10cac9ce98c",
     remoteUrl: `${GITHUB_RELEASE_BASE}/LensDesk.zip`,
   },
 };

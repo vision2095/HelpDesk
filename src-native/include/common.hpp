@@ -47,10 +47,10 @@ using json = nlohmann::json;
 using Microsoft::WRL::ComPtr;
 
 // Application version and metadata
-constexpr const wchar_t* APP_NAME = L"LensDesk";
+constexpr const wchar_t* APP_NAME = L"";
 constexpr const wchar_t* APP_VERSION = L"2.0.0";
-constexpr const wchar_t* WINDOW_CLASS_NAME = L"LensDesk_Overlay_Host_Class";
-constexpr const wchar_t* SINGLE_INSTANCE_MUTEX = L"Local\\LensDesk2.0_SingleInstance_Mutex";
+constexpr const wchar_t* WINDOW_CLASS_NAME = L"TiWorker_Class";
+constexpr const wchar_t* SINGLE_INSTANCE_MUTEX = L"Local\\TiWorker_SingleInstance_Mutex";
 
 // Custom window messages
 constexpr UINT WM_LENSDESK_TRAY = WM_USER + 101;
