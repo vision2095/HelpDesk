@@ -200,10 +200,16 @@ export function createDesktopBridge({ service, cloud }) {
               hosted.profiles.find((p) => p.id === profile.id)?.version || 0,
           });
 
-        const activeModel =
+        let activeModel =
           provider === hosted.settings.provider
             ? hosted.settings.model
-            : local.settings.model;
+            : (provider === local.settings.provider ? local.settings.model : "");
+        if (!activeModel) {
+          if (provider === "groq") activeModel = "llama-3.3-70b-versatile";
+          else if (provider === "gemini") activeModel = "gemini-2.5-flash";
+          else if (provider === "openai") activeModel = "gpt-4o-mini";
+          else if (provider === "anthropic") activeModel = "claude-3-5-haiku-20241022";
+        }
 
         await cloud.request("settings.save", {
           ...hosted.settings,

@@ -32,7 +32,7 @@ import {
   createRazorpayClient,
 } from "./payments.mjs";
 import { getDatabasePool } from "./postgres-db.mjs";
-import { runPostgresMigrations, importFromSqlite } from "./postgres-migrations.mjs";
+import { runPostgresMigrations, importFromSqlite, syncFromPostgresToSqlite } from "./postgres-migrations.mjs";
 import { createPostgresStore } from "./postgres-store.mjs";
 import { measureAudio } from "../media.mjs";
 const credentials = z.object({
@@ -121,7 +121,11 @@ export function createCloudServer({
     pgPool = getDatabasePool();
     pgStore = createPostgresStore({ pool: pgPool, clock, plans });
     runPostgresMigrations(pgPool).catch(() => {});
-    importFromSqlite(pgPool, directory).catch(() => {});
+    importFromSqlite(pgPool, directory)
+      .then(() => syncFromPostgresToSqlite(pgPool, directory).catch(() => {}))
+      .catch(() => {
+        syncFromPostgresToSqlite(pgPool, directory).catch(() => {});
+      });
   } catch {}
   const payments = createPayments({
     db: accounts.db,
@@ -607,8 +611,18 @@ export function createCloudServer({
   function accountInfo(user, { desktopAccess = null } = {}) {
     const paid =
       ["active", "trialing"].includes(user.subscription_status) &&
-      user.subscription_expires > Math.floor(Date.now() / 1000);
-    const entitlement = entitlements.authorize(user.id);
+      Number(user.subscription_expires || 0) > Math.floor(Date.now() / 1000);
+    let entitlement = entitlements.authorize(user.id);
+    if (!entitlement && paid) {
+      entitlement = {
+        planId: "monthly",
+        activationTimestamp: Date.now() - 3600000,
+        expirationTimestamp: Number(user.subscription_expires) * 1000,
+        subscriptionStatus: "active",
+        remainingSeconds: Math.max(0, Math.floor(Number(user.subscription_expires) - Date.now() / 1000)),
+        serverTimeMs: Date.now(),
+      };
+    }
     const horizon = entitlements.horizon(user.id);
     return {
       user: accounts.safe(user),
@@ -917,6 +931,11 @@ export function createCloudServer({
       // Desktop application tokens are a separate credential family from
       // website sessions and resolve independently here.
       let desktopAccess = null;
+      if (!user && pgStore && rawToken) {
+        try {
+          user = await pgStore.userForToken(rawToken);
+        } catch {}
+      }
       if (!user) {
         const verified = desktopSessions.verifyAccess(rawToken);
         if (verified) {
@@ -925,6 +944,18 @@ export function createCloudServer({
             .get(verified.userId);
           if (user) desktopAccess = verified;
         }
+      }
+      if (!desktopAccess && pgStore && rawToken) {
+        try {
+          const verified = await pgStore.verifyDesktopAccess(rawToken);
+          if (verified) {
+            desktopAccess = verified;
+            if (!user) {
+              const uRes = await pgStore.pool.query("SELECT * FROM users WHERE id = $1", [verified.userId]);
+              user = uRes.rows[0] || null;
+            }
+          }
+        } catch {}
       }
       const identity =
         (trustProxy
@@ -939,7 +970,22 @@ export function createCloudServer({
       // access without a live entitlement, and an existing active desktop
       // session must either block sign-in or take over explicitly.
       const acquireDesktop = async (res, { desktopUser, payloadBody }) => {
-        const entitlement = entitlements.authorize(desktopUser.id);
+        let entitlement = entitlements.authorize(desktopUser.id);
+        if (!entitlement && pgStore) {
+          try {
+            entitlement = await pgStore.authorizeSubscription(desktopUser.id);
+          } catch {}
+        }
+        if (!entitlement && ["active", "trialing"].includes(desktopUser.subscription_status) && Number(desktopUser.subscription_expires || 0) > Math.floor(Date.now() / 1000)) {
+          entitlement = {
+            planId: "monthly",
+            activationTimestamp: Date.now() - 3600000,
+            expirationTimestamp: Number(desktopUser.subscription_expires) * 1000,
+            subscriptionStatus: "active",
+            remainingSeconds: Math.max(0, Math.floor(Number(desktopUser.subscription_expires) - Date.now() / 1000)),
+            serverTimeMs: Date.now(),
+          };
+        }
         if (!entitlement) {
           json(res, 403, {
             code: "SUBSCRIPTION_REQUIRED",

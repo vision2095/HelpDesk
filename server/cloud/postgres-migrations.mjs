@@ -424,3 +424,138 @@ export async function importFromSqlite(pool, sqliteDir) {
     } catch {}
   }
 }
+
+export async function syncFromPostgresToSqlite(pool, sqliteDir) {
+  const sqlitePath = path.join(sqliteDir, "accounts.sqlite");
+  if (!fs.existsSync(sqlitePath)) return;
+
+  let sqliteDb;
+  try {
+    sqliteDb = new DatabaseSync(sqlitePath);
+  } catch (err) {
+    console.warn("[Postgres->SQLite Sync] Unable to open accounts.sqlite:", err.message);
+    return;
+  }
+
+  const client = await pool.connect();
+  try {
+    // 1. Sync Users from Postgres into SQLite
+    try {
+      const usersRes = await client.query("SELECT * FROM users");
+      const insertUser = sqliteDb.prepare(`
+        INSERT INTO users (id, email, name, password, verified, created_at, stripe_customer, subscription_status, subscription_id, subscription_expires)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT (id) DO UPDATE SET
+          email = excluded.email,
+          name = excluded.name,
+          password = excluded.password,
+          verified = excluded.verified,
+          subscription_status = excluded.subscription_status,
+          subscription_expires = excluded.subscription_expires
+      `);
+      for (const u of usersRes.rows) {
+        insertUser.run(
+          u.id,
+          u.email,
+          u.name || "",
+          u.password,
+          u.verified ? 1 : 0,
+          u.created_at ? new Date(u.created_at).toISOString() : new Date().toISOString(),
+          u.stripe_customer || null,
+          u.subscription_status || "free",
+          u.subscription_id || null,
+          Number(u.subscription_expires || 0)
+        );
+      }
+      if (usersRes.rows.length) {
+        console.log(`[Postgres->SQLite Sync] Synced ${usersRes.rows.length} users into SQLite.`);
+      }
+    } catch (err) {
+      console.warn("[Postgres->SQLite Sync Users Warning]", err.message);
+    }
+
+    // 2. Sync Entitlements from Postgres into SQLite
+    try {
+      const entRes = await client.query("SELECT * FROM entitlements");
+      const insertEnt = sqliteDb.prepare(`
+        INSERT INTO entitlements (id, user_id, plan_id, payment_id, activation_timestamp, expiration_timestamp, subscription_status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT (id) DO UPDATE SET
+          subscription_status = excluded.subscription_status,
+          expiration_timestamp = excluded.expiration_timestamp,
+          updated_at = excluded.updated_at
+      `);
+      for (const e of entRes.rows) {
+        insertEnt.run(
+          e.id,
+          e.user_id,
+          e.plan_id,
+          e.payment_id || null,
+          Number(e.activation_timestamp),
+          Number(e.expiration_timestamp),
+          e.subscription_status || "active",
+          e.created_at ? new Date(e.created_at).toISOString() : new Date().toISOString(),
+          e.updated_at ? new Date(e.updated_at).toISOString() : new Date().toISOString()
+        );
+      }
+      if (entRes.rows.length) {
+        console.log(`[Postgres->SQLite Sync] Synced ${entRes.rows.length} entitlements into SQLite.`);
+      }
+    } catch (err) {
+      console.warn("[Postgres->SQLite Sync Entitlements Warning]", err.message);
+    }
+
+    // 3. Sync Desktop Tokens & Seats from Postgres into SQLite
+    try {
+      const seatsRes = await client.query("SELECT * FROM desktop_seats");
+      const insertSeat = sqliteDb.prepare(`
+        INSERT INTO desktop_sessions (id, user_id, device_label, os, app_version, created_at, last_seen, lease_until, status, replaced_by, revoked_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', NULL, NULL)
+        ON CONFLICT (id) DO UPDATE SET
+          last_seen = excluded.last_seen,
+          lease_until = excluded.lease_until,
+          status = 'active'
+      `);
+      for (const s of seatsRes.rows) {
+        insertSeat.run(
+          s.session_id,
+          s.user_id,
+          s.device_label || "LensDesk desktop",
+          s.os || "",
+          s.app_version || "",
+          Number(s.created_at || Math.floor(Date.now() / 1000)),
+          Number(s.last_heartbeat || Math.floor(Date.now() / 1000)),
+          Number(s.lease_until || Math.floor(Date.now() / 1000) + 3600)
+        );
+      }
+
+      const tokensRes = await client.query("SELECT * FROM desktop_tokens WHERE revoked_at IS NULL");
+      const insertAccess = sqliteDb.prepare(`
+        INSERT INTO access_tokens (hash, session_id, created_at, expires_at, revoked_at)
+        VALUES (?, ?, ?, ?, NULL)
+        ON CONFLICT (hash) DO NOTHING
+      `);
+      const insertRefresh = sqliteDb.prepare(`
+        INSERT INTO refresh_tokens (id, session_id, hash, previous_hash, created_at, expires_at, consumed_at, revoked_at)
+        VALUES (?, ?, ?, ?, ?, ?, NULL, NULL)
+        ON CONFLICT (id) DO NOTHING
+      `);
+      for (const t of tokensRes.rows) {
+        if (t.token_type === "access") {
+          insertAccess.run(t.hash, t.session_id, Number(t.created_at), Number(t.expires_at));
+        } else if (t.token_type === "refresh") {
+          insertRefresh.run(t.id, t.session_id, t.hash, t.previous_hash || null, Number(t.created_at), Number(t.expires_at));
+        }
+      }
+    } catch (err) {
+      console.warn("[Postgres->SQLite Sync Tokens Warning]", err.message);
+    }
+  } catch (err) {
+    console.error("[Postgres->SQLite Sync Failed]", err.message);
+  } finally {
+    client.release();
+    try {
+      sqliteDb.close();
+    } catch {}
+  }
+}
