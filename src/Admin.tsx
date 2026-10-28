@@ -114,7 +114,7 @@ export function Admin({ navigate }: { navigate?: (page: string) => void } = {}) 
   }
 
   useEffect(() => {
-    const saved = sessionStorage.getItem("lensdesk_admin_token");
+    const saved = localStorage.getItem("lensdesk_admin_token") || sessionStorage.getItem("lensdesk_admin_token");
     if (saved) {
       setToken(saved);
       loadAll(saved);
@@ -154,12 +154,14 @@ export function Admin({ navigate }: { navigate?: (page: string) => void } = {}) 
     e.preventDefault();
     if (!token.trim()) return;
     if (rememberToken) {
+      localStorage.setItem("lensdesk_admin_token", token.trim());
       sessionStorage.setItem("lensdesk_admin_token", token.trim());
     }
     await loadAll(token.trim());
   }
 
   function lockConsole() {
+    localStorage.removeItem("lensdesk_admin_token");
     sessionStorage.removeItem("lensdesk_admin_token");
     setToken("");
     setOverview(null);
@@ -296,7 +298,7 @@ export function Admin({ navigate }: { navigate?: (page: string) => void } = {}) 
                 onChange={(e) => setRememberToken(e.target.checked)}
               />
               <label htmlFor="admin-remember" style={{ margin: 0, cursor: "pointer" }}>
-                Remember token during this browser session
+                Remember token on this device (Auto-login)
               </label>
             </div>
             <button className="button primary full-width" disabled={busy}>
