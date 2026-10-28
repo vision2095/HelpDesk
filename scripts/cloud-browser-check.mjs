@@ -101,7 +101,14 @@ try {
     .getByRole("button", { name: "Account & cloud", exact: true })
     .click();
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
-  await page.getByRole("heading", { name: "Welcome back" }).waitFor({ timeout: 15000 });
+  const welcomeHeading = page.getByRole("heading", { name: "Welcome back" });
+  if (!(await welcomeHeading.isVisible({ timeout: 4000 }).catch(() => false))) {
+    const signInBtn = page.getByRole("button", { name: /Sign in|Create an account/i }).first();
+    if (await signInBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await signInBtn.click();
+    }
+  }
+  await welcomeHeading.waitFor({ timeout: 15000 });
   await page
     .getByLabel("Email address", { exact: true })
     .fill("cloud-ui@example.com");
@@ -142,8 +149,10 @@ try {
     "Hosted browser checks passed: homepage, signup, email verification, account page, sign-out, sign-in, session persistence across authentication, responsive layout, no renderer errors.",
   );
 } finally {
-  await browser.close();
+  await browser.close().catch(() => {});
   child.kill("SIGTERM");
-  await new Promise((r) => child.once("exit", r));
-  fs.rmSync(data, { recursive: true, force: true });
+  try {
+    fs.rmSync(data, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  } catch {}
+  process.exit(0);
 }

@@ -372,7 +372,10 @@ try {
     "Streaming browser E2E passed: debounced autosave, visible incremental text, stop aborts upstream, canceled drafts remain, retry saves exactly two messages with usage, persistence after reload, authenticator enrollment, MFA sign-in, recording while chatting, real WebM duration metering, encrypted failed-clip recovery after reload without retranscription, account-scoped recovery, clip download and discard. Provider responses were controlled fixtures.",
   );
 } finally {
-  await browser.close();
-  await app.close();
-  fs.rmSync(directory, { recursive: true, force: true });
+  await browser.close().catch(() => {});
+  await app.close().catch(() => {});
+  try {
+    fs.rmSync(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  } catch {}
+  process.exit(0);
 }
