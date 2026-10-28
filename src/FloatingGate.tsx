@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Aperture,
   Check,
@@ -32,7 +32,16 @@ export function FloatingGate({
   onHide,
   onQuit,
 }: Props) {
-  const phase = gate?.phase || "checking";
+  const [checkingTimedOut, setCheckingTimedOut] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setCheckingTimedOut(true), 2500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const rawPhase = gate?.phase;
+  const phase = (!rawPhase || rawPhase === "checking") && checkingTimedOut
+    ? "signed_out"
+    : (rawPhase || "checking");
   const copy: Record<
     string,
     { eyebrow: string; title: string; description: string }

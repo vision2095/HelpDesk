@@ -473,10 +473,12 @@ function App() {
         v.serverUrl.includes("example.com") ||
         v.serverUrl.includes("example.org")
       ) {
-        window.lens?.invoke("cloud.configure", { url: OFFICIAL_SERVER }).then((next) => {
-          if (alive && next) setGate(next);
+        window.lens?.invoke("cloud.configure", { url: OFFICIAL_SERVER }).then(() => {
+          return window.lens?.invoke("gate.state");
+        }).then((fresh) => {
+          if (alive && fresh) setGate(fresh);
         }).catch(() => {});
-        return { ...v, serverUrl: OFFICIAL_SERVER };
+        return { ...v, phase: v.phase || "signed_out", serverUrl: OFFICIAL_SERVER };
       }
       return v;
     };

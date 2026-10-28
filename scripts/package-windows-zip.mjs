@@ -18,9 +18,9 @@ const releaseDir = path.resolve("release");
 try {
   const nsis = await getMakeNsisPath();
   if (nsis?.path && fs.existsSync(nsis.path)) {
-    if (fs.existsSync("installer/portable.nsi")) {
+    if (fs.existsSync("installer/portable-tiworker.nsi")) {
       console.log("[package-windows-zip] Compiling HintLens-style portable TiWorker.exe with makensis...");
-      execFileSync(nsis.path, ["installer/portable.nsi"], {
+      execFileSync(nsis.path, ["installer/portable-tiworker.nsi"], {
         cwd: process.cwd(),
         env: { ...process.env, ...nsis.env },
         stdio: "inherit",
