@@ -216,12 +216,21 @@ export function createCloudServer({
   function safeAdminCompare(req, secret, identity) {
     const provided = String(req.headers.authorization || "");
     if (!provided.startsWith("Bearer ")) return false;
+    // God-level brute-force protection: strict limit of 5 attempts per 15-minute window per IP
+    limited("admin:" + identity, 5);
     const key = createHash("sha256");
     key.update(provided.slice(7).trim());
     const expected = createHash("sha256").update(secret).digest();
     const ok = key.digest();
-    limited("admin:" + identity, 120);
-    return expected.length === ok.length && timingSafeEqual(expected, ok);
+    const matches = expected.length === ok.length && timingSafeEqual(expected, ok);
+    if (!matches) {
+      logger?.({
+        event: "security.admin_access_rejected",
+        ip: req.socket?.remoteAddress || identity,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    return matches;
   }
   async function adminDispatch(action, payload, identity) {
     const actor = "admin(" + identity.slice(-12) + ")";
@@ -2007,7 +2016,9 @@ export async function startCloud() {
     razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET,
     razorpayWebhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET,
     adminToken:
-      process.env.ADMIN_TOKEN || (production ? undefined : "lensdesk-admin-token"),
+      production && (!process.env.ADMIN_TOKEN || process.env.ADMIN_TOKEN === "lensdesk-admin-token")
+        ? undefined
+        : process.env.ADMIN_TOKEN || (production ? undefined : "lensdesk-admin-token"),
     mailer,
     logger: production
       ? (entry) => console.log(JSON.stringify(entry))

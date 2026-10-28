@@ -184,7 +184,7 @@ export function Access({
         } catch (err: any) {
           throw new Error(
             err?.message ||
-              "Payment gateway is not connected. An admin can grant subscription time from the /admin portal.",
+              "Payment gateway is temporarily unavailable. Please try again shortly.",
           );
         }
       }

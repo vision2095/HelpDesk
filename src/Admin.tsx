@@ -285,19 +285,8 @@ export function Admin({ navigate }: { navigate?: (page: string) => void } = {}) 
                 required
                 value={token}
                 onChange={(e) => setToken(e.target.value)}
-                placeholder="lensdesk-admin-token"
+                placeholder="Enter secret administrator token"
               />
-              <span className="field-help" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "6px", marginTop: "6px" }}>
-                <span>Dev token: <strong style={{ color: "var(--site-accent, #d8f56b)" }}>lensdesk-admin-token</strong></span>
-                <button
-                  type="button"
-                  className="quick-nav-pill"
-                  style={{ padding: "2px 8px", fontSize: "11px" }}
-                  onClick={() => setToken("lensdesk-admin-token")}
-                >
-                  Auto-fill token
-                </button>
-              </span>
             </label>
             <div style={{ display: "flex", alignItems: "center", gap: "8px", margin: "10px 0 16px", fontSize: "12px", color: "var(--site-dark-muted, #9aa698)" }}>
               <input
