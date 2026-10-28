@@ -1,0 +1,63 @@
+name: 24/7 Render Keep-Alive Watchdog
+
+on:
+  schedule:
+    # Run every 10 minutes to stay well within Render's 15-minute idle spin-down window
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+concurrency:
+  group: render-keepalive
+  cancel-in-progress: false
+
+jobs:
+  ping-render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping Render Web Service
+        run: |
+          TARGET_HEALTH="https://helpdesk-h44x.onrender.com/health"
+          TARGET_ROOT="https://helpdesk-h44x.onrender.com/"
+          
+          echo "========================================================"
+          echo "LensDesk 24/7 Keep-Alive Watchdog"
+          echo "Timestamp: $(date -u +"%Y-%m-%d %H:%M:%SZ")"
+          echo "Target Health: $TARGET_HEALTH"
+          echo "========================================================"
+
+          # Function to ping endpoint with retry logic
+          ping_endpoint() {
+            local url="$1"
+            local max_attempts=3
+            local attempt=1
+            local success=0
+
+            while [ $attempt -le $max_attempts ]; do
+              echo "[Attempt $attempt/$max_attempts] Pinging $url..."
+              HTTP_CODE=$(curl -s -L -o /dev/null -w "%{http_code}" --connect-timeout 15 --max-time 60 "$url" || echo "000")
+              echo "-> HTTP Response Code: $HTTP_CODE"
+
+              if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ]; then
+                echo "✓ Endpoint is awake and responsive!"
+                success=1
+                break
+              else
+                echo "⚠ Endpoint returned $HTTP_CODE or timed out. Waiting 8s for cold start..."
+                sleep 8
+                attempt=$((attempt + 1))
+              fi
+            done
+
+            if [ $success -eq 0 ]; then
+              echo "Warning: Could not get 200 from $url after $max_attempts attempts."
+            fi
+          }
+
+          # Ping both health and root to ensure both edge router and app are hot
+          ping_endpoint "$TARGET_HEALTH"
+          ping_endpoint "$TARGET_ROOT"
+
+          echo "Keep-alive ping cycle completed successfully."

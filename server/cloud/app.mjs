@@ -2007,7 +2007,7 @@ export async function startCloud() {
     publicUrl:
       process.env.PUBLIC_URL ||
       process.env.RENDER_EXTERNAL_URL ||
-      (production ? "https://helpdesk.onrender.com" : "http://127.0.0.1:4319"),
+      (production ? "https://helpdesk-h44x.onrender.com" : "http://127.0.0.1:4319"),
     encryptionKey: key,
     stripeSecret: process.env.STRIPE_SECRET_KEY,
     stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
@@ -2039,6 +2039,39 @@ export async function startCloud() {
       deepseek: process.env.DEEPSEEK_API_KEY,
     },
   });
+
+  // Crash Prevention & Process Resilience
+  process.on("uncaughtException", (error) => {
+    console.error("[Fatal Error Prevented - uncaughtException]", error?.stack || error);
+  });
+  process.on("unhandledRejection", (reason) => {
+    console.error("[Fatal Error Prevented - unhandledRejection]", reason?.stack || reason);
+  });
+
+  // Automated 24/7 Keep-Alive Self-Pinger for Render
+  const targetExternalUrl =
+    process.env.PUBLIC_URL ||
+    process.env.RENDER_EXTERNAL_URL ||
+    (production ? "https://helpdesk-h44x.onrender.com" : "");
+
+  if ((production || process.env.ENABLE_KEEP_ALIVE === "true" || process.env.RENDER) && targetExternalUrl.startsWith("http")) {
+    const pingUrl = targetExternalUrl.replace(/\/+$/, "") + "/health";
+    const PING_INTERVAL = Number(process.env.KEEP_ALIVE_INTERVAL_MS || 540000); // 9 minutes (Render sleeps after 15m)
+    console.log(`[KeepAlive] 24/7 self-pinger active. Target: ${pingUrl} (every ${Math.round(PING_INTERVAL / 60000)}m)`);
+    const timer = setInterval(async () => {
+      try {
+        const res = await fetch(pingUrl, {
+          headers: { "User-Agent": "LensDesk-KeepAlive-Internal/2.0" },
+          signal: AbortSignal.timeout(15000),
+        });
+        console.log(`[KeepAlive Ping] ${new Date().toISOString()} -> ${pingUrl} HTTP ${res.status}`);
+      } catch (err) {
+        console.warn(`[KeepAlive Ping Warning] Could not reach ${pingUrl}:`, err.message);
+      }
+    }, PING_INTERVAL);
+    if (timer.unref) timer.unref();
+  }
+
   app.server.listen(
     Number(process.env.PORT || 4319),
     process.env.HOST || "0.0.0.0",
