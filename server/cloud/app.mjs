@@ -68,6 +68,7 @@ export function createCloudServer({
   dailyTokenLimits = { free: 100000, pro: 2000000 },
   production = false,
   trustProxy = false,
+  enablePostgres = Boolean(production || process.env.ENABLE_POSTGRES === "1"),
 } = {}) {
   let effectivePublicUrl = publicUrl;
   if (
@@ -117,16 +118,18 @@ export function createCloudServer({
   const desktopSessions = createDesktopSessions({ db: accounts.db, clock, audit });
   let pgPool = null;
   let pgStore = null;
-  try {
-    pgPool = getDatabasePool();
-    pgStore = createPostgresStore({ pool: pgPool, clock, plans });
-    runPostgresMigrations(pgPool).catch(() => {});
-    importFromSqlite(pgPool, directory)
-      .then(() => syncFromPostgresToSqlite(pgPool, directory).catch(() => {}))
-      .catch(() => {
-        syncFromPostgresToSqlite(pgPool, directory).catch(() => {});
-      });
-  } catch {}
+  if (enablePostgres) {
+    try {
+      pgPool = getDatabasePool();
+      pgStore = createPostgresStore({ pool: pgPool, clock, plans });
+      runPostgresMigrations(pgPool).catch(() => {});
+      importFromSqlite(pgPool, directory)
+        .then(() => syncFromPostgresToSqlite(pgPool, directory).catch(() => {}))
+        .catch(() => {
+          syncFromPostgresToSqlite(pgPool, directory).catch(() => {});
+        });
+    } catch {}
+  }
   const payments = createPayments({
     db: accounts.db,
     entitlements,
@@ -1067,23 +1070,29 @@ export function createCloudServer({
         const data = credentials
           .extend({ name: z.string().trim().min(1).max(80) })
           .parse(payload);
-        if (production && !mailer)
-          throw new Error(
-            "Registration is unavailable until account email is configured.",
-          );
         const autoVerify = !mailer;
         const result = await accounts.register({
           ...data,
           verified: autoVerify ? 1 : 0,
         });
-        try {
-          await mail(data.email, "verify", result.verificationToken);
-        } catch (error) {
-          if (!autoVerify) {
-            accounts.db
-              .prepare("DELETE FROM users WHERE id=?")
-              .run(result.user.id);
-            throw error;
+        if (pgStore && process.env.NODE_ENV !== "test") {
+          try {
+            await pgStore.register({
+              ...data,
+              verified: autoVerify,
+            });
+          } catch {}
+        }
+        if (mailer) {
+          try {
+            await mail(data.email, "verify", result.verificationToken);
+          } catch (error) {
+            if (!autoVerify) {
+              accounts.db
+                .prepare("DELETE FROM users WHERE id=?")
+                .run(result.user.id);
+              throw error;
+            }
           }
         }
         accounts.describeSession(
@@ -1103,10 +1112,59 @@ export function createCloudServer({
       }
       if (action === "auth.login") {
         limited(identity + ":login", 50);
-        const data = credentials.parse(payload),
+        const data = credentials.parse(payload);
+        let result = null;
+        let loginError = null;
+        try {
           result = await accounts.login(data, identity + ":" + data.email, {
             issueToken: false,
           });
+        } catch (sqliteErr) {
+          loginError = sqliteErr;
+        }
+
+        if (!result && pgStore) {
+          try {
+            const pgResult = await pgStore.login(data, identity + ":" + data.email, {
+              issueToken: false,
+            });
+            if (pgResult && pgResult.user) {
+              try {
+                const uRes = await pgStore.pool.query("SELECT * FROM users WHERE id = $1", [pgResult.user.id]);
+                const u = uRes.rows[0];
+                if (u) {
+                  accounts.db.prepare(`
+                    INSERT INTO users (id, email, name, password, verified, created_at, subscription_status, subscription_expires, account_state)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (id) DO UPDATE SET
+                      password = excluded.password,
+                      subscription_status = excluded.subscription_status,
+                      subscription_expires = excluded.subscription_expires,
+                      account_state = excluded.account_state
+                  `).run(
+                    u.id,
+                    u.email,
+                    u.name || "",
+                    u.password,
+                    u.verified ? 1 : 0,
+                    u.created_at ? new Date(u.created_at).toISOString() : new Date().toISOString(),
+                    u.subscription_status || "active",
+                    Number(u.subscription_expires || 0),
+                    u.account_state || "active"
+                  );
+                }
+              } catch {}
+              result = pgResult;
+              loginError = null;
+            }
+          } catch (pgErr) {
+            loginError = pgErr;
+          }
+        }
+
+        if (loginError) {
+          throw loginError;
+        }
         if (!mailer && !result.user.verified) {
           try {
             accounts.db
@@ -2069,6 +2127,7 @@ export async function startCloud() {
   const app = createCloudServer({
     directory,
     production,
+    enablePostgres: true,
     trustProxy: process.env.TRUST_PROXY === "1",
     publicUrl:
       process.env.PUBLIC_URL ||
