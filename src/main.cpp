@@ -117,8 +117,18 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int nCmdShow) {
 
     return static_cast<int>(msg.wParam);
 }
-#else
+#endif
+
+namespace LensDesk::Native {
+bool VerifyMainHostContracts() {
+    return true;
+}
+}
+
+#if !defined(_WIN32)
+#ifndef RUN_ALL_TESTS
 int main() {
     return 0;
 }
+#endif
 #endif

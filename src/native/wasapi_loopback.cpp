@@ -115,6 +115,7 @@ bool WasapiLoopback::InitializeEndpoint() {
     m_ring = RingBuffer(tenSecondsBytes);
 
     const REFERENCE_TIME hnsBufferDuration = 10000000; // 1s buffer
+    // rea:iface IAudioClient::Initialize (vtable slot 3)
     hr = m_audioClient->Initialize(
         AUDCLNT_SHAREMODE_SHARED,
         AUDCLNT_STREAMFLAGS_LOOPBACK,
@@ -125,6 +126,7 @@ bool WasapiLoopback::InitializeEndpoint() {
     );
     if (FAILED(hr)) return false;
 
+    // rea:iface IAudioClient::GetService (vtable slot 14)
     hr = m_audioClient->GetService(
         __uuidof(IAudioCaptureClient),
         reinterpret_cast<void**>(m_captureClient.GetAddressOf())

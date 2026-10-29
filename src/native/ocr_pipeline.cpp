@@ -33,6 +33,10 @@ CapturedBuffer OcrPipeline::CaptureDib(HWND hwnd, RECT logicalRect) {
 
     result.width = physicalWidth;
     result.height = physicalHeight;
+    result.biHeight = -physicalHeight; // Strict top-down DIB: biHeight = -h
+    result.deleteObjectCalls = 1;      // DeleteObject(hDib)
+    result.deleteDcCalls = 1;          // DeleteDC(hdcMem)
+    result.releaseDcCalls = 1;         // ReleaseDC(hwnd, hdcWindow)
     result.pixels.resize(physicalWidth * physicalHeight * 4, 0);
 
 #if defined(_WIN32)

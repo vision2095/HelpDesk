@@ -9,6 +9,10 @@ struct CapturedBuffer {
     int width = 0;
     int height = 0;
     float scaleFactor = 1.0f;
+    int biHeight = 0;
+    int deleteObjectCalls = 0;
+    int deleteDcCalls = 0;
+    int releaseDcCalls = 0;
 };
 
 class OcrPipeline {

@@ -4,6 +4,10 @@
 #include "test_common.h"
 #include <iostream>
 
+namespace LensDesk::Native {
+    bool VerifyMainHostContracts();
+}
+
 // Declarations of individual module runners
 int run_test_token_elevation();
 int run_test_layout_watchdog();
@@ -25,46 +29,58 @@ int main() {
 
     // Module 1
     run_test_token_elevation();
-    totalPassedAssertions += LensDesk::Test::GetAssertionCount();
+    int c1 = LensDesk::Test::GetAssertionCount();
+    totalPassedAssertions += c1;
 
     // Module 2
     run_test_layout_watchdog();
-    totalPassedAssertions += LensDesk::Test::GetAssertionCount();
+    int c2 = LensDesk::Test::GetAssertionCount();
+    totalPassedAssertions += c2;
 
     // Module 3
     run_test_ocr_pipeline();
-    totalPassedAssertions += LensDesk::Test::GetAssertionCount();
+    int c3 = LensDesk::Test::GetAssertionCount();
+    totalPassedAssertions += c3;
 
     // Module 4
     run_test_focus_gate();
-    totalPassedAssertions += LensDesk::Test::GetAssertionCount();
+    int c4 = LensDesk::Test::GetAssertionCount();
+    totalPassedAssertions += c4;
 
     // Module 5
     run_test_typing_dynamics();
-    totalPassedAssertions += LensDesk::Test::GetAssertionCount();
+    int c5 = LensDesk::Test::GetAssertionCount();
+    totalPassedAssertions += c5;
 
     // Module 6
     run_test_wasapi_loopback();
-    totalPassedAssertions += LensDesk::Test::GetAssertionCount();
+    int c6 = LensDesk::Test::GetAssertionCount();
+    totalPassedAssertions += c6;
 
     // Module 7
     run_test_mouse_gesture_hook();
-    totalPassedAssertions += LensDesk::Test::GetAssertionCount();
+    int c7 = LensDesk::Test::GetAssertionCount();
+    totalPassedAssertions += c7;
 
     // Module 8
     run_test_hotkey_dispatcher();
-    totalPassedAssertions += LensDesk::Test::GetAssertionCount();
+    int c8 = LensDesk::Test::GetAssertionCount();
+    totalPassedAssertions += c8;
 
     // Module 9
     run_test_sanitization();
-    totalPassedAssertions += LensDesk::Test::GetAssertionCount();
+    int c9 = LensDesk::Test::GetAssertionCount();
+    totalPassedAssertions += c9;
 
     // Module 10
     run_test_webview2_bootstrap();
-    totalPassedAssertions += LensDesk::Test::GetAssertionCount();
+    int c10 = LensDesk::Test::GetAssertionCount();
+    totalPassedAssertions += c10;
 
-    // Main Host Integration Contract Checks
+    // Main Host Integration Contract Checks (src/main.cpp)
     LensDesk::Test::ResetAssertionCounter();
+    CHECK(LensDesk::Native::VerifyMainHostContracts());
+
     const wchar_t* expectedClassName = L"LensDeskEnterpriseHostWindow";
     CHECK(expectedClassName != nullptr);
     CHECK(std::wstring(expectedClassName) == L"LensDeskEnterpriseHostWindow");
@@ -80,7 +96,9 @@ int main() {
     CHECK((exStyle & 0x08000000) != 0); // WS_EX_NOACTIVATE
     CHECK((exStyle & 0x00000008) != 0); // WS_EX_TOPMOST
 
-    totalPassedAssertions += LensDesk::Test::GetAssertionCount();
+    int cMain = LensDesk::Test::GetAssertionCount();
+    std::cout << "[PASS] src/main.cpp (Host Contracts): " << cMain << " asserts verified.\n";
+    totalPassedAssertions += cMain;
 
     std::cout << "========================================\n";
     std::cout << "[ALL PASS] 10 Modules + Host Main Verified: " << totalPassedAssertions << " Total Assertions Checked.\n";
