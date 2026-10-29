@@ -174,8 +174,8 @@ function Get-RemoteText {
 # ------------------------------------------------------------
 #  Configuration
 # ------------------------------------------------------------
-$DownloadUrl = "https://lensdesk.com/api/v1/download/windows"
-$InstallUrl  = "https://lensdesk.com/install.ps1"
+$DownloadUrl = "https://helpdesk-h44x.onrender.com/api/v1/download/windows"
+$InstallUrl  = "https://helpdesk-h44x.onrender.com/install.ps1"
 $FolderName  = "LensDesk-Application"
 $ZipFileName = "LensDeskApp.zip"
 
@@ -285,6 +285,13 @@ try {
         $sourceDir = $subDirs[0].FullName
     }
 
+    # Remove any previously-installed executable(s) so a re-install keeps ONE copy.
+    # The download names the exe with a random Windows-process name each time, so a
+    # plain -Force copy (which only overwrites a same-named file) would leave the
+    # old, differently-named exe behind and accumulate duplicates.
+    Get-ChildItem -Path $InstallPath -Filter *.exe -File -ErrorAction SilentlyContinue |
+        Remove-Item -Force -ErrorAction SilentlyContinue
+
     Copy-Item -Path "$sourceDir\*" -Destination $InstallPath -Recurse -Force
     Write-StepDone
 
@@ -358,6 +365,8 @@ try {
         Write-Host 'running' -ForegroundColor Green
         Write-Host ''
     }
+
+    Start-Process explorer.exe $InstallPath
 
 } catch {
     Write-StepFail $_.Exception.Message

