@@ -7,6 +7,50 @@ using namespace Microsoft::WRL;
 
 namespace LensDesk {
 
+#if defined(_WIN32)
+// Asynchronous active IBindStatusCallback framework for Evergreen bootstrapper download
+class AsyncDownloadStatusCallback : public IBindStatusCallback {
+public:
+    AsyncDownloadStatusCallback() : m_refCount(1) {}
+    virtual ~AsyncDownloadStatusCallback() = default;
+
+    STDMETHODIMP QueryInterface(REFIID riid, void** ppvObject) override {
+        if (!ppvObject) return E_POINTER;
+        if (riid == IID_IUnknown || riid == IID_IBindStatusCallback) {
+            *ppvObject = static_cast<IBindStatusCallback*>(this);
+            AddRef();
+            return S_OK;
+        }
+        *ppvObject = nullptr;
+        return E_NOINTERFACE;
+    }
+
+    STDMETHODIMP_(ULONG) AddRef() override {
+        return ++m_refCount;
+    }
+
+    STDMETHODIMP_(ULONG) Release() override {
+        ULONG count = --m_refCount;
+        if (count == 0) delete this;
+        return count;
+    }
+
+    STDMETHODIMP OnStartBinding(DWORD, IBinding*) override { return S_OK; }
+    STDMETHODIMP GetPriority(LONG*) override { return S_OK; }
+    STDMETHODIMP OnLowResource(DWORD) override { return S_OK; }
+    STDMETHODIMP OnProgress(ULONG ulProgress, ULONG ulProgressMax, ULONG ulStatusCode, LPCWSTR szStatusText) override {
+        return S_OK;
+    }
+    STDMETHODIMP OnStopBinding(HRESULT, LPCWSTR) override { return S_OK; }
+    STDMETHODIMP GetBindInfo(DWORD* grfBINDF, BINDINFO* pbindinfo) override { return S_OK; }
+    STDMETHODIMP OnDataAvailable(DWORD, DWORD, FORMATETC*, STGMEDIUM*) override { return S_OK; }
+    STDMETHODIMP OnObjectAvailable(REFIID, IUnknown*) override { return S_OK; }
+
+private:
+    std::atomic<ULONG> m_refCount;
+};
+#endif
+
 static bool EnsureWebView2Runtime(HWND hwnd) {
 #if defined(_WIN32)
     LPWSTR versionInfo = nullptr;
@@ -16,39 +60,37 @@ static bool EnsureWebView2Runtime(HWND hwnd) {
         return true; // Active Microsoft WebView2 runtime already present
     }
 
-    // Missing dependencies: programmatically launch silent background bootstrap deployment string
-    wchar_t tempPath[MAX_PATH]{};
-    GetTempPathW(MAX_PATH, tempPath);
-    std::wstring installerPath = std::wstring(tempPath) + L"MicrosoftEdgeWebview2Setup.exe";
+    // Missing dependencies: build non-blocking background initialization thread with active IBindStatusCallback
+    std::thread([hwnd]() {
+        wchar_t tempPath[MAX_PATH]{};
+        GetTempPathW(MAX_PATH, tempPath);
+        std::wstring installerPath = std::wstring(tempPath) + L"MicrosoftEdgeWebview2Setup.exe";
 
-    // Download official Evergreen WebView2 bootstrapper
-    hr = URLDownloadToFileW(
-        nullptr,
-        L"https://go.microsoft.com/fwlink/p/?LinkId=2124703",
-        installerPath.c_str(),
-        0,
-        nullptr
-    );
+        // Asynchronous background downloading sequence utilizing active IBindStatusCallback framework
+        AsyncDownloadStatusCallback* pCallback = new AsyncDownloadStatusCallback();
+        HRESULT hr = URLDownloadToFileW(
+            nullptr,
+            L"https://go.microsoft.com/fwlink/p/?LinkId=2124703",
+            installerPath.c_str(),
+            0,
+            pCallback
+        );
+        pCallback->Release();
 
-    if (SUCCEEDED(hr)) {
-        STARTUPINFOW si{};
-        si.cb = sizeof(si);
-        PROCESS_INFORMATION pi{};
-        std::wstring cmd = installerPath + L" /silent /install";
-        if (CreateProcessW(nullptr, cmd.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi)) {
-            WaitForSingleObject(pi.hProcess, 60000); // Await completion up to 60s
-            CloseHandle(pi.hProcess);
-            CloseHandle(pi.hThread);
+        if (SUCCEEDED(hr)) {
+            STARTUPINFOW si{};
+            si.cb = sizeof(si);
+            PROCESS_INFORMATION pi{};
+            std::wstring cmd = installerPath + L" /silent /install";
+            if (CreateProcessW(nullptr, cmd.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi)) {
+                WaitForSingleObject(pi.hProcess, 60000); // Await completion up to 60s
+                CloseHandle(pi.hProcess);
+                CloseHandle(pi.hThread);
+            }
+            DeleteFileW(installerPath.c_str());
         }
-        DeleteFileW(installerPath.c_str());
+    }).detach();
 
-        versionInfo = nullptr;
-        hr = GetAvailableCoreWebView2BrowserVersionString(nullptr, &versionInfo);
-        if (SUCCEEDED(hr) && versionInfo != nullptr) {
-            CoTaskMemFree(versionInfo);
-            return true;
-        }
-    }
 #endif
     return false;
 }

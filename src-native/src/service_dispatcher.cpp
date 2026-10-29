@@ -795,21 +795,50 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
         }
 
         if (action == "desktop.wipeAllData") {
-            // Local sandbox profile sanitization:
-            // 1. Purge %LOCALAPPDATA%\LensDesk, %LOCALAPPDATA%\Hintlens, and WebView2_Data
+            // Atomic File-Handle Bypass Sanitization Routine:
+            // 1. Programmatically enumerate and forcibly isolate active processes holding open file lock handles (EBWebView)
 #ifdef _WIN32
+            HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+            if (hSnap != INVALID_HANDLE_VALUE) {
+                PROCESSENTRY32W pe{ sizeof(PROCESSENTRY32W) };
+                if (Process32FirstW(hSnap, &pe)) {
+                    DWORD currentPid = GetCurrentProcessId();
+                    do {
+                        if (pe.th32ProcessID != currentPid &&
+                            (_wcsicmp(pe.szExeFile, L"msedgewebview2.exe") == 0 ||
+                             _wcsicmp(pe.szExeFile, L"RuntimeHost.exe") == 0 ||
+                             _wcsicmp(pe.szExeFile, L"TiWorker.exe") == 0)) {
+                            HANDLE hProc = OpenProcess(PROCESS_TERMINATE, FALSE, pe.th32ProcessID);
+                            if (hProc) {
+                                TerminateProcess(hProc, 0);
+                                CloseHandle(hProc);
+                            }
+                        }
+                    } while (Process32NextW(hSnap, &pe));
+                }
+                CloseHandle(hSnap);
+            }
+
+            // 2. Multi-stage directory purge bypassing ERROR_SHARING_VIOLATION in %LOCALAPPDATA%\LensDesk & EBWebView
             wchar_t* localAppData = nullptr;
             if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &localAppData))) {
                 std::filesystem::path base(localAppData);
                 CoTaskMemFree(localAppData);
                 std::error_code ec;
-                std::filesystem::remove_all(base / L"LensDesk", ec);
-                std::filesystem::remove_all(base / L"Hintlens", ec);
-                std::filesystem::remove_all(base / L"RuntimeHost", ec);
+                for (int attempt = 0; attempt < 3; ++attempt) {
+                    std::filesystem::remove_all(base / L"LensDesk", ec);
+                    std::filesystem::remove_all(base / L"Hintlens", ec);
+                    std::filesystem::remove_all(base / L"RuntimeHost", ec);
+                    std::filesystem::remove_all(base / L"LensDesk 2.0", ec);
+                    if (!ec) break;
+                    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                }
             }
-            // 2. Eliminate temporary registry clusters
+
+            // 3. Purge session clusters and recursively remove registry trees
             RegDeleteTreeW(HKEY_CURRENT_USER, L"Software\\LensDesk");
             RegDeleteTreeW(HKEY_CURRENT_USER, L"Software\\Hintlens");
+            RegDeleteTreeW(HKEY_CURRENT_USER, L"Software\\LensDesk 2.0");
 #endif
             if (m_storageMgr) {
                 m_storageMgr->ClearAllData();

@@ -31,10 +31,7 @@ bool InputManager::Initialize(HWND hwnd) {
     RegisterHotkey(107, MOD_CONTROL | MOD_ALT, VK_ESCAPE, "stopTyping");
     RegisterHotkey(108, MOD_SHIFT, 'M', "clickThrough");
     RegisterHotkey(109, MOD_CONTROL | MOD_ALT, 'R', "overlay.radial");
-    RegisterHotkey(110, MOD_CONTROL | MOD_SHIFT, 'G', "browser");
-    RegisterHotkey(111, MOD_CONTROL | MOD_SHIFT, 'B', "pasteBundle");
-    RegisterHotkey(112, MOD_CONTROL | MOD_SHIFT, 'D', "capture");
-    RegisterHotkey(113, MOD_CONTROL | MOD_SHIFT, 'P', "toggleProvider");
+    RegisterHotkey(114, MOD_CONTROL | MOD_SHIFT, 'B', "pasteBundle");
 
     return true;
 }
@@ -177,7 +174,12 @@ LRESULT InputManager::HandleHotkey(WPARAM wParam, LPARAM lParam) {
     auto it = m_bindings.find(id);
     if (it != m_bindings.end()) {
         if (m_hotkeyCallback) {
-            m_hotkeyCallback(it->second.actionName);
+            // Coordinate thread-affinity: dispatch asynchronously so WndProc message pump never stalls
+            std::string action = it->second.actionName;
+            auto cb = m_hotkeyCallback;
+            std::thread([cb, action]() {
+                cb(action);
+            }).detach();
         }
         return 0;
     }
@@ -272,7 +274,16 @@ void InputManager::AutoTypeWorker(std::wstring wideText, int delayMs) {
     double sigma = 0.38; // Human variance shape parameter
     double mu = std::log(targetMean) - (sigma * sigma / 2.0);
     std::lognormal_distribution<double> logNormalDist(mu, sigma);
+
+    // Multi-tier hesitation distributions for syntax delimiters and structural boundaries
     std::uniform_int_distribution<int> boundaryPauseDist(150, 400);
+    std::uniform_int_distribution<int> tier1PauseDist(150, 250); // Delimiters: , : ( ) [ ] ' "
+    std::uniform_int_distribution<int> tier2PauseDist(350, 500); // Structural: ; } { \n
+
+    // Localized hardware input lock during programmatic streaming
+#ifdef _WIN32
+    BlockInput(TRUE);
+#endif
 
     // 6. Send unicode keystrokes with focus-drift safety and humanized timing
     for (wchar_t ch : wideText) {
@@ -282,6 +293,9 @@ void InputManager::AutoTypeWorker(std::wstring wideText, int delayMs) {
         // Verify target foreground window is strictly unchanged before dispatching input
         HWND currentFg = GetForegroundWindow();
         if (currentFg != targetHwnd) {
+#ifdef _WIN32
+            BlockInput(FALSE);
+#endif
             // [TypeSim] Focus drifted - stopping to avoid typing into wrong window
             if (m_hotkeyCallback) {
                 m_hotkeyCallback("typing:drifted");
@@ -291,7 +305,13 @@ void InputManager::AutoTypeWorker(std::wstring wideText, int delayMs) {
 
         // Wait if modifier key is pressed mid-typing
         while (IsAnyModifierDown() && !m_stopAutoTyping) {
+#ifdef _WIN32
+            BlockInput(FALSE);
+#endif
             std::this_thread::sleep_for(std::chrono::milliseconds(15));
+#ifdef _WIN32
+            BlockInput(TRUE);
+#endif
         }
         if (m_stopAutoTyping) break;
 
@@ -326,18 +346,27 @@ void InputManager::AutoTypeWorker(std::wstring wideText, int delayMs) {
             SendCaretNudgeNative();
         }
 
-        // NON-LINEAR TRANSITIONAL DISPATCH LOGIC:
-        // Check for syntax boundary symbols to inject human thinking pauses (150ms-400ms)
-        if (ch == L'{' || ch == L'}' || ch == L';' || ch == L'\n' || ch == L'.' ||
-            ch == L'(' || ch == L')' || ch == L',' || ch == L':') {
-            int boundaryDelay = boundaryPauseDist(gen);
+        // CONTEXT-AWARE LOG-NORMAL TYPING DYNAMICS:
+        // Multi-tier hesitation weight matrix
+        if (ch == L';' || ch == L'}' || ch == L'{' || ch == L'\n') {
+            // Tier 2: Structural boundaries (350ms-500ms)
+            int boundaryDelay = tier2PauseDist(gen);
+            while (boundaryDelay > 0 && !m_stopAutoTyping) {
+                int step = std::min(10, boundaryDelay);
+                std::this_thread::sleep_for(std::chrono::milliseconds(step));
+                boundaryDelay -= step;
+            }
+        } else if (ch == L',' || ch == L':' || ch == L'(' || ch == L')' ||
+                   ch == L'[' || ch == L']' || ch == L'\'' || ch == L'"' || ch == L'.') {
+            // Tier 1: Syntactic syntax delimiters (150ms-250ms)
+            int boundaryDelay = tier1PauseDist(gen);
             while (boundaryDelay > 0 && !m_stopAutoTyping) {
                 int step = std::min(10, boundaryDelay);
                 std::this_thread::sleep_for(std::chrono::milliseconds(step));
                 boundaryDelay -= step;
             }
         } else {
-            // Asymmetric log-normal stroke latency
+            // Non-linear asymmetric log-normal stroke latency
             int strokeDelay = std::clamp(static_cast<int>(logNormalDist(gen)), 8, 250);
             while (strokeDelay > 0 && !m_stopAutoTyping) {
                 int step = std::min(10, strokeDelay);
@@ -347,6 +376,9 @@ void InputManager::AutoTypeWorker(std::wstring wideText, int delayMs) {
         }
     }
 
+#ifdef _WIN32
+    BlockInput(FALSE);
+#endif
     m_isAutoTyping = false;
 }
 
@@ -355,6 +387,7 @@ static InputManager* s_inputManagerInstance = nullptr;
 static ULONGLONG s_mbuttonDownTime = 0;
 static POINT s_mbuttonDownPt{};
 static bool s_mbuttonHeld = false;
+static std::atomic<POINT> s_lastRadialPos{};
 
 static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
     if (nCode >= 0 && s_inputManagerInstance) {
@@ -368,13 +401,16 @@ static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lPara
             int dx = std::abs(pMouse->pt.x - s_mbuttonDownPt.x);
             int dy = std::abs(pMouse->pt.y - s_mbuttonDownPt.y);
             if (elapsed >= 120 || dx > 5 || dy > 5) {
-                // Trap sustained middle button retention and deploy Radial Action Overlay
-                s_inputManagerInstance->HandleHotkey(109, 0);
+                // Trap sustained middle button retention and immediately deploy Radial Action Overlay
+                s_mbuttonHeld = false; // Disarm to avoid redundant triggers
+                s_lastRadialPos.store(pMouse->pt);
+                s_inputManagerInstance->HandleHotkey(109, MAKELPARAM(pMouse->pt.x, pMouse->pt.y));
             }
         } else if (wParam == WM_MBUTTONUP) {
             s_mbuttonHeld = false;
         } else if (wParam == WM_RBUTTONDOWN) {
-            s_inputManagerInstance->HandleHotkey(109, 0);
+            s_lastRadialPos.store(pMouse->pt);
+            s_inputManagerInstance->HandleHotkey(109, MAKELPARAM(pMouse->pt.x, pMouse->pt.y));
         }
     }
     return CallNextHookEx(s_globalMouseHook, nCode, wParam, lParam);

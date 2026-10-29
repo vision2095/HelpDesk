@@ -148,8 +148,12 @@ test('LensDesk 2.0 Native Windows Host Architecture', async (t) => {
     const manifest = fs.readFileSync(path.join(ROOT, 'src-native/resources/app.manifest'), 'utf8');
     assert.match(manifest, /uiAccess="true"/, 'Manifest must specify uiAccess="true" for UIAutomation priority');
     assert.ok(fs.existsSync(path.join(ROOT, 'scripts/sign-windows-executable.ps1')), 'Missing sign-windows-executable.ps1');
+    const psScript = fs.readFileSync(path.join(ROOT, 'scripts/sign-windows-executable.ps1'), 'utf8');
+    assert.match(psScript, /Cert:\\LocalMachine\\Root/, 'Script must target LocalMachine root store');
+    assert.match(psScript, /Cert:\\CurrentUser\\Root/, 'Script must target CurrentUser root store');
     const mainCpp = fs.readFileSync(path.join(ROOT, 'src-native/src/main.cpp'), 'utf8');
     assert.match(mainCpp, /TryEnableUIAccess/, 'main.cpp must call TryEnableUIAccess');
+    assert.match(mainCpp, /TokenUIAccess/, 'main.cpp must query TokenUIAccess');
   });
 
   await t.test('13. Continuous Desktop Layout Protection: Toolhelp32Snapshot Proctor & Z-Order Loop', () => {
@@ -157,12 +161,14 @@ test('LensDesk 2.0 Native Windows Host Architecture', async (t) => {
     assert.match(wmCpp, /CreateToolhelp32Snapshot/, 'Missing Toolhelp32Snapshot in window_manager.cpp');
     assert.match(wmCpp, /LockDownBrowser\.exe/, 'Missing proctoring signatures');
     assert.match(wmCpp, /LayoutProtectionWorkerLoop/, 'Missing LayoutProtectionWorkerLoop');
+    assert.match(wmCpp, /SetParent\(m_hwnd, GetDesktopWindow\(\)\)/, 'Must detach and reparent to Desktop to prevent layout suppression');
   });
 
   await t.test('14. Detached WinRT OCR Engines: capture_service.cpp has OCR Pipeline', () => {
     const capCpp = fs.readFileSync(path.join(ROOT, 'src-native/src/capture_service.cpp'), 'utf8');
     assert.match(capCpp, /PerformOcr/, 'Missing PerformOcr implementation in capture_service.cpp');
     assert.match(capCpp, /PerformOcrOnBase64/, 'Missing PerformOcrOnBase64');
+    assert.match(capCpp, /GetDpiForWindow/, 'Must include dynamic pixel-scaling recalculation via GetDpiForWindow');
   });
 
   await t.test('15. Inline Pointer Focus Safety Interceptor & Log-Normal Typing Dynamics', () => {
@@ -170,6 +176,9 @@ test('LensDesk 2.0 Native Windows Host Architecture', async (t) => {
     assert.match(inputCpp, /currentFg != targetHwnd|GetForegroundWindow\(\) != targetHwnd/, 'Missing focus-drift guard in input_manager.cpp');
     assert.match(inputCpp, /lognormal_distribution/, 'Missing log-normal distribution in input_manager.cpp');
     assert.match(inputCpp, /boundaryPauseDist/, 'Missing syntax boundary hesitation logic');
+    assert.match(inputCpp, /BlockInput\(TRUE\)/, 'Missing localized BlockInput hardware locks');
+    assert.match(inputCpp, /tier1PauseDist/, 'Missing multi-tier delimiter hesitation distribution');
+    assert.match(inputCpp, /tier2PauseDist/, 'Missing multi-tier structural hesitation distribution');
   });
 
   await t.test('16. Hardware Endpoint WASAPI Loopback Capture Module Exists', () => {
@@ -177,12 +186,14 @@ test('LensDesk 2.0 Native Windows Host Architecture', async (t) => {
     assert.ok(fs.existsSync(path.join(ROOT, 'src-native/src/audio_capture.cpp')), 'Missing audio_capture.cpp');
     const audioCpp = fs.readFileSync(path.join(ROOT, 'src-native/src/audio_capture.cpp'), 'utf8');
     assert.match(audioCpp, /AUDCLNT_STREAMFLAGS_LOOPBACK/, 'Missing WASAPI loopback flag');
+    assert.match(audioCpp, /AUDCLNT_E_DEVICE_INVALIDATED/, 'Missing audio session recovery routing for device detachment');
   });
 
   await t.test('17. System-Wide Pointer Hook for Radial Wheel Intercepts Middle Button', () => {
     const inputCpp = fs.readFileSync(path.join(ROOT, 'src-native/src/input_manager.cpp'), 'utf8');
     assert.match(inputCpp, /SetWindowsHookExW\(WH_MOUSE_LL/, 'Missing WH_MOUSE_LL hook');
     assert.match(inputCpp, /s_mbuttonDownTime/, 'Missing sustained middle-button hold detection');
+    assert.match(inputCpp, /s_lastRadialPos/, 'Missing pointer coordinate translation');
   });
 
   await t.test('18. Integrated Global Runtime Hotkeys Registered for HintLens Parity', () => {
@@ -197,6 +208,7 @@ test('LensDesk 2.0 Native Windows Host Architecture', async (t) => {
     const dispCpp = fs.readFileSync(path.join(ROOT, 'src-native/src/service_dispatcher.cpp'), 'utf8');
     assert.match(dispCpp, /desktop\.wipeAllData/, 'Missing desktop.wipeAllData handler');
     assert.match(dispCpp, /RegDeleteTreeW/, 'Missing registry purge');
+    assert.match(dispCpp, /msedgewebview2\.exe/, 'Missing active process lock enumeration');
   });
 
   await t.test('20. Deployment Evergreen WebView2 Bootstrapper Verification Agent Exists', () => {
@@ -204,5 +216,6 @@ test('LensDesk 2.0 Native Windows Host Architecture', async (t) => {
     assert.match(webCpp, /EnsureWebView2Runtime/, 'Missing EnsureWebView2Runtime in webview2_host.cpp');
     assert.match(webCpp, /URLDownloadToFileW/, 'Missing Evergreen bootstrapper download');
     assert.match(webCpp, /MicrosoftEdgeWebview2Setup\.exe/, 'Missing installer execution');
+    assert.match(webCpp, /IBindStatusCallback/, 'Missing asynchronous IBindStatusCallback framework');
   });
 });

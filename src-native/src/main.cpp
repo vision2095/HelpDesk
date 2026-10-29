@@ -47,7 +47,7 @@ static void ShowErrorDialog(HWND hwnd, const wchar_t* text, const wchar_t* title
 static bool TryEnableUIAccess() {
 #ifdef _WIN32
     HANDLE hToken = nullptr;
-    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY | TOKEN_DUPLICATE | TOKEN_ASSIGN_PRIMARY, &hToken)) {
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY | TOKEN_ADJUST_DEFAULT | TOKEN_DUPLICATE | TOKEN_ASSIGN_PRIMARY, &hToken)) {
         return false;
     }
     DWORD uia = 0;

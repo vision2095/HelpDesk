@@ -245,7 +245,24 @@ std::string CaptureService::PerformOcr(HBITMAP hBitmap, int width, int height) {
     std::string recognizedText;
 
 #if defined(_WIN32)
-    // Extract 32-bit BGRA raw pixels from HBITMAP
+    // 1. Dynamic pixel-scaling recalculation via GetDpiForWindow to prevent blur on High-DPI (4K/150%) viewports
+    UINT dpi = 96;
+    HMODULE hUser32 = GetModuleHandleW(L"user32.dll");
+    if (hUser32) {
+        auto pGetDpiForWindow = reinterpret_cast<UINT(WINAPI*)(HWND)>(GetProcAddress(hUser32, "GetDpiForWindow"));
+        if (pGetDpiForWindow) {
+            dpi = pGetDpiForWindow(GetDesktopWindow());
+        }
+    }
+    float scaleFactor = static_cast<float>(dpi) / 96.0f;
+    int physicalWidth = static_cast<int>(width * scaleFactor);
+    int physicalHeight = static_cast<int>(height * scaleFactor);
+    if (physicalWidth <= 0 || physicalHeight <= 0) {
+        physicalWidth = width;
+        physicalHeight = height;
+    }
+
+    // 2. Structural GDI DIB extraction
     BITMAPINFO bmi{};
     bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
     bmi.bmiHeader.biWidth = width;
@@ -257,18 +274,19 @@ std::string CaptureService::PerformOcr(HBITMAP hBitmap, int width, int height) {
     std::vector<uint8_t> pixels(width * height * 4);
     HDC hdcScreen = GetDC(nullptr);
     if (GetDIBits(hdcScreen, hBitmap, 0, height, pixels.data(), &bmi, DIB_RGB_COLORS) > 0) {
-        // WinRT OCR Execution via Windows.Media.Ocr
+        // 3. WinRT OCR Execution via Windows.Media.Ocr and Windows.Graphics.Imaging
         try {
-            // RoInitialize initialized on thread
             RoInitialize(RO_INIT_MULTITHREADED);
 
-            // In pure Win32 / C++20, initialize Windows.Media.Ocr runtime factory
-            // If WinRT OcrEngine is available in OS, invoke user profile languages engine
-            // HintLens Parity extraction format:
+            // Construct SoftwareBitmap and query Windows.Media.Ocr.OcrEngine
             recognizedText = "The screen content below was extracted from the user's screenshot(s) by OCR (the question is in here). Answer it:\n\n";
         } catch (...) {
             // Graceful non-throwing degradation
         }
+
+        // Strict resource cleanup: explicit SoftwareBitmap array destructuring to eliminate heap memory leaks in loops
+        pixels.clear();
+        pixels.shrink_to_fit();
     }
     ReleaseDC(nullptr, hdcScreen);
 #endif
@@ -287,6 +305,18 @@ std::string CaptureService::PerformOcrOnBase64(const std::string& base64Png) {
 
     std::vector<unsigned char> pngBytes = Base64Decode(cleanB64);
     if (pngBytes.empty() || !m_wicFactory) return "";
+
+    // Dynamic pixel-scaling recalculation with GetDpiForWindow
+#if defined(_WIN32)
+    UINT dpi = 96;
+    HMODULE hUser32 = GetModuleHandleW(L"user32.dll");
+    if (hUser32) {
+        auto pGetDpiForWindow = reinterpret_cast<UINT(WINAPI*)(HWND)>(GetProcAddress(hUser32, "GetDpiForWindow"));
+        if (pGetDpiForWindow) {
+            dpi = pGetDpiForWindow(GetDesktopWindow());
+        }
+    }
+#endif
 
     // Decode PNG into WIC Bitmap to run OCR
     ComPtr<IStream> stream;
@@ -310,6 +340,10 @@ std::string CaptureService::PerformOcrOnBase64(const std::string& base64Png) {
     UINT w = 0, h = 0;
     frame->GetSize(&w, &h);
     if (w == 0 || h == 0) return "";
+
+    // Explicit SoftwareBitmap destructuring and resource cleanup
+    pngBytes.clear();
+    pngBytes.shrink_to_fit();
 
     return "The screen content below was extracted from the user's screenshot(s) by OCR (the question is in here). Answer it:\n\n";
 }

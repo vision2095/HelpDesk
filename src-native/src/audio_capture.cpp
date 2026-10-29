@@ -106,8 +106,30 @@ void WasapiLoopbackCapture::CaptureThreadLoop() {
 #if defined(_WIN32)
     while (!m_stopCapture) {
         UINT32 nextPacketSize = 0;
-        HRESULT hr = m_captureClient->GetNextPacketSize(&nextPacketSize);
-        if (FAILED(hr)) break;
+        HRESULT hr = m_captureClient ? m_captureClient->GetNextPacketSize(&nextPacketSize) : E_FAIL;
+        
+        // Explicit audio session recovery routing:
+        // Intercept AUDCLNT_E_DEVICE_INVALIDATED notifications on hardware endpoint detachment
+        if (hr == AUDCLNT_E_DEVICE_INVALIDATED || FAILED(hr)) {
+            if (m_stopCapture) break;
+
+            // Release invalidated endpoint interfaces
+            m_captureClient.Reset();
+            m_audioClient.Reset();
+            m_device.Reset();
+
+            // Wait before attempting session recovery to allow hardware enumeration to settle
+            std::this_thread::sleep_for(std::chrono::milliseconds(250));
+            if (m_stopCapture) break;
+
+            if (Initialize()) {
+                if (m_audioClient && SUCCEEDED(m_audioClient->Start())) {
+                    continue; // Recovery successful
+                }
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            continue;
+        }
 
         while (nextPacketSize != 0 && !m_stopCapture) {
             BYTE* pData = nullptr;

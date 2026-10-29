@@ -418,7 +418,24 @@ void WindowManager::LayoutProtectionWorkerLoop() {
                 SetWindowDisplayAffinity(m_hwnd, WDA_EXCLUDEFROMCAPTURE);
             }
 
-            if (m_alwaysOnTop && m_isVisible) {
+            if (proctorDetected) {
+                // Explicitly detach and reparent to Desktop to prevent layout suppression by kiosk processes
+                SetParent(m_hwnd, GetDesktopWindow());
+
+                // Execute aggressive 5ms window constraint loop while proctor is active
+                for (int fastPulse = 0; fastPulse < 60 && !m_stopLayoutWorker; ++fastPulse) {
+                    if (m_alwaysOnTop && m_isVisible) {
+                        SetWindowPos(
+                            m_hwnd,
+                            HWND_TOPMOST,
+                            0, 0, 0, 0,
+                            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
+                        );
+                    }
+                    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                }
+                continue;
+            } else if (m_alwaysOnTop && m_isVisible) {
                 HWND fg = GetForegroundWindow();
                 if (fg != m_hwnd) {
                     SetWindowPos(
@@ -431,7 +448,7 @@ void WindowManager::LayoutProtectionWorkerLoop() {
             }
         }
 
-        // Interruptible sleep interval (~300ms)
+        // Interruptible sleep interval (~300ms) when no proctor is active
         for (int i = 0; i < 30 && !m_stopLayoutWorker; ++i) {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
