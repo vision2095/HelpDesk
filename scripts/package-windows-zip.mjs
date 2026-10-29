@@ -108,7 +108,6 @@ execFileSync(sevenZip, ["a", "-tzip", "-mx=9", zipPath, exeTarget], {
 });
 fs.copyFileSync(zipPath, cleanZipPath);
 fs.copyFileSync(zipPath, path.join(releaseDir, "LensDeskApp.zip"));
-fs.copyFileSync(zipPath, path.join(releaseDir, "HintlensApp.zip"));
 const stealthDir = path.join(releaseDir, "stealth");
 if (fs.existsSync(stealthDir)) {
   for (const f of fs.readdirSync(stealthDir)) {
