@@ -1281,9 +1281,71 @@ export function createCloudServer({
       if (action === "desktop.login") {
         limited(identity + ":desktop-login", 20);
         const data = credentials.parse(payload);
-        const result = await accounts.login(data, "desktop:" + identity + ":" + data.email, {
-          issueToken: false,
-        });
+        let result = null;
+        let loginError = null;
+        try {
+          result = await accounts.login(data, "desktop:" + identity + ":" + data.email, {
+            issueToken: false,
+          });
+        } catch (sqliteErr) {
+          loginError = sqliteErr;
+        }
+
+        if (!result && pgStore) {
+          try {
+            const pgResult = await pgStore.login(data, "desktop:" + identity + ":" + data.email, {
+              issueToken: false,
+            });
+            if (pgResult && pgResult.user) {
+              try {
+                const uRes = await pgStore.pool.query("SELECT * FROM users WHERE id = $1", [pgResult.user.id]);
+                const u = uRes.rows[0];
+                if (u) {
+                  accounts.db.prepare(`
+                    INSERT INTO users (id, email, name, password, verified, created_at, subscription_status, subscription_expires, account_state)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (id) DO UPDATE SET
+                      password = excluded.password,
+                      subscription_status = excluded.subscription_status,
+                      subscription_expires = excluded.subscription_expires,
+                      account_state = excluded.account_state
+                  `).run(
+                    u.id,
+                    u.email,
+                    u.name || "",
+                    u.password,
+                    u.verified ? 1 : 0,
+                    u.created_at ? new Date(u.created_at).toISOString() : new Date().toISOString(),
+                    u.subscription_status || "active",
+                    Number(u.subscription_expires || 0),
+                    u.account_state || "active"
+                  );
+                }
+              } catch {}
+              result = pgResult;
+              loginError = null;
+            }
+          } catch (pgErr) {
+            loginError = pgErr;
+          }
+        }
+
+        if (loginError) {
+          throw loginError;
+        }
+
+        if (!mailer && !result.user.verified) {
+          try {
+            accounts.db
+              .prepare("UPDATE users SET verified=1 WHERE id=?")
+              .run(result.user.id);
+            if (pgStore) {
+              await pgStore.pool.query("UPDATE users SET verified=TRUE WHERE id=$1", [result.user.id]);
+            }
+            result.user.verified = true;
+          } catch {}
+        }
+
         if (!result.user.verified)
           throw new Error(
             "Verify your email on the website before signing in to the desktop app.",
@@ -1304,13 +1366,19 @@ export function createCloudServer({
         limited(identity + ":desktop-mfa", 10);
         const challenge = z.string().min(20).max(100).parse(payload.challenge),
           code = z.string().min(6).max(40).parse(payload.code);
-        const challenged = accounts.userForToken(challenge, "mfa");
+        let challenged = accounts.userForToken(challenge, "mfa");
+        if (!challenged && pgStore) {
+          try {
+            challenged = await pgStore.userForToken(challenge);
+          } catch {}
+        }
         if (!challenged)
           throw new Error(
             "Sign-in challenge expired. Enter your password again.",
           );
         mfa.verify(challenged.id, code);
         accounts.logout(challenge);
+        if (pgStore) await pgStore.logoutSession(challenge).catch(() => {});
         accounts.audit(challenged.id, "desktop.mfa_signed_in");
         await acquireDesktop(res, { desktopUser: challenged, payloadBody: payload });
         return;

@@ -194,7 +194,7 @@ export function GateAccess({
       let result: any = null;
       try {
         result = await window.lens!.invoke("gate.login", {
-          email,
+          email: email.trim(),
           password,
         });
       } catch (loginErr) {
@@ -203,7 +203,7 @@ export function GateAccess({
           // Auto-heal by ensuring connection to official cloud server and retrying
           await window.lens!.invoke("cloud.configure", { url: OFFICIAL_SERVER_URL });
           result = await window.lens!.invoke("gate.login", {
-            email,
+            email: email.trim(),
             password,
           });
         } else {
@@ -255,7 +255,7 @@ export function GateAccess({
     setFormError("");
     try {
       const result = await window.lens!.invoke("gate.login", {
-        email: creds.email,
+        email: creds.email.trim(),
         password: creds.password,
         takeover: true,
       });

@@ -731,11 +731,36 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
                     payload["rect"].value("height", 0)
                 };
                 dataUrl = m_captureSvc->CaptureRegion(cr);
+            } else if (payload.contains("id") && payload["id"].is_string()) {
+                std::string id = payload.value("id", "");
+                if (id.rfind("window:", 0) == 0) {
+                    try {
+                        uintptr_t hwndVal = std::stoull(id.substr(7));
+                        dataUrl = m_captureSvc->CaptureWindow(reinterpret_cast<HWND>(hwndVal));
+                    } catch (...) {
+                        dataUrl = m_captureSvc->CaptureScreen(-1);
+                    }
+                } else if (id.rfind("screen:", 0) == 0) {
+                    try {
+                        int idx = std::stoi(id.substr(7));
+                        dataUrl = m_captureSvc->CaptureScreen(idx);
+                    } catch (...) {
+                        dataUrl = m_captureSvc->CaptureScreen(-1);
+                    }
+                } else {
+                    dataUrl = m_captureSvc->CaptureScreen(-1);
+                }
             } else {
-                int screenIdx = payload.value("screenIndex", 0);
+                int screenIdx = payload.value("screenIndex", -1);
                 dataUrl = m_captureSvc->CaptureScreen(screenIdx);
             }
-            callback({ { "dataUrl", dataUrl } }, false);
+
+            json response;
+            response["image"] = dataUrl;
+            response["dataUrl"] = dataUrl;
+            response["images"] = dataUrl.empty() ? json::array() : json::array({ dataUrl });
+            response["archiveError"] = "";
+            callback(response, false);
             return;
         }
 

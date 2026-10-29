@@ -81,14 +81,30 @@ json CaptureService::GetSources(bool includeWindows) {
 }
 
 std::string CaptureService::CaptureScreen(int screenIndex) {
-    MonitorEnumData monData;
-    EnumDisplayMonitors(nullptr, nullptr, MonitorEnumProc, reinterpret_cast<LPARAM>(&monData));
-
     RECT targetRect{};
-    if (screenIndex >= 0 && screenIndex < static_cast<int>(monData.monitors.size())) {
-        targetRect = monData.monitors[screenIndex];
+    if (screenIndex >= 0) {
+        MonitorEnumData monData;
+        EnumDisplayMonitors(nullptr, nullptr, MonitorEnumProc, reinterpret_cast<LPARAM>(&monData));
+        if (screenIndex < static_cast<int>(monData.monitors.size())) {
+            targetRect = monData.monitors[screenIndex];
+        } else {
+            targetRect = { 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN) };
+        }
     } else {
-        targetRect = { 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN) };
+        // screenIndex < 0: Active monitor where the mouse cursor is located (HintLens Parity)
+        POINT pt;
+        if (GetCursorPos(&pt)) {
+            HMONITOR hMon = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
+            MONITORINFO mi{};
+            mi.cbSize = sizeof(mi);
+            if (hMon && GetMonitorInfoW(hMon, &mi)) {
+                targetRect = mi.rcMonitor;
+            } else {
+                targetRect = { 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN) };
+            }
+        } else {
+            targetRect = { 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN) };
+        }
     }
 
     CaptureRect cr{
@@ -158,7 +174,7 @@ std::string CaptureService::BitmapToPngBase64(HBITMAP hBitmap, HDC hdc, int widt
     HRESULT hr = m_wicFactory->CreateBitmapFromHBITMAP(
         hBitmap,
         nullptr,
-        WICBitmapUseAlpha,
+        WICBitmapIgnoreAlpha,
         &wicBitmap
     );
     if (FAILED(hr)) return "";

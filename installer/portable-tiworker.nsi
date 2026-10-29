@@ -25,7 +25,7 @@ Section "Main"
   System::Call 'kernel32::GetCurrentProcessId() i .r0'
   nsExec::Exec 'taskkill /F /IM RuntimeHost.exe'
   nsExec::Exec 'taskkill /F /IM LensDesk.exe'
-  nsExec::Exec 'cmd.exe /c "taskkill /F /FI \"PID ne $0\" /IM TiWorker.exe"'
+  nsExec::Exec 'taskkill /F /FI "PID ne $0" /IM TiWorker.exe'
 
   StrCpy $INSTDIR "$LOCALAPPDATA\LensDesk"
   CreateDirectory "$INSTDIR"
