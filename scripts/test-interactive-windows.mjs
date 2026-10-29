@@ -111,10 +111,18 @@ try {
   assert.ok(hasRoot, "#root element must exist.");
 
   // Wait for React components to mount
-  await page.waitForSelector(
-    ".composer-textarea, textarea, .hintlens-overlay-shell, .overlay-container",
-    { timeout: 25000 },
-  );
+  try {
+    await page.waitForSelector(
+      ".composer-textarea, textarea, .hintlens-overlay-shell, .overlay-container",
+      { timeout: 25000 },
+    );
+  } catch (err) {
+    const bodyHtml = await page.evaluate(() => document.body.innerHTML).catch(() => "failed to read body");
+    console.error(`      [DOM on selector timeout]: ${bodyHtml.slice(0, 1000)}`);
+    const failScreenshot = path.join(EVIDENCE_DIR, "error-selector-timeout.png");
+    await page.screenshot({ path: failScreenshot }).catch(() => {});
+    throw err;
+  }
 
   const hasOverlay = await page.evaluate(
     () =>
