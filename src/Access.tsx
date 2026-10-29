@@ -167,6 +167,9 @@ export function Access({
   async function purchase(plan: any) {
     setBusyPlan(plan.id);
     try {
+      if (!email) {
+        throw new Error("Please sign in or create an account first to purchase a plan.");
+      }
       if (desktop) {
         // Purchases happen on the website only; open the dashboard there.
         await openPurchaseWebsite();
