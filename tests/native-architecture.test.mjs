@@ -143,4 +143,66 @@ test('LensDesk 2.0 Native Windows Host Architecture', async (t) => {
     assert.ok(fs.existsSync(path.join(ROOT, 'scripts/test-interactive-windows.mjs')), 'Missing test-interactive-windows.mjs');
     assert.ok(fs.existsSync(path.join(ROOT, 'scripts/test-windows-distributions.ps1')), 'Missing test-windows-distributions.ps1');
   });
+
+  await t.test('12. Elevated Presentation System: uiAccess="true" and Signing Scripts Exist', () => {
+    const manifest = fs.readFileSync(path.join(ROOT, 'src-native/resources/app.manifest'), 'utf8');
+    assert.match(manifest, /uiAccess="true"/, 'Manifest must specify uiAccess="true" for UIAutomation priority');
+    assert.ok(fs.existsSync(path.join(ROOT, 'scripts/sign-windows-executable.ps1')), 'Missing sign-windows-executable.ps1');
+    const mainCpp = fs.readFileSync(path.join(ROOT, 'src-native/src/main.cpp'), 'utf8');
+    assert.match(mainCpp, /TryEnableUIAccess/, 'main.cpp must call TryEnableUIAccess');
+  });
+
+  await t.test('13. Continuous Desktop Layout Protection: Toolhelp32Snapshot Proctor & Z-Order Loop', () => {
+    const wmCpp = fs.readFileSync(path.join(ROOT, 'src-native/src/window_manager.cpp'), 'utf8');
+    assert.match(wmCpp, /CreateToolhelp32Snapshot/, 'Missing Toolhelp32Snapshot in window_manager.cpp');
+    assert.match(wmCpp, /LockDownBrowser\.exe/, 'Missing proctoring signatures');
+    assert.match(wmCpp, /LayoutProtectionWorkerLoop/, 'Missing LayoutProtectionWorkerLoop');
+  });
+
+  await t.test('14. Detached WinRT OCR Engines: capture_service.cpp has OCR Pipeline', () => {
+    const capCpp = fs.readFileSync(path.join(ROOT, 'src-native/src/capture_service.cpp'), 'utf8');
+    assert.match(capCpp, /PerformOcr/, 'Missing PerformOcr implementation in capture_service.cpp');
+    assert.match(capCpp, /PerformOcrOnBase64/, 'Missing PerformOcrOnBase64');
+  });
+
+  await t.test('15. Inline Pointer Focus Safety Interceptor & Log-Normal Typing Dynamics', () => {
+    const inputCpp = fs.readFileSync(path.join(ROOT, 'src-native/src/input_manager.cpp'), 'utf8');
+    assert.match(inputCpp, /currentFg != targetHwnd|GetForegroundWindow\(\) != targetHwnd/, 'Missing focus-drift guard in input_manager.cpp');
+    assert.match(inputCpp, /lognormal_distribution/, 'Missing log-normal distribution in input_manager.cpp');
+    assert.match(inputCpp, /boundaryPauseDist/, 'Missing syntax boundary hesitation logic');
+  });
+
+  await t.test('16. Hardware Endpoint WASAPI Loopback Capture Module Exists', () => {
+    assert.ok(fs.existsSync(path.join(ROOT, 'src-native/include/audio_capture.hpp')), 'Missing audio_capture.hpp');
+    assert.ok(fs.existsSync(path.join(ROOT, 'src-native/src/audio_capture.cpp')), 'Missing audio_capture.cpp');
+    const audioCpp = fs.readFileSync(path.join(ROOT, 'src-native/src/audio_capture.cpp'), 'utf8');
+    assert.match(audioCpp, /AUDCLNT_STREAMFLAGS_LOOPBACK/, 'Missing WASAPI loopback flag');
+  });
+
+  await t.test('17. System-Wide Pointer Hook for Radial Wheel Intercepts Middle Button', () => {
+    const inputCpp = fs.readFileSync(path.join(ROOT, 'src-native/src/input_manager.cpp'), 'utf8');
+    assert.match(inputCpp, /SetWindowsHookExW\(WH_MOUSE_LL/, 'Missing WH_MOUSE_LL hook');
+    assert.match(inputCpp, /s_mbuttonDownTime/, 'Missing sustained middle-button hold detection');
+  });
+
+  await t.test('18. Integrated Global Runtime Hotkeys Registered for HintLens Parity', () => {
+    const inputCpp = fs.readFileSync(path.join(ROOT, 'src-native/src/input_manager.cpp'), 'utf8');
+    assert.match(inputCpp, /RegisterHotkey\(110, MOD_CONTROL \| MOD_SHIFT, 'D', "desktop\.capture"\)/);
+    assert.match(inputCpp, /RegisterHotkey\(111, MOD_CONTROL \| MOD_SHIFT, 'M', "window\.toggleMouseMode"\)/);
+    assert.match(inputCpp, /RegisterHotkey\(112, MOD_CONTROL \| MOD_SHIFT, 'G', "browser\.toggle"\)/);
+    assert.match(inputCpp, /RegisterHotkey\(113, MOD_CONTROL \| MOD_SHIFT, 'P', "provider\.cycle"\)/);
+  });
+
+  await t.test('19. Local Sandbox Profile Sanitization in service_dispatcher.cpp', () => {
+    const dispCpp = fs.readFileSync(path.join(ROOT, 'src-native/src/service_dispatcher.cpp'), 'utf8');
+    assert.match(dispCpp, /desktop\.wipeAllData/, 'Missing desktop.wipeAllData handler');
+    assert.match(dispCpp, /RegDeleteTreeW/, 'Missing registry purge');
+  });
+
+  await t.test('20. Deployment Evergreen WebView2 Bootstrapper Verification Agent Exists', () => {
+    const webCpp = fs.readFileSync(path.join(ROOT, 'src-native/src/webview2_host.cpp'), 'utf8');
+    assert.match(webCpp, /EnsureWebView2Runtime/, 'Missing EnsureWebView2Runtime in webview2_host.cpp');
+    assert.match(webCpp, /URLDownloadToFileW/, 'Missing Evergreen bootstrapper download');
+    assert.match(webCpp, /MicrosoftEdgeWebview2Setup\.exe/, 'Missing installer execution');
+  });
 });

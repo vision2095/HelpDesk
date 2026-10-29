@@ -43,7 +43,33 @@ static void ShowErrorDialog(HWND hwnd, const wchar_t* text, const wchar_t* title
     }
 }
 
+// UIAccess Token Duplication helper for elevated focus & SendInput priority
+static bool TryEnableUIAccess() {
+#ifdef _WIN32
+    HANDLE hToken = nullptr;
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY | TOKEN_DUPLICATE | TOKEN_ASSIGN_PRIMARY, &hToken)) {
+        return false;
+    }
+    DWORD uia = 0;
+    DWORD retLen = 0;
+    if (GetTokenInformation(hToken, TokenUIAccess, &uia, sizeof(uia), &retLen) && uia != 0) {
+        CloseHandle(hToken);
+        return true; // Already running with UIAccess elevation
+    }
+    DWORD enable = 1;
+    if (SetTokenInformation(hToken, TokenUIAccess, &enable, sizeof(enable))) {
+        CloseHandle(hToken);
+        return true;
+    }
+    CloseHandle(hToken);
+#endif
+    return false;
+}
+
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow) {
+    // Enable UIAccess presentation priority
+    TryEnableUIAccess();
+
     // 0. Attach console and configure logging
     if (AttachConsole(ATTACH_PARENT_PROCESS)) {
         FILE* fp = nullptr;

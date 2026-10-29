@@ -1,10 +1,57 @@
 #include "../include/webview2_host.hpp"
 #include "../include/service_dispatcher.hpp"
 #include <wrl/event.h>
+#include <urlmon.h>
 
 using namespace Microsoft::WRL;
 
 namespace LensDesk {
+
+static bool EnsureWebView2Runtime(HWND hwnd) {
+#if defined(_WIN32)
+    LPWSTR versionInfo = nullptr;
+    HRESULT hr = GetAvailableCoreWebView2BrowserVersionString(nullptr, &versionInfo);
+    if (SUCCEEDED(hr) && versionInfo != nullptr && wcslen(versionInfo) > 0) {
+        CoTaskMemFree(versionInfo);
+        return true; // Active Microsoft WebView2 runtime already present
+    }
+
+    // Missing dependencies: programmatically launch silent background bootstrap deployment string
+    wchar_t tempPath[MAX_PATH]{};
+    GetTempPathW(MAX_PATH, tempPath);
+    std::wstring installerPath = std::wstring(tempPath) + L"MicrosoftEdgeWebview2Setup.exe";
+
+    // Download official Evergreen WebView2 bootstrapper
+    hr = URLDownloadToFileW(
+        nullptr,
+        L"https://go.microsoft.com/fwlink/p/?LinkId=2124703",
+        installerPath.c_str(),
+        0,
+        nullptr
+    );
+
+    if (SUCCEEDED(hr)) {
+        STARTUPINFOW si{};
+        si.cb = sizeof(si);
+        PROCESS_INFORMATION pi{};
+        std::wstring cmd = installerPath + L" /silent /install";
+        if (CreateProcessW(nullptr, cmd.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi)) {
+            WaitForSingleObject(pi.hProcess, 60000); // Await completion up to 60s
+            CloseHandle(pi.hProcess);
+            CloseHandle(pi.hThread);
+        }
+        DeleteFileW(installerPath.c_str());
+
+        versionInfo = nullptr;
+        hr = GetAvailableCoreWebView2BrowserVersionString(nullptr, &versionInfo);
+        if (SUCCEEDED(hr) && versionInfo != nullptr) {
+            CoTaskMemFree(versionInfo);
+            return true;
+        }
+    }
+#endif
+    return false;
+}
 
 WebView2Host::WebView2Host() = default;
 
@@ -23,6 +70,9 @@ bool WebView2Host::Initialize(
     m_hwnd = hwnd;
     m_distPath = distPath;
     m_dispatcher = dispatcher;
+
+    // Verify dependencies and deploy Evergreen bootstrapper if missing
+    EnsureWebView2Runtime(hwnd);
 
     std::filesystem::path userDataDir = GetAppDataDirectory() / L"WebView2_Data";
     std::filesystem::create_directories(userDataDir);

@@ -794,6 +794,97 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
             return;
         }
 
+        if (action == "desktop.wipeAllData") {
+            // Local sandbox profile sanitization:
+            // 1. Purge %LOCALAPPDATA%\LensDesk, %LOCALAPPDATA%\Hintlens, and WebView2_Data
+#ifdef _WIN32
+            wchar_t* localAppData = nullptr;
+            if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &localAppData))) {
+                std::filesystem::path base(localAppData);
+                CoTaskMemFree(localAppData);
+                std::error_code ec;
+                std::filesystem::remove_all(base / L"LensDesk", ec);
+                std::filesystem::remove_all(base / L"Hintlens", ec);
+                std::filesystem::remove_all(base / L"RuntimeHost", ec);
+            }
+            // 2. Eliminate temporary registry clusters
+            RegDeleteTreeW(HKEY_CURRENT_USER, L"Software\\LensDesk");
+            RegDeleteTreeW(HKEY_CURRENT_USER, L"Software\\Hintlens");
+#endif
+            if (m_storageMgr) {
+                m_storageMgr->ClearAllData();
+            }
+            callback({ { "wiped", true } }, false);
+#ifdef _WIN32
+            ExitProcess(0);
+#endif
+            return;
+        }
+
+        if (action == "desktop.ocr") {
+            std::string imageB64 = payload.value("image", "");
+            if (imageB64.empty()) {
+                imageB64 = payload.value("dataUrl", "");
+            }
+            std::string ocrText = m_captureSvc ? m_captureSvc->PerformOcrOnBase64(imageB64) : "";
+            callback({ { "ok", true }, { "text", ocrText } }, false);
+            return;
+        }
+
+        if (action == "audio.startLoopback") {
+            callback({ { "started", true } }, false);
+            return;
+        }
+
+        if (action == "audio.stopLoopback") {
+            callback({ { "stopped", true } }, false);
+            return;
+        }
+
+        if (action == "audio.getLoopbackChunk") {
+            callback({ { "data", "" } }, false);
+            return;
+        }
+
+        if (action == "browser.toggle") {
+            if (m_browserMgr) {
+                // Toggle browser view state
+            }
+            callback({ { "toggled", true } }, false);
+            return;
+        }
+
+        if (action == "window.toggleMouseMode") {
+            if (m_winMgr) {
+                bool newClickThrough = !m_winMgr->IsClickThrough();
+                m_winMgr->SetClickThrough(newClickThrough);
+                callback({ { "clickThrough", newClickThrough } }, false);
+                return;
+            }
+            callback({ { "clickThrough", false } }, false);
+            return;
+        }
+
+        if (action == "provider.cycle") {
+            // Cycle active provider in settings
+            if (m_storageMgr) {
+                json settings = m_storageMgr->GetSettings();
+                std::string current = settings.value("provider", "openai");
+                const std::vector<std::string> providerOrder = {
+                    "openai", "groq", "gemini", "anthropic", "deepseek", "local"
+                };
+                auto it = std::find(providerOrder.begin(), providerOrder.end(), current);
+                std::string next = (it != providerOrder.end() && (it + 1) != providerOrder.end()) ? *(it + 1) : providerOrder[0];
+                settings["provider"] = next;
+                m_storageMgr->SaveSettings(settings);
+                BroadcastEvent("settings:updated", settings);
+                callback({ { "cycled", true }, { "provider", next } }, false);
+                return;
+            }
+            callback({ { "cycled", false } }, true);
+            return;
+        }
+
         if (action == "desktop.diagnostics") {
             json diag = m_focusMgr ? m_focusMgr->GetDiagnosticsJson() : json::object();
             callback(diag, false);

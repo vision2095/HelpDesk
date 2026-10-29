@@ -2,6 +2,7 @@
 #include <thread>
 #include <chrono>
 #include <algorithm>
+#include <random>
 
 namespace LensDesk {
 
@@ -18,6 +19,12 @@ bool InputManager::Initialize(HWND hwnd) {
     RegisterHotkey(101, MOD_CONTROL | MOD_SHIFT, 'L', "toggle");
     RegisterHotkey(102, MOD_SHIFT, 'H', "hide");
     RegisterHotkey(103, MOD_CONTROL | MOD_SHIFT, 'S', "capture");
+
+    // Mandate and enforce explicit HintLens parity global hotkeys
+    RegisterHotkey(110, MOD_CONTROL | MOD_SHIFT, 'D', "desktop.capture");
+    RegisterHotkey(111, MOD_CONTROL | MOD_SHIFT, 'M', "window.toggleMouseMode");
+    RegisterHotkey(112, MOD_CONTROL | MOD_SHIFT, 'G', "browser.toggle");
+    RegisterHotkey(113, MOD_CONTROL | MOD_SHIFT, 'P', "provider.cycle");
     RegisterHotkey(104, MOD_CONTROL | MOD_SHIFT, 'O', "overlay");
     RegisterHotkey(105, MOD_CONTROL | MOD_SHIFT, 'A', "hideAnswer");
     RegisterHotkey(106, MOD_CONTROL | MOD_SHIFT, 'T', "autoType");
@@ -258,13 +265,27 @@ void InputManager::AutoTypeWorker(std::wstring wideText, int delayMs) {
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }
 
-    // 5. Send unicode keystrokes with realistic hold and interruptible slicing
+    // 5. Initialize log-normal distribution for non-linear keystroke timing dynamics
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    double targetMean = static_cast<double>(std::max(5, delayMs));
+    double sigma = 0.38; // Human variance shape parameter
+    double mu = std::log(targetMean) - (sigma * sigma / 2.0);
+    std::lognormal_distribution<double> logNormalDist(mu, sigma);
+    std::uniform_int_distribution<int> boundaryPauseDist(150, 400);
+
+    // 6. Send unicode keystrokes with focus-drift safety and humanized timing
     for (wchar_t ch : wideText) {
         if (m_stopAutoTyping) break;
 
-        // Verify target foreground window is still active (LensDesk focus drift guard)
-        if (GetForegroundWindow() != targetHwnd) {
-            // [TypeSim] Focus drifted stopping to avoid typing into wrong window
+        // INLINE POINTER FOCUS SAFETY INTERCEPTOR:
+        // Verify target foreground window is strictly unchanged before dispatching input
+        HWND currentFg = GetForegroundWindow();
+        if (currentFg != targetHwnd) {
+            // [TypeSim] Focus drifted - stopping to avoid typing into wrong window
+            if (m_hotkeyCallback) {
+                m_hotkeyCallback("typing:drifted");
+            }
             break;
         }
 
@@ -305,12 +326,24 @@ void InputManager::AutoTypeWorker(std::wstring wideText, int delayMs) {
             SendCaretNudgeNative();
         }
 
-        // Interruptible delay in 10ms slices
-        int remaining = delayMs;
-        while (remaining > 0 && !m_stopAutoTyping) {
-            int step = std::min(10, remaining);
-            std::this_thread::sleep_for(std::chrono::milliseconds(step));
-            remaining -= step;
+        // NON-LINEAR TRANSITIONAL DISPATCH LOGIC:
+        // Check for syntax boundary symbols to inject human thinking pauses (150ms-400ms)
+        if (ch == L'{' || ch == L'}' || ch == L';' || ch == L'\n' || ch == L'.' ||
+            ch == L'(' || ch == L')' || ch == L',' || ch == L':') {
+            int boundaryDelay = boundaryPauseDist(gen);
+            while (boundaryDelay > 0 && !m_stopAutoTyping) {
+                int step = std::min(10, boundaryDelay);
+                std::this_thread::sleep_for(std::chrono::milliseconds(step));
+                boundaryDelay -= step;
+            }
+        } else {
+            // Asymmetric log-normal stroke latency
+            int strokeDelay = std::clamp(static_cast<int>(logNormalDist(gen)), 8, 250);
+            while (strokeDelay > 0 && !m_stopAutoTyping) {
+                int step = std::min(10, strokeDelay);
+                std::this_thread::sleep_for(std::chrono::milliseconds(step));
+                strokeDelay -= step;
+            }
         }
     }
 
@@ -319,11 +352,28 @@ void InputManager::AutoTypeWorker(std::wstring wideText, int delayMs) {
 
 static HHOOK s_globalMouseHook = nullptr;
 static InputManager* s_inputManagerInstance = nullptr;
+static ULONGLONG s_mbuttonDownTime = 0;
+static POINT s_mbuttonDownPt{};
+static bool s_mbuttonHeld = false;
 
 static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
     if (nCode >= 0 && s_inputManagerInstance) {
-        if (wParam == WM_MBUTTONDOWN || wParam == WM_RBUTTONDOWN) {
-            // Trigger global radial action wheel overlay
+        auto* pMouse = reinterpret_cast<MSLLHOOKSTRUCT*>(lParam);
+        if (wParam == WM_MBUTTONDOWN) {
+            s_mbuttonDownTime = GetTickCount64();
+            s_mbuttonDownPt = pMouse->pt;
+            s_mbuttonHeld = true;
+        } else if (wParam == WM_MOUSEMOVE && s_mbuttonHeld) {
+            ULONGLONG elapsed = GetTickCount64() - s_mbuttonDownTime;
+            int dx = std::abs(pMouse->pt.x - s_mbuttonDownPt.x);
+            int dy = std::abs(pMouse->pt.y - s_mbuttonDownPt.y);
+            if (elapsed >= 120 || dx > 5 || dy > 5) {
+                // Trap sustained middle button retention and deploy Radial Action Overlay
+                s_inputManagerInstance->HandleHotkey(109, 0);
+            }
+        } else if (wParam == WM_MBUTTONUP) {
+            s_mbuttonHeld = false;
+        } else if (wParam == WM_RBUTTONDOWN) {
             s_inputManagerInstance->HandleHotkey(109, 0);
         }
     }

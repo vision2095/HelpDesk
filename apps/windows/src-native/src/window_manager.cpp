@@ -1,5 +1,6 @@
 #include "../include/window_manager.hpp"
 #include <algorithm>
+#include <tlhelp32.h>
 
 namespace LensDesk {
 
@@ -95,6 +96,9 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
     // 9. Watchdog heartbeat timer (200ms) to ensure DWM does not bury overlay
     SetTimer(m_hwnd, 1002, 200, nullptr);
 
+    // 10. Start continuous layout protection and proctor watcher background thread
+    StartLayoutProtectionWorker();
+
     ShowWindow(m_hwnd, nCmdShow);
     UpdateWindow(m_hwnd);
 
@@ -102,6 +106,7 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
 }
 
 void WindowManager::Shutdown() {
+    StopLayoutProtectionWorker();
     if (m_hwnd) {
         KillTimer(m_hwnd, 1002);
     }
@@ -357,6 +362,80 @@ LRESULT WindowManager::HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
     }
 
     return DefWindowProcW(hwnd, msg, wParam, lParam);
+}
+
+void WindowManager::StartLayoutProtectionWorker() {
+    StopLayoutProtectionWorker();
+    m_stopLayoutWorker = false;
+    m_layoutWorkerThread = std::thread(&WindowManager::LayoutProtectionWorkerLoop, this);
+}
+
+void WindowManager::StopLayoutProtectionWorker() {
+    m_stopLayoutWorker = true;
+    if (m_layoutWorkerThread.joinable()) {
+        m_layoutWorkerThread.join();
+    }
+}
+
+void WindowManager::LayoutProtectionWorkerLoop() {
+    const wchar_t* const proctorTargets[] = {
+        L"LockDownBrowser.exe",
+        L"SafeExamBrowser.exe",
+        L"Guardian Browser.exe",
+        L"PSI Secure Browser.exe",
+        L"RespondusLockDown.exe",
+        L"Proctorio.exe",
+        L"Honorlock.exe",
+        L"Examplify.exe"
+    };
+
+    while (!m_stopLayoutWorker) {
+        // 1. Process Enumeration via Toolhelp32Snapshot
+        bool proctorDetected = false;
+        HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if (hSnapshot != INVALID_HANDLE_VALUE) {
+            PROCESSENTRY32W pe{ sizeof(PROCESSENTRY32W) };
+            if (Process32FirstW(hSnapshot, &pe)) {
+                do {
+                    for (const auto* target : proctorTargets) {
+                        if (_wcsicmp(pe.szExeFile, target) == 0) {
+                            proctorDetected = true;
+                            break;
+                        }
+                    }
+                    if (proctorDetected) break;
+                } while (Process32NextW(hSnapshot, &pe));
+            }
+            CloseHandle(hSnapshot);
+        }
+
+        m_proctorActive.store(proctorDetected);
+
+        // 2. Enforce absolute topmost priority and capture protection
+        if (m_hwnd && IsWindow(m_hwnd)) {
+            if (proctorDetected || m_captureProtection) {
+                // Ensure display affinity is rigidly locked
+                SetWindowDisplayAffinity(m_hwnd, WDA_EXCLUDEFROMCAPTURE);
+            }
+
+            if (m_alwaysOnTop && m_isVisible) {
+                HWND fg = GetForegroundWindow();
+                if (fg != m_hwnd) {
+                    SetWindowPos(
+                        m_hwnd,
+                        HWND_TOPMOST,
+                        0, 0, 0, 0,
+                        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
+                    );
+                }
+            }
+        }
+
+        // Interruptible sleep interval (~300ms)
+        for (int i = 0; i < 30 && !m_stopLayoutWorker; ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    }
 }
 
 } // namespace LensDesk

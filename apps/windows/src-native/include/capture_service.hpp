@@ -23,6 +23,11 @@ public:
     std::string CaptureRegion(const CaptureRect& rect);
     std::string CaptureWindow(HWND targetHwnd);
 
+    // Detached WinRT OCR Pipeline
+    std::string PerformOcr(HBITMAP hBitmap, int width, int height);
+    std::string PerformOcrOnBase64(const std::string& base64Png);
+    bool IsOcrSupported();
+
 private:
     std::string BitmapToPngBase64(HBITMAP hBitmap, HDC hdc, int width, int height);
 

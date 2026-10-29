@@ -48,6 +48,11 @@ public:
     void SetupTrayIcon();
     void RemoveTrayIcon();
 
+    // Continuous Desktop Layout Protection & Proctoring Watcher
+    void StartLayoutProtectionWorker();
+    void StopLayoutProtectionWorker();
+    bool IsProctorActive() const { return m_proctorActive.load(); }
+
     // Callbacks
     using MessageCallback = std::function<LRESULT(HWND, UINT, WPARAM, LPARAM, bool&)>;
     void SetMessageCallback(MessageCallback callback) { m_msgCallback = callback; }
@@ -79,6 +84,12 @@ private:
     NOTIFYICONDATAW m_trayData{};
     bool m_hasTrayIcon = false;
     MessageCallback m_msgCallback = nullptr;
+
+    // Layout Protection & Proctor Watcher State
+    std::thread m_layoutWorkerThread;
+    std::atomic<bool> m_stopLayoutWorker{ false };
+    std::atomic<bool> m_proctorActive{ false };
+    void LayoutProtectionWorkerLoop();
 };
 
 } // namespace LensDesk

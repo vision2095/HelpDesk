@@ -31,7 +31,16 @@ export const IPC_ACTIONS = {
   WINDOW_SET_BOUNDS: "window.setBounds",
   WINDOW_SET_STEALTH: "window.setStealth",
   WINDOW_SET_OPACITY: "window.setOpacity",
-  WINDOW_SET_ALWAYS_ON_TOP: "window.setAlwaysOnTop"
+  WINDOW_SET_ALWAYS_ON_TOP: "window.setAlwaysOnTop",
+  WINDOW_TOGGLE_MOUSE_MODE: "window.toggleMouseMode",
+  DESKTOP_OCR: "desktop.ocr",
+  DESKTOP_WIPE_ALL_DATA: "desktop.wipeAllData",
+  AUDIO_START_LOOPBACK: "audio.startLoopback",
+  AUDIO_STOP_LOOPBACK: "audio.stopLoopback",
+  AUDIO_GET_LOOPBACK_CHUNK: "audio.getLoopbackChunk",
+  PROVIDER_CYCLE: "provider.cycle",
+  BROWSER_TOGGLE: "browser.toggle",
+  TYPING_DRIFTED: "typing:drifted"
 } as const;
 
 export type IpcAction = typeof IPC_ACTIONS[keyof typeof IPC_ACTIONS];
