@@ -38,7 +38,6 @@ console.log("=================================================================")
 
 // 1. Resolve RuntimeHost.exe binary
 const candidatePaths = [
-  "C:/Program Files/LensDesk/RuntimeHost.exe",
   path.resolve("build-native/bin/Release/RuntimeHost.exe"),
   path.resolve("release/RuntimeHost.exe"),
 ];

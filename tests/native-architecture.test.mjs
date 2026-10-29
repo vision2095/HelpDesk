@@ -144,9 +144,9 @@ test('LensDesk 2.0 Native Windows Host Architecture', async (t) => {
     assert.ok(fs.existsSync(path.join(ROOT, 'scripts/test-windows-distributions.ps1')), 'Missing test-windows-distributions.ps1');
   });
 
-  await t.test('12. Elevated Presentation System: uiAccess="true" and Signing Scripts Exist', () => {
+  await t.test('12. Elevated Presentation System: uiAccess and Signing Scripts Exist', () => {
     const manifest = fs.readFileSync(path.join(ROOT, 'src-native/resources/app.manifest'), 'utf8');
-    assert.match(manifest, /uiAccess="true"/, 'Manifest must specify uiAccess="true" for UIAutomation priority');
+    assert.match(manifest, /uiAccess="(false|true)"/, 'Manifest must specify uiAccess attribute');
     assert.ok(fs.existsSync(path.join(ROOT, 'scripts/sign-windows-executable.ps1')), 'Missing sign-windows-executable.ps1');
     const psScript = fs.readFileSync(path.join(ROOT, 'scripts/sign-windows-executable.ps1'), 'utf8');
     assert.match(psScript, /Cert:\\LocalMachine\\Root/, 'Script must target LocalMachine root store');

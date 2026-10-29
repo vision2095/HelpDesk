@@ -54,11 +54,6 @@ jobs:
         run: |
           node --test tests/native-architecture.test.mjs
 
-      - name: Sign Native Windows Binary for uiAccess Elevation
-        shell: pwsh
-        run: |
-          pwsh scripts/sign-windows-executable.ps1 -TargetExe build-native/bin/Release/RuntimeHost.exe
-
       - name: Execute Real Windows Runtime & Win32 Integration Test
         shell: pwsh
         run: |
