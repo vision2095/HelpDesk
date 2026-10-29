@@ -13,6 +13,9 @@ Write-Host "  LensDesk 2.0 Real Windows Runtime Integration & Verification"
 Write-Host "================================================================="
 
 # 1. Resolve executable path
+try {
+    Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name "EnableSecureUIAPaths" -Value 0 -ErrorAction SilentlyContinue
+} catch {}
 $Exe = Resolve-Path $BinaryPath -ErrorAction SilentlyContinue
 if (-not $Exe -or -not (Test-Path $Exe)) {
     $Exe = Resolve-Path "release/RuntimeHost.exe" -ErrorAction SilentlyContinue
@@ -136,7 +139,32 @@ public class WindowFinder {
 # 3. Launch RuntimeHost.exe
 Write-Host "[2/7] Launching RuntimeHost.exe..."
 $workDir = Split-Path $Exe.Path -Parent
-$proc = Start-Process -FilePath $Exe.Path -WorkingDirectory $workDir -PassThru
+$launchPath = $Exe.Path
+
+# Deploy to trusted path required by Windows UAC for uiAccess=true
+$trustedDir = "C:\Program Files\LensDesk"
+try {
+    if (-not (Test-Path $trustedDir)) {
+        New-Item -ItemType Directory -Path $trustedDir -Force | Out-Null
+    }
+    $trustedExe = Join-Path $trustedDir "RuntimeHost.exe"
+    Copy-Item $Exe.Path $trustedExe -Force
+    if (Test-Path "$workDir\WebView2Loader.dll") {
+        Copy-Item "$workDir\WebView2Loader.dll" $trustedDir -Force
+    }
+    if (Test-Path "src-native/third_party/webview2/lib/x64/WebView2Loader.dll") {
+        Copy-Item "src-native/third_party/webview2/lib/x64/WebView2Loader.dll" $trustedDir -Force
+    }
+    if (Test-Path "dist") {
+        Copy-Item -Recurse "dist" "$trustedDir\dist" -Force
+    }
+    $launchPath = $trustedExe
+    $workDir = $trustedDir
+} catch {
+    Write-Warning "Trusted path deploy note: $($_.Exception.Message)"
+}
+
+$proc = Start-Process -FilePath $launchPath -WorkingDirectory $workDir -PassThru
 if (-not $proc -or $proc.HasExited) {
     Write-Error "Failed to launch RuntimeHost.exe (exited immediately with code $($proc.ExitCode))."
     exit 1
