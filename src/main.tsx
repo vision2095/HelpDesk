@@ -450,9 +450,24 @@ function App() {
   function notify(text: string) {
     setToast(text);
   }
+  const OFFICIAL_SERVER = "https://helpdesk-h44x.onrender.com";
+  const sanitizeGateState = (v: any) => {
+    if (!v) return v;
+    const serverUrl =
+      v.serverUrl &&
+      !v.serverUrl.includes("example.com") &&
+      !v.serverUrl.includes("example.org")
+        ? v.serverUrl
+        : OFFICIAL_SERVER;
+    return { ...v, serverUrl };
+  };
   async function refresh() {
     const next = await api<State>("state");
     setState(next);
+    const g = (next as any)?.gate;
+    if (g) {
+      setGate(sanitizeGateState(g));
+    }
     return next;
   }
   useEffect(() => {
@@ -467,31 +482,27 @@ function App() {
     // Subscription gate snapshots: authoritative phase, session, and
     // entitlement pushed by the main-process arbitraritor.
     let alive = true;
-    const OFFICIAL_SERVER = "https://helpdesk-h44x.onrender.com";
-    const sanitize = (v: any) => {
-      if (!v) return v;
-      if (
-        !v.serverUrl ||
-        v.serverUrl.includes("example.com") ||
-        v.serverUrl.includes("example.org")
-      ) {
-        window.lens?.invoke("cloud.configure", { url: OFFICIAL_SERVER }).then(() => {
-          return window.lens?.invoke("gate.state");
-        }).then((fresh) => {
-          if (alive && fresh) setGate(fresh);
-        }).catch(() => {});
-        return { ...v, phase: v.phase || "signed_out", serverUrl: OFFICIAL_SERVER };
-      }
-      return v;
-    };
     if (window.lens?.invoke) {
       window.lens
         .invoke("gate.state")
-        .then((v) => alive && v && setGate(sanitize(v)))
+        .then((v) => {
+          if (!alive || !v) return;
+          setGate(sanitizeGateState(v));
+          if (
+            !v.serverUrl ||
+            v.serverUrl.includes("example.com") ||
+            v.serverUrl.includes("example.org")
+          ) {
+            window.lens?.invoke("cloud.configure", { url: OFFICIAL_SERVER }).catch(() => {});
+          }
+        })
         .catch(() => {});
     }
     const off = window.lens?.onGate
-      ? window.lens.onGate((v) => alive && v && setGate(sanitize(v)))
+      ? window.lens.onGate((v) => {
+          if (!alive || !v) return;
+          setGate(sanitizeGateState(v));
+        })
       : () => {};
     return () => {
       alive = false;

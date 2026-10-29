@@ -87,40 +87,32 @@ export function GateAccess({
     let alive = true;
     const sanitizeGate = (v: any) => {
       if (!v) return v;
-      if (
-        !v.serverUrl ||
-        v.serverUrl.includes("example.com") ||
-        v.serverUrl.includes("example.org")
-      ) {
-        if (window.lens?.invoke) {
-          window.lens.invoke("cloud.configure", { url: OFFICIAL_SERVER_URL }).catch(() => {});
-        }
-        return { ...v, serverUrl: OFFICIAL_SERVER_URL };
-      }
-      return v;
+      const serverUrl =
+        v.serverUrl &&
+        !v.serverUrl.includes("example.com") &&
+        !v.serverUrl.includes("example.org")
+          ? v.serverUrl
+          : OFFICIAL_SERVER_URL;
+      return { ...v, serverUrl };
     };
 
     if (window.lens?.invoke) {
       window.lens
         .invoke("gate.state")
         .then((raw) => {
-          if (!alive) return;
+          if (!alive || !raw) return;
           const v = sanitizeGate(raw);
-          if (v) {
-            setView(v);
-            if (v?.serverUrl) setServerDraft(v.serverUrl);
-          }
+          setView(v);
+          if (v?.serverUrl) setServerDraft(v.serverUrl);
         })
         .catch(() => {});
     }
     const off =
       window.lens?.onGate?.((raw) => {
-        if (!alive) return;
+        if (!alive || !raw) return;
         const v = sanitizeGate(raw);
-        if (v) {
-          setView(v);
-          if (v?.serverUrl) setServerDraft(v.serverUrl);
-        }
+        setView(v);
+        if (v?.serverUrl) setServerDraft(v.serverUrl);
       }) ?? (() => {});
     return () => {
       alive = false;

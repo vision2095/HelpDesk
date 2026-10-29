@@ -133,7 +133,8 @@ void CALLBACK WindowManager::StaticWinEventProc(
     DWORD
 ) {
     if (event == EVENT_SYSTEM_FOREGROUND && s_instance) {
-        if (s_instance->m_hwnd && s_instance->m_alwaysOnTop && s_instance->m_isVisible) {
+        HWND fg = GetForegroundWindow();
+        if (fg && fg != s_instance->m_hwnd && s_instance->m_hwnd && s_instance->m_alwaysOnTop && s_instance->m_isVisible) {
             SetWindowPos(
                 s_instance->m_hwnd,
                 HWND_TOPMOST,
@@ -295,36 +296,30 @@ LRESULT WindowManager::HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
         case WM_WINDOWPOSCHANGING: {
             if (m_alwaysOnTop && m_isVisible) {
                 auto* pwp = reinterpret_cast<WINDOWPOS*>(lParam);
-                if (pwp) {
+                if (pwp && pwp->hwndInsertAfter != HWND_TOPMOST && !(pwp->flags & SWP_NOZORDER)) {
                     pwp->hwndInsertAfter = HWND_TOPMOST;
-                    pwp->flags &= ~SWP_NOZORDER;
                 }
             }
-            return 0;
+            break;
         }
 
         case WM_TIMER: {
             if (wParam == 1002 && m_alwaysOnTop && m_isVisible && m_hwnd) {
-                SetWindowPos(
-                    m_hwnd,
-                    HWND_TOPMOST,
-                    0, 0, 0, 0,
-                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
-                );
+                HWND fg = GetForegroundWindow();
+                if (fg != m_hwnd) {
+                    SetWindowPos(
+                        m_hwnd,
+                        HWND_TOPMOST,
+                        0, 0, 0, 0,
+                        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
+                    );
+                }
             }
             return 0;
         }
 
         case WM_ACTIVATEAPP:
         case WM_NCACTIVATE: {
-            if (m_alwaysOnTop && m_isVisible && m_hwnd) {
-                SetWindowPos(
-                    m_hwnd,
-                    HWND_TOPMOST,
-                    0, 0, 0, 0,
-                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
-                );
-            }
             break;
         }
 
