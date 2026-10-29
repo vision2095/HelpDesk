@@ -27,7 +27,7 @@ jobs:
           cache: "npm"
 
       - name: Install Node Dependencies
-        run: npm ci
+        run: npm install
 
       - name: Install Media Tools and NSIS
         run: choco install ffmpeg nsis -y --no-progress

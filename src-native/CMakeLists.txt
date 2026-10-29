@@ -18,6 +18,7 @@ endif()
 # Include directories
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/native
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/imgui
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/webview2/include
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/nlohmann
@@ -39,6 +40,18 @@ set(SOURCES
     src/cloud_client.cpp
     src/service_dispatcher.cpp
     src/audio_capture.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/token_elevation.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/layout_watchdog.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/ocr_pipeline.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/focus_gate.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/typing_dynamics.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/wasapi_loopback.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/websocket_audio_sink.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/stealth_targets.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/mouse_gesture_hook.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/hotkey_dispatcher.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/sanitization.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/webview2_bootstrap.cpp
     third_party/imgui/imgui.cpp
     third_party/imgui/imgui_draw.cpp
     third_party/imgui/imgui_tables.cpp
@@ -70,6 +83,8 @@ target_link_libraries(RuntimeHost PRIVATE
     d3dcompiler
     urlmon
     advapi32
+    oleaut32
+    mmdevapi
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/webview2/lib/x64/WebView2LoaderStatic.lib
 )
 
