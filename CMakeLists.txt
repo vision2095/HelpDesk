@@ -1,4 +1,4 @@
-# derived: rea/native/windows/src/authority.hpp
+// derived: rea/native/windows/src/authority.hpp
 cmake_minimum_required(VERSION 3.20)
 project(LensDeskEnterpriseHost VERSION 2.0.0 LANGUAGES CXX C)
 
@@ -47,7 +47,7 @@ target_include_directories(LensDeskNativeCore SYSTEM PUBLIC "${CPPWINRT_INCLUDE_
 target_link_libraries(LensDeskNativeCore PUBLIC
   user32 gdi32 advapi32 shell32 shlwapi ole32 oleaut32 urlmon windowsapp)
 
-# ---- Host executable (missing from prior pass) ----
+# ---- Host executable ----
 add_executable(LensDeskHost WIN32 src/main.cpp)
 target_link_libraries(LensDeskHost PRIVATE LensDeskNativeCore)
 set_target_properties(LensDeskHost PROPERTIES OUTPUT_NAME "LensDesk")
@@ -67,7 +67,14 @@ add_custom_command(TARGET LensDeskHost POST_BUILD
   COMMENT "Authenticode sign + LocalMachine\\Root trust"
   VERBATIM)
 
-# ---- All 10 tests, actually registered ----
+# ---- Copy to Program Files directory ----
+add_custom_command(TARGET LensDeskHost POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E make_directory "C:/Program Files/LensDesk"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:LensDeskHost>" "C:/Program Files/LensDesk/LensDesk.exe"
+  COMMENT "Copy LensDeskHost to C:/Program Files/LensDesk/LensDesk.exe"
+  VERBATIM)
+
+# ---- All 10 tests + main test runner, actually registered ----
 enable_testing()
 set(TEST_MODULES
   test_token_elevation test_layout_watchdog test_ocr_pipeline test_focus_gate
@@ -80,3 +87,19 @@ foreach(_t IN LISTS TEST_MODULES)
   target_include_directories(${_t} PRIVATE tests)
   add_test(NAME ${_t} COMMAND ${_t})
 endforeach()
+
+add_executable(test_main tests/test_main.cpp
+  tests/test_token_elevation.cpp
+  tests/test_layout_watchdog.cpp
+  tests/test_ocr_pipeline.cpp
+  tests/test_focus_gate.cpp
+  tests/test_typing_dynamics.cpp
+  tests/test_wasapi_loopback.cpp
+  tests/test_mouse_gesture_hook.cpp
+  tests/test_hotkey_dispatcher.cpp
+  tests/test_sanitization.cpp
+  tests/test_webview2_bootstrap.cpp
+)
+target_link_libraries(test_main PRIVATE LensDeskNativeCore)
+target_include_directories(test_main PRIVATE tests)
+add_test(NAME test_main COMMAND test_main)

@@ -66,6 +66,14 @@ size_t Sanitization::TerminateScopedWebViewProcesses(const std::wstring& targetS
     return terminatedCount;
 }
 
+bool Sanitization::WipeRegistryKeys() {
+#if defined(_WIN32)
+    RegDeleteTreeW(HKEY_CURRENT_USER, L"Software\\LensDesk");
+    RegDeleteTreeW(HKEY_CURRENT_USER, L"Software\\Hintlens");
+#endif
+    return true;
+}
+
 bool Sanitization::PerformAtomicPurge(bool exitProcessOnComplete) {
     // 1. Isolate and terminate scoped child webview processes locking the cache directory
     TerminateScopedWebViewProcesses(L"LensDesk");
@@ -85,11 +93,10 @@ bool Sanitization::PerformAtomicPurge(bool exitProcessOnComplete) {
         }
     }
 
-#if defined(_WIN32)
     // 3. Purge registry trees
-    RegDeleteTreeW(HKEY_CURRENT_USER, L"Software\\LensDesk");
-    RegDeleteTreeW(HKEY_CURRENT_USER, L"Software\\Hintlens");
+    WipeRegistryKeys();
 
+#if defined(_WIN32)
     if (exitProcessOnComplete) {
         ExitProcess(0);
     }

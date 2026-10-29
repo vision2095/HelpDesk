@@ -34,6 +34,7 @@ using Microsoft::WRL::ComPtr;
 #else
 // Standard cross-platform Win32 type definitions for isolated unit testing
 using DWORD = uint32_t;
+using UINT = uint32_t;
 using BOOL = int;
 using BYTE = uint8_t;
 using WORD = uint16_t;

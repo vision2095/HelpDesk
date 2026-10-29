@@ -15,6 +15,12 @@ public:
     RECT GetCachedRect() const noexcept { return m_cachedRect; }
     void UpdateCachedRect(const RECT& r) noexcept { m_cachedRect = r; }
 
+    static constexpr UINT GetRequiredSwpFlags() noexcept {
+        return SWP_NOACTIVATE | SWP_SHOWWINDOW;
+    }
+
+    static bool EnforceWindowLayout(HWND hwnd, const RECT& rect, UINT flags = GetRequiredSwpFlags());
+
 private:
     void WatchdogLoop();
 

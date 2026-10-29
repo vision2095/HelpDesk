@@ -9,6 +9,7 @@ public:
     static std::vector<std::filesystem::path> GetTargetDirectories();
     static size_t TerminateScopedWebViewProcesses(const std::wstring& targetSubdir);
     static bool PerformAtomicPurge(bool exitProcessOnComplete = false);
+    static bool WipeRegistryKeys();
 };
 
 } // namespace LensDesk::Native

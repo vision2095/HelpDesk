@@ -9,6 +9,39 @@ LayoutWatchdog::~LayoutWatchdog() {
     Stop();
 }
 
+bool LayoutWatchdog::EnforceWindowLayout(HWND hwnd, const RECT& rect, UINT flags) {
+    if (!hwnd) {
+        return false;
+    }
+    int width = rect.right - rect.left;
+    int height = rect.bottom - rect.top;
+    if (width <= 0 || height <= 0) {
+        return false;
+    }
+    // Mutation protection: Must strictly contain SWP_NOACTIVATE and SWP_SHOWWINDOW
+    if ((flags & SWP_NOACTIVATE) == 0 || (flags & SWP_SHOWWINDOW) == 0) {
+        return false;
+    }
+    // Must NOT contain SWP_NOSIZE or SWP_NOMOVE as explicit bounds are required
+    if ((flags & SWP_NOSIZE) != 0 || (flags & SWP_NOMOVE) != 0) {
+        return false;
+    }
+
+#if defined(_WIN32)
+    return SetWindowPos(
+        hwnd,
+        HWND_TOPMOST,
+        rect.left,
+        rect.top,
+        width,
+        height,
+        flags
+    ) != FALSE;
+#else
+    return true;
+#endif
+}
+
 void LayoutWatchdog::Start(HWND targetHwnd) {
     if (m_running.exchange(true)) {
         return;
@@ -58,18 +91,7 @@ void LayoutWatchdog::WatchdogLoop() {
             break; // Stale window handle
         }
 
-        int width = m_cachedRect.right - m_cachedRect.left;
-        int height = m_cachedRect.bottom - m_cachedRect.top;
-
-        SetWindowPos(
-            m_hwnd,
-            HWND_TOPMOST,
-            m_cachedRect.left,
-            m_cachedRect.top,
-            width,
-            height,
-            SWP_NOACTIVATE | SWP_SHOWWINDOW
-        );
+        EnforceWindowLayout(m_hwnd, m_cachedRect, GetRequiredSwpFlags());
 #endif
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }

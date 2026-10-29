@@ -16,6 +16,9 @@ public:
     static CapturedBuffer CaptureDib(HWND hwnd, RECT logicalRect);
     static std::string ExtractText(const CapturedBuffer& buffer);
     static std::string FormatOutput(const std::string& extractedText);
+    static const char* GetPromptPrefix() noexcept {
+        return "The screen content below was extracted from the user's screenshot(s) by OCR (the question is in here). Answer it:\n\n";
+    }
 };
 
 } // namespace LensDesk::Native

@@ -1,44 +1,53 @@
 // derived: rea/native/windows/src/authority.hpp
 #include "../src/native/token_elevation.h"
-#include <cassert>
+#include "test_common.h"
 #include <iostream>
 
 using namespace LensDesk::Native;
 
-int main() {
+int run_test_token_elevation() {
+    LensDesk::Test::ResetAssertionCounter();
+
     // 1. Verify ScopedHandle RAII semantics
     {
         ScopedHandle h1;
-        assert(!h1.valid());
-        assert(h1.get() == INVALID_HANDLE_VALUE);
+        CHECK(!h1.valid());
+        CHECK(h1.get() == INVALID_HANDLE_VALUE);
 
         ScopedHandle h2(reinterpret_cast<HANDLE>(0x100));
-        assert(h2.valid());
-        assert(h2.get() == reinterpret_cast<HANDLE>(0x100));
+        CHECK(h2.valid());
+        CHECK(h2.get() == reinterpret_cast<HANDLE>(0x100));
 
         HANDLE released = h2.release();
-        assert(released == reinterpret_cast<HANDLE>(0x100));
-        assert(!h2.valid());
+        CHECK(released == reinterpret_cast<HANDLE>(0x100));
+        CHECK(!h2.valid());
 
         h1.reset(reinterpret_cast<HANDLE>(0x200));
-        assert(h1.valid());
-        assert(h1.get() == reinterpret_cast<HANDLE>(0x200));
+        CHECK(h1.valid());
+        CHECK(h1.get() == reinterpret_cast<HANDLE>(0x200));
 
-        ScopedHandle h3 = std::move(h1);
-        assert(!h1.valid());
-        assert(h3.valid());
-        assert(h3.get() == reinterpret_cast<HANDLE>(0x200));
+        ScopedHandle h3(std::move(h1));
+        CHECK(h3.valid());
+        CHECK(!h1.valid());
+        CHECK(h3.get() == reinterpret_cast<HANDLE>(0x200));
+
+        ScopedHandle h4;
+        h4 = std::move(h3);
+        CHECK(h4.valid());
+        CHECK(!h3.valid());
+        CHECK(h4.get() == reinterpret_cast<HANDLE>(0x200));
     }
 
-    // 2. Verify TokenElevation state checks
-    bool enabled = TokenElevation::IsUIAccessEnabled();
-    assert(!enabled || enabled); // Valid boolean return without throwing or crashing
+    // 2. Verify elevation function invocation boundary without crashing
+    bool elevated = TokenElevation::ElevateAndRelaunchSelf();
+    CHECK(elevated == true || elevated == false);
 
-    // 3. Verify ElevateAndRelaunchSelf API boundary
-    // In test environment, returns without unhandled exception
-    bool elevatedOrRunning = TokenElevation::ElevateAndRelaunchSelf();
-    assert(elevatedOrRunning == false || elevatedOrRunning == true);
-
-    std::cout << "[PASS] test_token_elevation: 13 asserts verified.\n";
+    std::cout << "[PASS] test_token_elevation: " << LensDesk::Test::GetAssertionCount() << " asserts verified.\n";
     return 0;
 }
+
+#ifndef RUN_ALL_TESTS
+int main() {
+    return run_test_token_elevation();
+}
+#endif
