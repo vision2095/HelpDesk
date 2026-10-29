@@ -77,7 +77,7 @@ bool WinHttpAudioSink::Open(const wchar_t* url) {
         L"GET",
         path,
         nullptr,
-        WINHTTP_NO_REFERRER,
+        WINHTTP_NO_REFERER,
         WINHTTP_DEFAULT_ACCEPT_TYPES,
         reqFlags
     );

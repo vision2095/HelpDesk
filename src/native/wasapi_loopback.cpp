@@ -132,7 +132,7 @@ bool WasapiLoopback::InitializeEndpoint() {
 
     // Buffer sized to 10 seconds of raw frames derived from mix format
     size_t tenSecondsBytes = m_waveFormat->nAvgBytesPerSec * 10;
-    m_ring = RingBuffer(tenSecondsBytes);
+    m_ring.Resize(tenSecondsBytes);
 
     const REFERENCE_TIME hnsBufferDuration = 10000000; // 1s buffer
     // rea:iface IAudioClient::Initialize (vtable slot 3)

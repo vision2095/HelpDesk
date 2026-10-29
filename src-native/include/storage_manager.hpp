@@ -15,6 +15,12 @@ public:
     json GetPreferences();
     bool SavePreferences(const json& prefs);
 
+    // Settings aliases for IPC parity
+    json GetSettings() { return GetPreferences(); }
+    bool SaveSettings(const json& settings) { return SavePreferences(settings); }
+    bool ClearAllData();
+    bool ClearAll() { return ClearAllData(); }
+
     // Profiles
     json GetProfiles();
     bool SaveProfile(const json& profile);

@@ -431,4 +431,11 @@ json StorageManager::GetWorkspaces() {
     return ws;
 }
 
+bool StorageManager::ClearAllData() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    std::error_code ec;
+    std::filesystem::remove_all(m_appDataDir, ec);
+    return !ec;
+}
+
 } // namespace LensDesk

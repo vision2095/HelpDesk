@@ -8,12 +8,29 @@
 #include "../include/imgui_overlay.hpp"
 #include "../include/focus_manager.hpp"
 #include <winhttp.h>
+#ifdef _WIN32
+#include <tlhelp32.h>
+#endif
 #include <cmath>
 #include <cctype>
 
 namespace LensDesk {
 
 namespace {
+
+static json errorResult(const std::string& err) {
+    return json{ { "ok", false }, { "error", err } };
+}
+
+static std::wstring GetExecutablePath() {
+#ifdef _WIN32
+    wchar_t buf[MAX_PATH] = { 0 };
+    GetModuleFileNameW(nullptr, buf, MAX_PATH);
+    return std::wstring(buf);
+#else
+    return L"";
+#endif
+}
 
 std::string TrimText(std::string value) {
     while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front()))) value.erase(value.begin());
