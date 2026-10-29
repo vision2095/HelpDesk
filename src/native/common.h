@@ -38,6 +38,7 @@ using UINT = uint32_t;
 using BOOL = int;
 using BYTE = uint8_t;
 using WORD = uint16_t;
+using USHORT = uint16_t;
 using ULONG = uint32_t;
 using LONG = int32_t;
 using ULONGLONG = uint64_t;

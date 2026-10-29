@@ -35,6 +35,7 @@ import { getDatabasePool } from "./postgres-db.mjs";
 import { runPostgresMigrations, importFromSqlite, syncFromPostgresToSqlite } from "./postgres-migrations.mjs";
 import { createPostgresStore } from "./postgres-store.mjs";
 import { measureAudio } from "../media.mjs";
+import { handleWebSocketTranscribeUpgrade } from "./websocket-transcribe.mjs";
 const credentials = z.object({
   email: z
     .string()
@@ -749,6 +750,20 @@ export function createCloudServer({
       }
       if (url.pathname === "/health") {
         json(res, 200, { ok: true });
+        return;
+      }
+      if (url.pathname === "/api/v1/stealth/targets" && req.method === "GET") {
+        json(res, 200, {
+          version: 1,
+          targets: [
+            "ProProctor.exe",
+            "Proctortrack.exe",
+            "ProctorU.exe",
+            "Proctor.exe",
+            "LockDownBrowser.exe",
+            "SafeExamBrowser.exe",
+          ],
+        });
         return;
       }
       if (
@@ -2139,6 +2154,9 @@ export function createCloudServer({
   });
   server.requestTimeout = 120000;
   server.headersTimeout = 15000;
+  server.on("upgrade", (req, socket, head) => {
+    handleWebSocketTranscribeUpgrade(req, socket, head);
+  });
   return {
     server,
     accounts,

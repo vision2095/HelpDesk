@@ -19,6 +19,9 @@ int run_test_mouse_gesture_hook();
 int run_test_hotkey_dispatcher();
 int run_test_sanitization();
 int run_test_webview2_bootstrap();
+int run_test_websocket_audio();
+int run_test_stealth_targets();
+int run_test_model_palette();
 
 int main() {
     int totalPassedAssertions = 0;
@@ -77,6 +80,21 @@ int main() {
     int c10 = LensDesk::Test::GetAssertionCount();
     totalPassedAssertions += c10;
 
+    // Additive Module B: WebSocket Audio Transport
+    run_test_websocket_audio();
+    int cB = LensDesk::Test::GetAssertionCount();
+    totalPassedAssertions += cB;
+
+    // Additive Module D: Stealth Targets Sync
+    run_test_stealth_targets();
+    int cD = LensDesk::Test::GetAssertionCount();
+    totalPassedAssertions += cD;
+
+    // Additive Module C: Model Palette
+    run_test_model_palette();
+    int cC = LensDesk::Test::GetAssertionCount();
+    totalPassedAssertions += cC;
+
     // Main Host Integration Contract Checks (src/main.cpp)
     LensDesk::Test::ResetAssertionCounter();
     CHECK(LensDesk::Native::VerifyMainHostContracts());
@@ -101,7 +119,7 @@ int main() {
     totalPassedAssertions += cMain;
 
     std::cout << "========================================\n";
-    std::cout << "[ALL PASS] 10 Modules + Host Main Verified: " << totalPassedAssertions << " Total Assertions Checked.\n";
+    std::cout << "[ALL PASS] 13 Test Modules + Host Main Verified: " << totalPassedAssertions << " Total Assertions Checked.\n";
     std::cout << "========================================\n";
 
     return 0;

@@ -10,6 +10,8 @@ public:
 
     size_t Write(const uint8_t* data, size_t count);
     size_t Drain(uint8_t* destination, size_t maxCount);
+    size_t Pop(uint8_t* destination, size_t maxCount);
+    bool WaitForData(DWORD timeoutMs);
     size_t Available() const noexcept;
     size_t Capacity() const noexcept { return m_capacity; }
     void Clear() noexcept;

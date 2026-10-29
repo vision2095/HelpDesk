@@ -63,6 +63,26 @@ size_t RingBuffer::Drain(uint8_t* destination, size_t maxCount) {
     return bytesToRead;
 }
 
+size_t RingBuffer::Pop(uint8_t* destination, size_t maxCount) {
+    return Drain(destination, maxCount);
+}
+
+bool RingBuffer::WaitForData(DWORD timeoutMs) {
+    if (Available() > 0) return true;
+    auto start = std::chrono::steady_clock::now();
+    while (true) {
+        if (Available() > 0) return true;
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - start
+        ).count();
+        if (elapsed >= static_cast<int64_t>(timeoutMs)) {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    return Available() > 0;
+}
+
 WasapiLoopback::WasapiLoopback() = default;
 
 WasapiLoopback::~WasapiLoopback() {

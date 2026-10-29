@@ -10,6 +10,12 @@ import {
 import type { Settings, Provider } from "./types";
 import { api } from "./api";
 import { cloud } from "./cloud";
+import {
+  DEFAULT_MODEL,
+  PARITY_MODELS,
+  LEGACY_MODELS,
+  resolveModel,
+} from "./model_palette";
 
 export interface LensDeskSettingsModalProps {
   isOpen: boolean;
@@ -161,7 +167,7 @@ const same = (a: unknown, b: unknown) =>
 
 const DEFAULT_MODAL_SETTINGS: Settings = {
   provider: "openai",
-  model: "gpt-4o-mini",
+  model: DEFAULT_MODEL,
   localBaseUrl: "http://127.0.0.1:11434/v1",
   language: "English",
   systemPrompt:
@@ -809,18 +815,42 @@ export function LensDeskSettingsModal({
                     </div>,
                   )}
                 {label(
+                  "Model Palette",
+                  <select
+                    aria-label="Model Picker"
+                    className="lensdesk-select hintlens-select"
+                    value={resolveModel(draft.model)}
+                    onChange={(event) =>
+                      changeSetting({ model: event.target.value })
+                    }
+                  >
+                    <optgroup label="Parity Models">
+                      {PARITY_MODELS.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.id}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Legacy Models">
+                      {LEGACY_MODELS.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.id}
+                        </option>
+                      ))}
+                    </optgroup>
+                  </select>,
+                )}
+                {label(
                   "Model ID (auto-selected)",
                   <input
                     aria-label="Model ID"
                     className="lensdesk-input hintlens-input"
                     value={
                       draft.model ||
-                      providers.find(([id]) => id === draft.provider)?.[2] ||
-                      ""
+                      DEFAULT_MODEL
                     }
                     placeholder={
-                      providers.find(([id]) => id === draft.provider)?.[2] ||
-                      "Auto-selected"
+                      DEFAULT_MODEL
                     }
                     maxLength={100}
                     onChange={(event) =>

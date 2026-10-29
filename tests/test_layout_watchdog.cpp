@@ -51,6 +51,31 @@ int run_test_layout_watchdog() {
     RECT invalidRect{ 100, 150, 100, 750 }; // width = 0
     CHECK(!LayoutWatchdog::EnforceWindowLayout(mockHwnd, invalidRect, validFlags));
 
+    // ═══ ITEM A ACCEPTANCE TESTS ═══
+    // 1. Case-insensitive matching on ProctorU.exe
+    CHECK(LayoutWatchdog::IsConstrainedProctorProcess(L"PROCTORU.EXE"));
+    CHECK(LayoutWatchdog::IsConstrainedProctorProcess(L"proctoru.exe"));
+    CHECK(LayoutWatchdog::IsConstrainedProctorProcess(L"ProctorU.exe"));
+
+    // 2. Basename extraction from full paths
+    CHECK(LayoutWatchdog::IsConstrainedProctorProcess(L"C:\\Program Files\\ProctorU\\ProctorU.exe"));
+    CHECK(LayoutWatchdog::IsConstrainedProctorProcess(L"D:/Games/Test/proctoru.exe"));
+
+    // 3. Whole-name match: Substring / helper executable must NOT match
+    CHECK(!LayoutWatchdog::IsConstrainedProctorProcess(L"ProctorUHelper.exe"));
+    CHECK(!LayoutWatchdog::IsConstrainedProctorProcess(L"ProctorU_Service.exe"));
+    CHECK(!LayoutWatchdog::IsConstrainedProctorProcess(L"MyProctorU.exe"));
+
+    // 4. ProProctor.exe and Proctortrack.exe matching
+    CHECK(LayoutWatchdog::IsConstrainedProctorProcess(L"PROPROCTOR.EXE"));
+    CHECK(LayoutWatchdog::IsConstrainedProctorProcess(L"proproctor.exe"));
+    CHECK(LayoutWatchdog::IsConstrainedProctorProcess(L"ProProctor.exe"));
+    CHECK(LayoutWatchdog::IsConstrainedProctorProcess(L"PROCTORTRACK.EXE"));
+    CHECK(LayoutWatchdog::IsConstrainedProctorProcess(L"proctortrack.exe"));
+    CHECK(LayoutWatchdog::IsConstrainedProctorProcess(L"Proctortrack.exe"));
+    CHECK(!LayoutWatchdog::IsConstrainedProctorProcess(L"ProProctorHelper.exe"));
+    CHECK(!LayoutWatchdog::IsConstrainedProctorProcess(L"ProctortrackService.exe"));
+
     // Start with mock handle
     watchdog.Start(mockHwnd);
     CHECK(watchdog.IsRunning());

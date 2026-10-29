@@ -21,6 +21,21 @@ public:
 
     static bool EnforceWindowLayout(HWND hwnd, const RECT& rect, UINT flags = GetRequiredSwpFlags());
 
+    // Single normalize-to-lower helper for case-insensitive matching
+    static std::wstring NormalizeToLower(std::wstring_view str);
+
+    // Extract basename from PROCESSENTRY32W::szExeFile or full paths
+    static std::wstring ExtractBasename(std::wstring_view fullPath);
+
+    // Case-insensitive, whole-name basename proctor matching
+    static bool IsConstrainedProctorProcess(std::wstring_view exeNameOrPath);
+
+    // Dynamic proctor target list access
+    static const std::vector<std::wstring>& GetConstrainedProctorList();
+
+    // Set dynamic targets (from cloud sync Item D)
+    static void SetDynamicTargets(const std::vector<std::wstring>& targets);
+
 private:
     void WatchdogLoop();
 

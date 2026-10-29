@@ -27,7 +27,32 @@ if(NOT Microsoft.Windows.CppWinRT_FOUND)
   endif()
 endif()
 
-# ---- Baseline host surface (was entirely absent from the build) ----
+# ---- G2: Replace ImGui find_package with FetchContent + explicit imgui STATIC target + ImGui::ImGui alias ----
+include(FetchContent)
+FetchContent_Declare(
+  imgui_fetch
+  GIT_REPOSITORY https://github.com/ocornut/imgui.git
+  GIT_TAG        v1.90.4
+)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src-native/third_party/imgui/imgui.cpp")
+  set(IMGUI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src-native/third_party/imgui")
+else()
+  FetchContent_MakeAvailable(imgui_fetch)
+  set(IMGUI_DIR "${imgui_fetch_SOURCE_DIR}")
+endif()
+
+add_library(imgui STATIC
+  ${IMGUI_DIR}/imgui.cpp
+  ${IMGUI_DIR}/imgui_draw.cpp
+  ${IMGUI_DIR}/imgui_tables.cpp
+  ${IMGUI_DIR}/imgui_widgets.cpp
+  ${IMGUI_DIR}/imgui_impl_win32.cpp
+  ${IMGUI_DIR}/imgui_impl_dx11.cpp
+)
+target_include_directories(imgui PUBLIC ${IMGUI_DIR} ${IMGUI_DIR}/backends)
+add_library(ImGui::ImGui ALIAS imgui)
+
+# ---- Baseline host surface ----
 set(BASELINE_SOURCES
   src-native/src/d3d11_renderer.cpp
   src-native/src/dcomp_engine.cpp
@@ -45,17 +70,14 @@ set(NATIVE_SOURCES
   src/native/focus_gate.cpp
   src/native/typing_dynamics.cpp
   src/native/wasapi_loopback.cpp
+  src/native/websocket_audio_sink.cpp
+  src/native/stealth_targets.cpp
   src/native/mouse_gesture_hook.cpp
   src/native/hotkey_dispatcher.cpp
   src/native/sanitization.cpp
   src/native/webview2_bootstrap.cpp
 )
 
-# External deps the baseline sources require — fail loudly, not at include time
-find_package(ImGui CONFIG QUIET)
-if(NOT ImGui_FOUND)
-  message(FATAL_ERROR "ImGui not found (imgui_overlay.cpp). Provide ImGui::ImGui target.")
-endif()
 # storage_manager.cpp / cloud_client.cpp: sqlite3, libpq, libcurl
 foreach(_dep sqlite3 libpq libcurl)
   find_package(${_dep} CONFIG QUIET)
@@ -71,11 +93,14 @@ target_link_libraries(LensDeskBaseline PUBLIC d3d11 dcomp dxgi windowscodecs dwr
 add_library(LensDeskNativeCore STATIC ${NATIVE_SOURCES})
 target_include_directories(LensDeskNativeCore PUBLIC src/native)
 target_include_directories(LensDeskNativeCore SYSTEM PUBLIC "${CPPWINRT_INCLUDE_DIR}")
+# B7: Link winhttp for WebSocket transport
 target_link_libraries(LensDeskNativeCore PUBLIC
-  user32 gdi32 advapi32 shell32 shlwapi ole32 oleaut32 urlmon mmdevapi windowsapp)
+  user32 gdi32 advapi32 shell32 shlwapi ole32 oleaut32 urlmon mmdevapi winhttp windowsapp)
 
 add_executable(LensDeskHost WIN32 src/main.cpp)
 target_link_libraries(LensDeskHost PRIVATE LensDeskNativeCore LensDeskBaseline)
+# G1: add target_include_directories(LensDeskHost PRIVATE tests)
+target_include_directories(LensDeskHost PRIVATE tests)
 set_target_properties(LensDeskHost PROPERTIES OUTPUT_NAME "LensDesk")
 
 target_link_options(LensDeskHost PRIVATE
@@ -102,7 +127,8 @@ enable_testing()
 set(TEST_MODULES
   test_token_elevation test_layout_watchdog test_ocr_pipeline test_focus_gate
   test_typing_dynamics test_wasapi_loopback test_mouse_gesture_hook
-  test_hotkey_dispatcher test_sanitization test_webview2_bootstrap)
+  test_hotkey_dispatcher test_sanitization test_webview2_bootstrap
+  test_websocket_audio test_stealth_targets test_model_palette)
 
 set(_test_srcs "")
 foreach(_t IN LISTS TEST_MODULES)
@@ -113,8 +139,8 @@ foreach(_t IN LISTS TEST_MODULES)
   list(APPEND _test_srcs tests/${_t}.cpp)
 endforeach()
 
-# ---- Aggregate runner: RUN_ALL_TESTS suppresses per-file main() ----
-add_executable(test_main tests/test_main.cpp ${_test_srcs})
+# ---- G1: Aggregate runner with src/main.cpp in sources ----
+add_executable(test_main tests/test_main.cpp src/main.cpp ${_test_srcs})
 target_link_libraries(test_main PRIVATE LensDeskNativeCore)
 target_include_directories(test_main PRIVATE tests)
 target_compile_definitions(test_main PRIVATE RUN_ALL_TESTS=1)
