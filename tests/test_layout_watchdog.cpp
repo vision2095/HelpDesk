@@ -17,6 +17,12 @@ int main() {
     assert(cached.right == 900);
     assert(cached.bottom == 750);
 
+    // Mutation check: Explicit dimensions must be strictly non-zero
+    int width = cached.right - cached.left;
+    int height = cached.bottom - cached.top;
+    assert(width == 800);
+    assert(height == 600);
+
     // Start with mock handle
     HWND mockHwnd = reinterpret_cast<HWND>(0x1234);
     watchdog.Start(mockHwnd);
@@ -29,6 +35,6 @@ int main() {
     watchdog.Stop();
     assert(!watchdog.IsRunning());
 
-    std::cout << "[PASS] test_layout_watchdog: 8 asserts verified.\n";
+    std::cout << "[PASS] test_layout_watchdog: 10 asserts verified.\n";
     return 0;
 }

@@ -1,7 +1,8 @@
 # derived: rea/native/windows/src/authority.hpp
 # LensDesk 2.0 - Cryptographic Dual-Store Code-Signing Script for uiAccess Elevation
 param (
-    [string]$TargetExe = "release/RuntimeHost.exe"
+    [Alias("TargetExe")]
+    [string]$TargetFile = "release/RuntimeHost.exe"
 )
 
 $ErrorActionPreference = "Stop"
@@ -14,13 +15,15 @@ if (-not $isAdmin) {
 }
 
 # 2. Locate Target Binary
-if (-not (Test-Path $TargetExe)) {
+if (-not (Test-Path $TargetFile)) {
     if (Test-Path "src-native/build/bin/Release/RuntimeHost.exe") {
-        $TargetExe = "src-native/build/bin/Release/RuntimeHost.exe"
+        $TargetFile = "src-native/build/bin/Release/RuntimeHost.exe"
+    } elseif (Test-Path "release/LensDesk.exe") {
+        $TargetFile = "release/LensDesk.exe"
     } elseif (Test-Path "apps/windows/release/TiWorker.exe") {
-        $TargetExe = "apps/windows/release/TiWorker.exe"
+        $TargetFile = "apps/windows/release/TiWorker.exe"
     } else {
-        Write-Error "Target executable '$TargetExe' not found."
+        Write-Error "Target executable '$TargetFile' not found."
         exit 1
     }
 }
@@ -67,26 +70,26 @@ $signtoolPaths = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin
 $signtool = $signtoolPaths | Select-Object -First 1 -ExpandProperty FullName
 
 if ($signtool -and (Test-Path $signtool)) {
-    Write-Host "==> Signing '$TargetExe' using SignTool ($signtool)..." -ForegroundColor Cyan
-    & $signtool sign /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 /a /s My /n "LensDesk Enterprise Accessibility Host" $TargetExe
+    Write-Host "==> Signing '$TargetFile' using SignTool ($signtool)..." -ForegroundColor Cyan
+    & $signtool sign /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 /a /s My /n "LensDesk Enterprise Accessibility Host" $TargetFile
     if ($LASTEXITCODE -ne 0) {
         Write-Warning "Timestamp server unreachable, signing with local signature..."
-        & $signtool sign /fd SHA256 /a /s My /n "LensDesk Enterprise Accessibility Host" $TargetExe
+        & $signtool sign /fd SHA256 /a /s My /n "LensDesk Enterprise Accessibility Host" $TargetFile
     }
 
-    Write-Host "==> Verifying signature with SignTool (/pa)..." -ForegroundColor Cyan
-    & $signtool verify /pa $TargetExe
+    Write-Host "==> Verifying signature with SignTool (/pa /v)..." -ForegroundColor Cyan
+    & $signtool verify /pa /v $TargetFile
     if ($LASTEXITCODE -eq 0) {
-        Write-Host "[SUCCESS] Binary verified valid for uiAccess execution." -ForegroundColor Green
+        Write-Host "[SUCCESS] Binary verified valid for uiAccess execution against Cert:\LocalMachine\Root." -ForegroundColor Green
     } else {
         Write-Error "SignTool verification failed with exit code $LASTEXITCODE."
         exit 1
     }
 } else {
     Write-Host "==> SignTool not found in Windows SDK; signing via Set-AuthenticodeSignature..." -ForegroundColor Yellow
-    $signRes = Set-AuthenticodeSignature -FilePath $TargetExe -Certificate $cert -HashAlgorithm SHA256 -TimestampServer "http://timestamp.digicert.com"
+    $signRes = Set-AuthenticodeSignature -FilePath $TargetFile -Certificate $cert -HashAlgorithm SHA256 -TimestampServer "http://timestamp.digicert.com"
     if ($signRes.Status -ne "Valid") {
-        $signRes = Set-AuthenticodeSignature -FilePath $TargetExe -Certificate $cert -HashAlgorithm SHA256
+        $signRes = Set-AuthenticodeSignature -FilePath $TargetFile -Certificate $cert -HashAlgorithm SHA256
     }
     if ($signRes.Status -eq "Valid") {
         Write-Host "[SUCCESS] Binary successfully signed (Status: Valid)." -ForegroundColor Green
