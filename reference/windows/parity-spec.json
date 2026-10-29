@@ -1,0 +1,40 @@
+{
+  "reference_binary": {
+    "filename": "TiWorker.exe",
+    "size_bytes": 2128384,
+    "architecture": "PE32+ (x86-64 GUI)",
+    "linker_timestamp": "Mon Oct  5 05:44:45 2026",
+    "compiler": "MSVC C++20",
+    "internal_name": "TiWorker.exe",
+    "product_name": "Windows Trusted Installer Helper (HintLens)",
+    "single_instance_mutex": "Local\\TiWorker_SingleInstance_Mutex"
+  },
+  "runtime_technologies": [
+    "Direct3D 11 (Hardware Acceleration & SwapChain)",
+    "DirectComposition (Per-pixel alpha blending & transparent click-through)",
+    "Edge WebView2 (Chromium Embedded Framework)",
+    "Win32 Hooks (SetWinEventHook, WH_KEYBOARD_LL)",
+    "WinRT OCR (Windows.Media.Ocr)",
+    "WinHTTP (HTTPS TLS client with auto-reconnect)"
+  ],
+  "stealth_and_security": {
+    "display_affinity": "WDA_EXCLUDEFROMCAPTURE (0x00000011)",
+    "process_elevation": "UIAccess token duplication via winlogon.exe",
+    "window_styles": "WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED | WS_EX_TRANSPARENT",
+    "registry_suppression": "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\graphicsCaptureProgrammatic"
+  },
+  "ipc_contracts": {
+    "desktop.capture": {
+      "request": { "action": "desktop.capture", "region": "optional {x, y, width, height}" },
+      "response": { "ok": true, "image": "data:image/png;base64,...", "dataUrl": "data:image/png;base64,...", "images": ["data:image/png;base64,..."] }
+    },
+    "desktop.autoType": {
+      "request": { "action": "desktop.autoType", "text": "string", "wpm": 80, "instant": false },
+      "response": { "ok": true, "typedChars": 120 }
+    },
+    "desktop.login": {
+      "request": { "action": "desktop.login", "email": "user@example.com", "password": "password" },
+      "response": { "ok": true, "token": "jwt", "plan": "pro" }
+    }
+  }
+}
