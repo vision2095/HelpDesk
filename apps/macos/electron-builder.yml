@@ -1,0 +1,26 @@
+appId: com.runtimehost.app
+productName: LensDesk
+directories:
+  output: ../../release/macos
+files:
+  - "src/**/*"
+  - "preload/**/*"
+  - "resources/**/*"
+  - "../../packages/ui/dist/**/*"
+mac:
+  category: public.app-category.productivity
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+  extendInfo:
+    LSUIElement: false
+    NSHighResolutionCapable: true
+    NSScreenCaptureUsageDescription: "LensDesk captures a screen you select to attach to an AI question."
+    NSDesktopCaptureUsageDescription: "LensDesk captures a screen you select to attach to an AI question."
+    NSMicrophoneUsageDescription: "LensDesk uses your microphone when you start transcription."
+    NSAppleEventsUsageDescription: "LensDesk needs access to Apple Events to activate target windows."
+    NSSystemAdministrationUsageDescription: "LensDesk uses administration privileges for memory optimizations."
+  icon: resources/icon.icns
+  entitlements: resources/entitlements.plist

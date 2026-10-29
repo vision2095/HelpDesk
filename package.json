@@ -5,6 +5,10 @@
   "private": true,
   "description": "RuntimeHost",
   "author": "RuntimeHost",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
@@ -41,6 +45,13 @@
     "test:browser-desktop": "node scripts/browser-desktop-check.mjs",
     "test:reference": "node scripts/reference-workflow-check.mjs",
     "test:settings": "node tests/settings-modal-browser.mjs",
+    "test:web": "node --experimental-strip-types --test tests/web/*.test.mjs",
+    "test:macos": "node --experimental-strip-types --test tests/macos/*.test.mjs",
+    "test:windows": "node --experimental-strip-types --test tests/windows/*.test.mjs",
+    "build:ui": "npm --workspace=@lensdesk/ui run build",
+    "build:web": "npm --workspace=@lensdesk/ui run build",
+    "build:mac": "npm --workspace=@lensdesk/ui run build && npm --workspace=@lensdesk/macos run build",
+    "build:win": "npm --workspace=@lensdesk/windows run build:win",
     "dist:mac:arm64": "npm run build && electron-builder --mac dmg --arm64 --publish never",
     "dist:mac:x64": "npm run build && electron-builder --mac dmg --x64 --publish never"
   },

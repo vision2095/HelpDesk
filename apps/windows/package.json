@@ -1,0 +1,15 @@
+{
+  "name": "@lensdesk/windows",
+  "version": "2.0.0",
+  "description": "LensDesk 2.0 Pure C++20 Win32 Host Application (HintLens Parity)",
+  "type": "module",
+  "scripts": {
+    "build:win": "node scripts/package-windows-zip.mjs",
+    "package:zip": "node scripts/package-windows-zip.mjs",
+    "test:archive": "node scripts/windows-archive-check.mjs",
+    "test:pe": "node scripts/win-exe-audit.mjs release/TiWorker.exe"
+  },
+  "devDependencies": {
+    "adm-zip": "^0.5.16"
+  }
+}

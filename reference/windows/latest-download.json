@@ -1,0 +1,12 @@
+{
+  "downloadUrl": "https://api.hintlens.com/api/v1/download/windows",
+  "archiveSha256": "a5f9a5a880112492d03c85048a21415b79b195c6c439e1c48f1aab14aada5940",
+  "entries": [
+    {
+      "name": "SearchProtocolHost.exe",
+      "bytes": 2128384,
+      "compressedBytes": 1246290
+    }
+  ],
+  "executed": false
+}

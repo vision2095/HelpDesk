@@ -1,0 +1,19 @@
+{
+  "name": "@lensdesk/macos",
+  "version": "2.0.0",
+  "description": "LensDesk 2.0 macOS Desktop Application",
+  "main": "src/main.cjs",
+  "scripts": {
+    "start": "electron src/main.cjs",
+    "build": "electron-builder --mac",
+    "dist:arm64": "electron-builder --mac --arm64",
+    "dist:x64": "electron-builder --mac --x64"
+  },
+  "dependencies": {
+    "uiohook-napi": "^1.5.4"
+  },
+  "devDependencies": {
+    "electron": "44.9.3",
+    "electron-builder": "^26.4.1"
+  }
+}

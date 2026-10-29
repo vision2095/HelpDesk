@@ -1,0 +1,807 @@
+
+======================================================================
+CATEGORY: Hotkeys & Shortcuts (30 items)
+======================================================================
+    -  Ctrl+Shift+M for mouse
+    Custom hotkeys are a paid feature - the default shortcuts below still work on the 
+    Hotkeys###CheatSheet
+  ##bind_hotkey
+  (Ctrl+Shift+M for mouse)
+  A keyboard-free way to fire the main actions - useful when typing hotkeys is risky. Hold the trigger button to pop a wheel at the cursor, move toward an action, and release to run it. Release in the center to cancel.
+  Add Ctrl, Shift, or Alt - a modifier is required.
+  Alt+
+  Click %s Button to break in debugger! (remap w/ Ctrl+Shift)
+  Ctrl+
+  Ctrl+Shift+D to capture
+  Hotkey cheat-sheet
+  Hotkey cheat-sheet hidden
+  Hotkey cheat-sheet shown
+  Hotkeys
+  How the Type hotkey enters an answer into the focused app. Pick a preset, or fine-tune the pace and how human the typing looks. Changes apply to the next Type.
+  No screenshots - Ctrl+Shift+D to capture
+  No screenshots. Press Ctrl+Shift+D first.
+  Region: corner 1 marked - press the region hotkey again at the opposite corner
+  Remap w/ Ctrl+Shift: click anywhere to select new mouse button.
+  Settings for the in-overlay browser (open it with Ctrl+Shift+G).
+  Shift+
+  Show Hotkey Cheat-Sheet
+  When enabled, images captured via the Mark Point or Fullscreen Screenshot hotkeys are automatically saved to a local folder so you can review them later.
+  Which display the fullscreen Screenshot hotkey captures. "Active monitor" grabs whichever screen your mouse is on - the smallest, most focused image and fastest to send.
+  You're offline. Cloud providers need internet - switch the provider to Local (Ctrl+Shift+P) to answer with the model on this PC.
+  \hotkeys.json
+  customHotkeys
+  hotkeys
+  modifiers
+
+======================================================================
+CATEGORY: Settings & Configuration (36 items)
+======================================================================
+    Settings###SettingsWin
+  !g.Initialized && !g.SettingsLoaded
+  ##settings_btn
+  ##settings_content
+  ##settings_nav
+  (flags & ImGuiSliderFlags_WrapAround) == 0
+  (flags == 1 || (flags & ImGuiSliderFlags_InvalidMask_) == 0) && "Invalid ImGuiSliderFlags flags! Has the legacy 'float power' argument been mistakenly cast to flags? Call function with ImGuiSliderFlags_Logarithmic flags instead."
+  (function(){try{if(window.chrome&&window.chrome.webview){try{delete window.chrome.webview}catch(e){}if(window.chrome.webview){try{Object.defineProperty(window.chrome,'webview',{value:undefined,writable:false,configurable:false,enumerable:false})}catch(e){}}}if(navigator.userAgentData){var ua=navigator.userAgentData;var f=function(a){return a.filter(function(b){return b.brand.indexOf('WebView2')===-1})};try{var fb=Object.freeze(f(ua.brands));Object.defineProperty(ua,'brands',{get:function(){return fb},configurable:false,enumerable:true})}catch(e){}if(ua.getHighEntropyValues){var gh=ua.getHighEntropyValues.bind(ua);try{Object.defineProperty(ua,'getHighEntropyValues',{value:function(h){return gh(h).then(function(v){if(v.brands)v.brands=f(v.brands);if(v.fullVersionList)v.fullVersionList=f(v.fullVersionList);return v})},writable:false,configurable:false})}catch(e){}}try{Object.defineProperty(ua,'toJSON',{value:function(){return{brands:fb,mobile:ua.mobile,platform:ua.platform}},writable:false,configurable:false})}catch(e){}}var wp=Window.prototype;try{var dw=Object.getOwnPropertyDescriptor(wp,'outerWidth');if(dw)Object.defineProperty(wp,'outerWidth',{get:function(){return this.innerWidth+16},enumerable:dw.enumerable,configurable:true})}catch(e){}try{var dh=Object.getOwnPropertyDescriptor(wp,'outerHeight');if(dh)Object.defineProperty(wp,'outerHeight',{get:function(){return this.innerHeight+89},enumerable:dh.enumerable,configurable:true})}catch(e){}}catch(e){}})();
+  /api/v1/settings
+  API Error: Local LLM host/port isn't set (Settings 
+  API Error: No local model selected (Settings 
+  Could not parse settings response
+  FindSettingsHandler(handler->TypeName) == 0
+  How the Type hotkey enters an answer into the focused app. Pick a preset, or fine-tune the pace and how human the typing looks. Changes apply to the next Type.
+  Local   - set up in Settings 
+  Permanently erases everything on this PC - settings, saved logins, browser data and screenshots - and removes the app. This cannot be undone. Your online account is not affected.
+  Preset
+  Set io.ConfigDebugHighlightIdConflicts=false to disable this warning in non-programmers builds.
+  Settings
+  Settings for the in-overlay browser (open it with Ctrl+Shift+G).
+  This permanently removes all Hintlens data from this computer - your settings, saved logins and browser data, and captured screenshots - then uninstalls the app. It cannot be undone. Your online account is left untouched.
+  Unavailable: Windows has no OCR language installed. Add a language pack in Windows Settings 
+  Windows has no OCR language installed. Add a language pack in Settings 
+  [imgui-error] (current settings: Assert=%d, Log=%d, Tooltip=%d)
+  _configthreadlocale
+  _configure_narrow_argv
+  default_generation_settings
+  font_cfg_in->RasterizerDensity > 0.0f && "Is ImFontConfig struct correctly initialized?"
+  g.IO.ConfigErrorRecoveryEnableAssert || g.IO.ConfigErrorRecoveryEnableDebugLog || g.IO.ConfigErrorRecoveryEnableTooltip || g.ErrorCallback != 0
+  g.SettingsWindows.empty()
+  settings
+  settings->ColumnsCount == table->ColumnsCount && settings->ColumnsCountMax >= settings->ColumnsCount
+  settings->ID == table->ID
+  settings->ID == window->ID
+  settingsH
+  {"settings":
+
+======================================================================
+CATEGORY: Layouts & Views (Minimal, Compact, Full, Floating, Browser, Interview) (102 items)
+======================================================================
+   Billing to unlock premium models, longer interviews, and more.
+   listening to the interviewer
+  ##browser_home
+  ##browser_search
+  ##browser_zoom
+  ##browserexit
+  ##confirm_clear_browser
+  ##exitinterview
+  ##ivcompactline
+  --no-sandbox --disable-gpu-sandbox --disable-features=msWebView2BrowserHitTransparent
+  /api/v1/interview/answer
+  ?Browser is not ready yet
+  Answers appear here automatically when the interviewer finishes a question (or press AI Help). Screenshots in the bundle are attached for coding questions.
+  Browser
+  Browser Mode
+  Browser data
+  Browser mode
+  Browser mode closed
+  Browser mode is off
+  Browser mode time included in the %s plan. Upgrade for unlimited access.
+  Browser mode time is used up for today on the Free plan - upgrade for unlimited browser access
+  Browser mode unavailable 
+  Browser mode unavailable - WebView2 runtime not responding
+  Browser mode unavailable - is the WebView2 runtime installed?
+  BrowserExecutableFolder
+  BrowserLock.exe
+  Chat layout
+  Clears the in-overlay browser's cookies, cache and saved logins - you'll be signed out of every site there. The app and your Hintlens account are not affected.
+  Compact
+  Compact narrows the interview window to a single-line transcript with full-width answers. Applies to interview mode only.
+  Compact##iv
+  Couldn't start the browser
+  EBWebView\x64\EmbeddedBrowserWebView.dll
+  Exit Interview
+  Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" | Where-Object { $_.CommandLine -like '*\Hintlens\browser*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+  GetKeyboardLayout
+  Guardian Browser.exe
+  Interview
+  Interview Mode
+  Interview layout
+  Interview mode
+  Interview mode 
+  Interview mode - mouse control enabled
+  Interview mode closed
+  Interview time is used up for %s on the %s plan 
+  Interview transcription time included in the %s plan. Upgrade from the web dashboard for more.
+  Interviewer
+  Interviewer stream lost: 
+  Layout
+  Listening... the interviewer (system audio) will appear here. Your own voice is not captured.
+  Listening... the interviewer's speech appears here.
+  LockDownBrowser.exe
+  LockDownBrowserOEM.exe
+  Minimal
+  Minimal is a portrait layout: full-width chat, a one-line status bar, a screenshot strip and four buttons (the rest behind the More menu). Each layout remembers its own window size. Interview and browser mode are unaffected.
+  Multilingual interviews require Pro or Premium - the %s plan transcribes English only. Upgrade from the web dashboard.
+  Open / Close Browser
+  Open browser mode first, then paste the bundle
+  PSI Bridge Secure Browser.exe
+  PSI Secure Browser.exe
+  Permanently erases everything on this PC - settings, saved logins, browser data and screenshots - and removes the app. This cannot be undone. Your online account is not affected.
+  SafeExamBrowser.Client.exe
+  SafeExamBrowser.exe
+  Settings for the in-overlay browser (open it with Ctrl+Shift+G).
+  Signing in%.*s  (a browser may open for Google)
+  Standard layout
+  Start a session to begin live transcription of the interviewer's audio.
+  Start a session to transcribe the interviewer.
+  Starting browser
+  Starting the browser
+  TestTakerSBBrowser.exe
+  This permanently removes all Hintlens data from this computer - your settings, saved logins and browser data, and captured screenshots - then uninstalls the app. It cannot be undone. Your online account is left untouched.
+  This signs you out of every site in the browser and clears its cookies and cache. It can't be undone.
+  WEBVIEW2_BROWSER_EXECUTABLE_FOLDER
+  WebView2: CoreWebView2Environment failed when trying to call into EmbeddedBrowserWebView.dll. hr=0x
+  WebView2: This error (0x8007007E) typically indicates missing binaries or an architecture mismatch. Please ensure the correct binaries (WebView2Loader.dll, EmbeddedBrowserWebView.dll, etc.) for the target architecture (x86/x64/ARM64) are deployed
+  [Browser] %s
+  [interviewer: live]
+  [interviewer: off]
+  \browser
+  \browser.ini
+  _Current == 0 && _Count <= 1 && "Nested channel splitting is not supported. Please use separate instances of ImDrawListSplitter."
+  browser
+  browserSecondsPerDay
+  interview
+  interview %d 0 0
+  interviewSecondsPerDay
+  interviewSecondsRemaining
+  minimal
+  minimal %d 0 0
+  qmsecurebrowser.exe
+  splitter->_Current == 0
+  sz_idx == sizeof(ImDrawIdx) && "Mismatched struct layout!"
+  sz_io == sizeof(ImGuiIO) && "Mismatched struct layout!"
+  sz_style == sizeof(ImGuiStyle) && "Mismatched struct layout!"
+  sz_vec2 == sizeof(ImVec2) && "Mismatched struct layout!"
+  sz_vec4 == sizeof(ImVec4) && "Mismatched struct layout!"
+  sz_vert == sizeof(ImDrawVert) && "Mismatched struct layout!"
+  table != 0 && table->IsLayoutLocked == false
+  table->IsLayoutLocked == false
+  table->MemoryCompacted == false
+  toggle_browser
+
+======================================================================
+CATEGORY: Capture & Screenshots (149 items)
+======================================================================
+    Cloud answer history is a paid feature - screenshots still save to disk on the 
+    [+screenshot]
+   DirectComposition failed on this display
+   captured
+   captured (
+   captures
+   in bundle
+   no desktop monitor, running on '%s'
+   returned no text. If you sent a screenshot, make sure this is a VISION model (e.g. llava, qwen2.5-vl, gemma3, minicpm-v) - text-only models can't read images.
+   screenshot into the page
+   screenshot(s) - bundle empty
+   screenshot(s) per answer. Get the answer, remove one, or upgrade.
+   screenshot(s)...
+   screenshots into the page
+   speak, or capture a screenshot first
+  ##bundle
+  ##capture
+  --- Screenshot 
+  .?AU?$delegate@U?$AsyncOperationCompletedHandler@UOcrResult@Ocr@Media@Windows@winrt@@@Foundation@Windows@winrt@@V<lambda_e92febeebb5c762d5c26180067218350>@@@impl@winrt@@
+  .?AU?$implements_delegate@U?$AsyncOperationCompletedHandler@UOcrResult@Ocr@Media@Windows@winrt@@@Foundation@Windows@winrt@@V<lambda_e92febeebb5c762d5c26180067218350>@@@impl@winrt@@
+  .?AUtype@?$abi@U?$AsyncOperationCompletedHandler@UOcrResult@Ocr@Media@Windows@winrt@@@Foundation@Windows@winrt@@X@impl@winrt@@
+  ;var dt=new DataTransfer();for(var i=0;i<imgs.length;i++){var bs=atob(imgs[i]);var arr=new Uint8Array(bs.length);for(var j=0;j<bs.length;j++)arr[j]=bs.charCodeAt(j);var blob=new Blob([arr],{type:'image/png'});dt.items.add(new File([blob],'screenshot-'+(i+1)+'.png',{type:'image/png'}));}var fi=document.querySelector('input[type=file]');if(fi){fi.files=dt.files;fi.dispatchEvent(new Event('change',{bubbles:true}));}else{var el=document.activeElement||document.body;el.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:dt}));}if(note){var el2=document.activeElement;if(el2&&(el2.tagName=='TEXTAREA'||el2.tagName=='INPUT')){var st=el2.selectionStart==null?el2.value.length:el2.selectionStart;el2.value=el2.value.slice(0,st)+note+el2.value.slice(st);el2.dispatchEvent(new Event('input',{bubbles:true}));}else if(el2&&el2.isContentEditable){document.execCommand('insertText',false,note);}}return 'ok';}catch(e){return 'error: '+e.message;}})();
+  <!doctype html><html><head><meta charset='utf-8'><title>Hintlens</title><style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0a0c12;background-image:radial-gradient(640px 420px at 18% 8%,rgba(24,104,219,.18),transparent 60%),radial-gradient(640px 420px at 85% 92%,rgba(191,99,243,.14),transparent 60%);font-family:'Segoe UI',system-ui,sans-serif;color:#e8eaf2}.card{text-align:center;padding:56px 64px;border-radius:20px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.09);box-shadow:0 24px 60px rgba(0,0,0,.45);animation:in .5s ease}.brand{font-size:14px;font-weight:700;letter-spacing:.35em;text-transform:uppercase;background:linear-gradient(90deg,#5ea2ff,#bf63f3);-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:28px}h1{font-size:22px;font-weight:600;margin:0 0 8px}p{font-size:14px;color:#9aa1b5;margin:0}.hint{margin-top:18px;font-size:12px;color:#6b7286}.badge{width:64px;height:64px;margin:0 auto 24px;border-radius:50%;display:flex;align-items:center;justify-content:center;animation:pop .45s cubic-bezier(.2,1.4,.4,1)}.spin{width:44px;height:44px;margin:0 auto 22px;border-radius:50%;border:3px solid rgba(255,255,255,.12);border-top-color:#5ea2ff;animation:rot 1s linear infinite}@keyframes rot{to{transform:rotate(360deg)}}@keyframes pop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}@keyframes draw{to{stroke-dashoffset:0}}@keyframes in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}</style></head><body><div class='card'><div class='brand'>Hintlens</div><div class='badge' style='background:linear-gradient(135deg,#16a34a,#22c55e);box-shadow:0 10px 30px rgba(34,197,94,.35)'><svg width='30' height='30' viewBox='0 0 24 24' fill='none'><path d='M4 12.5l5 5L20 6.5' stroke='#fff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' style='stroke-dasharray:30;stroke-dashoffset:30;animation:draw .5s .25s ease forwards'/></svg></div><h1>You&#8217;re signed in</h1><p>Head back to the Hintlens app &#8212; it&#8217;s ready for you.</p><div class='hint'>This window will try to close itself.</div></div><script>setTimeout(function(){window.close();},2200);</script></body></html>
+  <!doctype html><html><head><meta charset='utf-8'><title>Hintlens</title><style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0a0c12;background-image:radial-gradient(640px 420px at 18% 8%,rgba(24,104,219,.18),transparent 60%),radial-gradient(640px 420px at 85% 92%,rgba(191,99,243,.14),transparent 60%);font-family:'Segoe UI',system-ui,sans-serif;color:#e8eaf2}.card{text-align:center;padding:56px 64px;border-radius:20px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.09);box-shadow:0 24px 60px rgba(0,0,0,.45);animation:in .5s ease}.brand{font-size:14px;font-weight:700;letter-spacing:.35em;text-transform:uppercase;background:linear-gradient(90deg,#5ea2ff,#bf63f3);-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:28px}h1{font-size:22px;font-weight:600;margin:0 0 8px}p{font-size:14px;color:#9aa1b5;margin:0}.hint{margin-top:18px;font-size:12px;color:#6b7286}.badge{width:64px;height:64px;margin:0 auto 24px;border-radius:50%;display:flex;align-items:center;justify-content:center;animation:pop .45s cubic-bezier(.2,1.4,.4,1)}.spin{width:44px;height:44px;margin:0 auto 22px;border-radius:50%;border:3px solid rgba(255,255,255,.12);border-top-color:#5ea2ff;animation:rot 1s linear infinite}@keyframes rot{to{transform:rotate(360deg)}}@keyframes pop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}@keyframes draw{to{stroke-dashoffset:0}}@keyframes in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}</style></head><body><div class='card'><div class='brand'>Hintlens</div><div class='badge' style='background:linear-gradient(135deg,#b91c1c,#ef4444);box-shadow:0 10px 30px rgba(239,68,68,.35)'><svg width='26' height='26' viewBox='0 0 24 24' fill='none'><path d='M6 6l12 12M18 6L6 18' stroke='#fff' stroke-width='3' stroke-linecap='round'/></svg></div><h1>Sign-in failed</h1><p>Close this window and try again from the Hintlens app.</p></div></body></html>
+  <!doctype html><html><head><meta charset='utf-8'><title>Hintlens</title><style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0a0c12;background-image:radial-gradient(640px 420px at 18% 8%,rgba(24,104,219,.18),transparent 60%),radial-gradient(640px 420px at 85% 92%,rgba(191,99,243,.14),transparent 60%);font-family:'Segoe UI',system-ui,sans-serif;color:#e8eaf2}.card{text-align:center;padding:56px 64px;border-radius:20px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.09);box-shadow:0 24px 60px rgba(0,0,0,.45);animation:in .5s ease}.brand{font-size:14px;font-weight:700;letter-spacing:.35em;text-transform:uppercase;background:linear-gradient(90deg,#5ea2ff,#bf63f3);-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:28px}h1{font-size:22px;font-weight:600;margin:0 0 8px}p{font-size:14px;color:#9aa1b5;margin:0}.hint{margin-top:18px;font-size:12px;color:#6b7286}.badge{width:64px;height:64px;margin:0 auto 24px;border-radius:50%;display:flex;align-items:center;justify-content:center;animation:pop .45s cubic-bezier(.2,1.4,.4,1)}.spin{width:44px;height:44px;margin:0 auto 22px;border-radius:50%;border:3px solid rgba(255,255,255,.12);border-top-color:#5ea2ff;animation:rot 1s linear infinite}@keyframes rot{to{transform:rotate(360deg)}}@keyframes pop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}@keyframes draw{to{stroke-dashoffset:0}}@keyframes in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}</style></head><body><div class='card'><div class='brand'>Hintlens</div><div class='spin'></div><h1>Completing sign-in&#8230;</h1><p>Just a moment.</p></div><script>var h=location.hash?location.hash.substring(1):'';if(h){location.replace('/done?'+h);}else{document.querySelector('h1').textContent='No token received.';document.querySelector('p').textContent='You can close this window and try again from Hintlens.';}</script></body></html>
+  Active monitor (where the mouse is)
+  All monitors
+  Analyse the provided screenshot(s) or question and provide the correct answer. For MCQs, give the correct option with a brief explanation if helpful. For coding/debugging, return the complete correct code. For descriptive questions, provide a clear and accurate answer.
+  Answers appear here automatically when the interviewer finishes a question (or press AI Help). Screenshots in the bundle are attached for coding questions.
+  Best results come from a vision model - llava, qwen2.5-vl, gemma3 or minicpm-v - which reads the screenshot itself.
+  Bundle (%d)
+  Bundle already empty
+  Bundle cleared
+  Bundle is full - the 
+  CAPTURED:  
+  Can't see images and the OCR fallback below is off, so screenshots won't work here.
+  Can't see images, and Windows has no OCR language installed - screenshots won't work here.
+  Can't see images, so screenshots are read with Windows OCR and sent as text.
+  Capture
+  Capture Screenshot
+  Capture screenshot & paste into page
+  Captured - pasting into page...
+  Capturing region...
+  Capturing screenshot...
+  Clear Last Screenshot
+  Clear Screenshot Bundle
+  Clear screenshot bundle
+  Clipper: Step(): display %d to %d.
+  CoCreateFreeThreadedMarshaler
+  CoCreateInstance
+  Couldn't decode the screenshot.
+  Ctrl+Shift+D to capture
+  DisplayStart < 0
+  EnumDisplayMonitors
+  GetCapture
+  GetMonitorInfoW
+  GetWindowDisplayAffinity
+  IAudioCaptureClient unavailable
+  ImIsPowerOfTwo(flags & ImGuiColorEditFlags_DisplayMask_)
+  Instructions sent with every screenshot answer request.
+  Instructions sent with every screenshot answer request. Click the box below and type to edit.
+  Listening... the interviewer (system audio) will appear here. Your own voice is not captured.
+  Mark Region Point (Snip)
+  Minimal is a portrait layout: full-width chat, a one-line status bar, a screenshot strip and four buttons (the rest behind the More menu). Each layout remembers its own window size. Interview and browser mode are unaffected.
+  Monitor 
+  MonitorFromPoint
+  MonitorFromWindow
+  No monitors detected.
+  No readable text found in the screenshot.
+  No screenshots
+  No screenshots - Ctrl+Shift+D to capture
+  No screenshots in bundle.
+  No screenshots in the bundle to paste
+  No screenshots. Press Ctrl+Shift+D first.
+  OCR failed.
+  OCR failed: 
+  OCR found no text in the screenshot(s).
+  OCR must run on a background thread.
+  Open browser mode first, then paste the bundle
+  Paste %d screenshot(s) into the focused element
+  Paste Bundle
+  Pasted screenshot into the page
+  Permanently erases everything on this PC - settings, saved logins, browser data and screenshots - and removes the app. This cannot be undone. Your online account is not affected.
+  Q: [Screenshot]
+  Read screenshots with Windows OCR
+  Reads screenshots directly.
+  Region
+  Region #
+  Region capture failed.
+  Region too small - mark two diagonal corners again.
+  Region: corner 1 marked - press the region hotkey again at the opposite corner
+  Region: corner 2?
+  ReleaseCapture
+  Remove this screenshot
+  Removed last screenshot
+  Removed screenshot - 
+  RtlCaptureContext
+  Save screenshots to disk
+  Screenshot
+  Screenshot #
+  Screenshot area
+  Screenshot bundle is too large to paste in one go
+  Screenshot capture failed.
+  Screenshot is too large for the OCR engine (max 
+  Screenshot limit reached (
+  SetCapture
+  SetWindowDisplayAffinity
+  Snip
+  Solving screenshot with 
+  Specific monitor
+  System audio capture failed: 
+  The provider and model used to answer your screenshots and questions.
+  The screen content below was extracted from the user's screenshot(s) by OCR (the question is in here). Answer it:
+  This permanently removes all Hintlens data from this computer - your settings, saved logins and browser data, and captured screenshots - then uninstalls the app. It cannot be undone. Your online account is left untouched.
+  Typing... | %s (%s) | %d captures
+  Unavailable: Windows has no OCR language installed. Add a language pack in Windows Settings 
+  Vision capability unknown (only Ollama and LM Studio report it). Screenshots are sent as images.
+  When enabled, each answered screenshot (the image plus the AI response) is saved to your account, grouped by session, so you can review it from the web dashboard on any device. Requires sign-in.
+  When enabled, images captured via the Mark Point or Fullscreen Screenshot hotkeys are automatically saved to a local folder so you can review them later.
+  Which display the fullscreen Screenshot hotkey captures. "Active monitor" grabs whichever screen your mouse is on - the smallest, most focused image and fastest to send.
+  Windows has no OCR language installed. Add a language pack in Settings 
+  Windows.Media.Ocr.OcrEngine
+  [DesktopMonitor] Child gone from '%s' 
+  [DesktopMonitor] Gave up placing child on '%s' after %d attempts.
+  [DesktopMonitor] Hollowed child as %ls, PID=%d
+  [DesktopMonitor] Host spawn failed on desktop '%s'
+  [DesktopMonitor] Our desktop: '%s'
+  [DesktopMonitor] Spawn attempt %d on '%s' FAILED.
+  [DesktopMonitor] Spawning child on desktop '%s'
+  [DesktopMonitor] Started monitoring. Shutdown event: %s
+  [font] Texture #%03d: update %d regions, texid=0x%I64X, backend_data=0x%I64X
+  \screenshots
+  capture
+  capture %d %d 0
+  capture_monitor_index
+  capture_monitor_mode
+  capture_screenshot
+  clear_all_screenshots
+  clear_last_screenshot
+  column->IndexWithinEnabledSet <= column->DisplayOrder
+  g.IO.DisplaySize.x >= 0.0f && g.IO.DisplaySize.y >= 0.0f && "Invalid DisplaySize value!"
+  mark_region_point
+  maxScreenshots
+  ocr 
+  ocr %d
+  save_screenshots
+  screenshots: 
+  screenshots: %s
+  text_end_display >= text_begin && text_end_display <= text_end
+
+======================================================================
+CATEGORY: Audio & Speech / WASAPI (134 items)
+======================================================================
+   listening to the interviewer
+  !atlas->Locked && "Cannot use dynamic font size with a locked ImFontAtlas!"
+  ##ivspeech
+  (flags == 1 || (flags & ImGuiSliderFlags_InvalidMask_) == 0) && "Invalid ImGuiSliderFlags flags! Has the legacy 'float power' argument been mistakenly cast to flags? Call function with ImGuiSliderFlags_Logarithmic flags instead."
+  .?AU?$DelegateInvokeHelper@UICoreWebView2AddScriptToExecuteOnDocumentCreatedCompletedHandler@@V<lambda_24649ab322b08a77d3bf98efe08e738a>@@$00JPEB_W@?$DelegateArgTraits@P8ICoreWebView2AddScriptToExecuteOnDocumentCreatedCompletedHandler@@EAAJJPEB_W@Z@Details@WRL@Microsoft@@
+  .?AU?$DelegateInvokeHelper@UICoreWebView2AddScriptToExecuteOnDocumentCreatedCompletedHandler@@V<lambda_6d67d02a3869646b5a54309ce1952db0>@@$00JPEB_W@?$DelegateArgTraits@P8ICoreWebView2AddScriptToExecuteOnDocumentCreatedCompletedHandler@@EAAJJPEB_W@Z@Details@WRL@Microsoft@@
+  .?AU?$DelegateInvokeHelper@UICoreWebView2CallDevToolsProtocolMethodCompletedHandler@@V<lambda_122a3a323a9f4001bd8f8377f5431ac3>@@$00JPEB_W@?$DelegateArgTraits@P8ICoreWebView2CallDevToolsProtocolMethodCompletedHandler@@EAAJJPEB_W@Z@Details@WRL@Microsoft@@
+  .?AU?$DelegateInvokeHelper@UICoreWebView2ClearBrowsingDataCompletedHandler@@V<lambda_6740f0883bf2e6c830cad53c0f8a6c52>@@$00J@?$DelegateArgTraits@P8ICoreWebView2ClearBrowsingDataCompletedHandler@@EAAJJ@Z@Details@WRL@Microsoft@@
+  .?AU?$DelegateInvokeHelper@UICoreWebView2CreateCoreWebView2CompositionControllerCompletedHandler@@V<lambda_3b27e0f26d5bc4adf78f86c469a341b8>@@$00JPEAUICoreWebView2CompositionController@@@?$DelegateArgTraits@P8ICoreWebView2CreateCoreWebView2CompositionControllerCompletedHandler@@EAAJJPEAUICoreWebView2CompositionController@@@Z@Details@WRL@Microsoft@@
+  .?AU?$DelegateInvokeHelper@UICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler@@V<lambda_5dd7ff85a4f81dc5137cad807ee812c4>@@$00JPEAUICoreWebView2Environment@@@?$DelegateArgTraits@P8ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler@@EAAJJPEAUICoreWebView2Environment@@@Z@Details@WRL@Microsoft@@
+  .?AU?$DelegateInvokeHelper@UICoreWebView2CursorChangedEventHandler@@V<lambda_25e2dff3bac96986c9bbca78073744c6>@@$00PEAUICoreWebView2CompositionController@@PEAUIUnknown@@@?$DelegateArgTraits@P8ICoreWebView2CursorChangedEventHandler@@EAAJPEAUICoreWebView2CompositionController@@PEAUIUnknown@@@Z@Details@WRL@Microsoft@@
+  .?AU?$DelegateInvokeHelper@UICoreWebView2DocumentTitleChangedEventHandler@@V<lambda_701dbd22f8b79774862bfa903e8eaf77>@@$00PEAUICoreWebView2@@PEAUIUnknown@@@?$DelegateArgTraits@P8ICoreWebView2DocumentTitleChangedEventHandler@@EAAJPEAUICoreWebView2@@PEAUIUnknown@@@Z@Details@WRL@Microsoft@@
+  .?AU?$DelegateInvokeHelper@UICoreWebView2DownloadStartingEventHandler@@V<lambda_4683be54dcd5697eb5bd5ed7e4f98678>@@$00PEAUICoreWebView2@@PEAUICoreWebView2DownloadStartingEventArgs@@@?$DelegateArgTraits@P8ICoreWebView2DownloadStartingEventHandler@@EAAJPEAUICoreWebView2@@PEAUICoreWebView2DownloadStartingEventArgs@@@Z@Details@WRL@Microsoft@@
+  .?AU?$DelegateInvokeHelper@UICoreWebView2ExecuteScriptCompletedHandler@@V<lambda_d97b79f3f2a5c9727551cea581832c8c>@@$00JPEB_W@?$DelegateArgTraits@P8ICoreWebView2ExecuteScriptCompletedHandler@@EAAJJPEB_W@Z@Details@WRL@Microsoft@@
+  .?AU?$DelegateInvokeHelper@UICoreWebView2HistoryChangedEventHandler@@V<lambda_d8e322d8056891b77a1b7ab11024b2c5>@@$00PEAUICoreWebView2@@PEAUIUnknown@@@?$DelegateArgTraits@P8ICoreWebView2HistoryChangedEventHandler@@EAAJPEAUICoreWebView2@@PEAUIUnknown@@@Z@Details@WRL@Microsoft@@
+  .?AU?$DelegateInvokeHelper@UICoreWebView2NavigationCompletedEventHandler@@V<lambda_19019604280d29f12509db0bfe274b93>@@$00PEAUICoreWebView2@@PEAUICoreWebView2NavigationCompletedEventArgs@@@?$DelegateArgTraits@P8ICoreWebView2NavigationCompletedEventHandler@@EAAJPEAUICoreWebView2@@PEAUICoreWebView2NavigationCompletedEventArgs@@@Z@Details@WRL@Microsoft@@
+  .?AU?$DelegateInvokeHelper@UICoreWebView2NavigationStartingEventHandler@@V<lambda_7e5fdd635670299dea1ef35bad9800ec>@@$00PEAUICoreWebView2@@PEAUICoreWebView2NavigationStartingEventArgs@@@?$DelegateArgTraits@P8ICoreWebView2NavigationStartingEventHandler@@EAAJPEAUICoreWebView2@@PEAUICoreWebView2NavigationStartingEventArgs@@@Z@Details@WRL@Microsoft@@
+  .?AU?$DelegateInvokeHelper@UICoreWebView2NewWindowRequestedEventHandler@@V<lambda_a9e904e2f88d8a64b6dec6903fb97181>@@$00PEAUICoreWebView2@@PEAUICoreWebView2NewWindowRequestedEventArgs@@@?$DelegateArgTraits@P8ICoreWebView2NewWindowRequestedEventHandler@@EAAJPEAUICoreWebView2@@PEAUICoreWebView2NewWindowRequestedEventArgs@@@Z@Details@WRL@Microsoft@@
+  .?AU?$DelegateInvokeHelper@UICoreWebView2PermissionRequestedEventHandler@@V<lambda_e05e6e193b4b6bb70cdbd4207f2969fe>@@$00PEAUICoreWebView2@@PEAUICoreWebView2PermissionRequestedEventArgs@@@?$DelegateArgTraits@P8ICoreWebView2PermissionRequestedEventHandler@@EAAJPEAUICoreWebView2@@PEAUICoreWebView2PermissionRequestedEventArgs@@@Z@Details@WRL@Microsoft@@
+  .?AU?$DelegateInvokeHelper@UICoreWebView2ProcessFailedEventHandler@@V<lambda_ca8226cadeac314d20f89a83fca346db>@@$00PEAUICoreWebView2@@PEAUICoreWebView2ProcessFailedEventArgs@@@?$DelegateArgTraits@P8ICoreWebView2ProcessFailedEventHandler@@EAAJPEAUICoreWebView2@@PEAUICoreWebView2ProcessFailedEventArgs@@@Z@Details@WRL@Microsoft@@
+  .?AU?$DelegateInvokeHelper@UICoreWebView2SourceChangedEventHandler@@V<lambda_b68cfb73bfaf9e9d72670bae82058979>@@$00PEAUICoreWebView2@@PEAUICoreWebView2SourceChangedEventArgs@@@?$DelegateArgTraits@P8ICoreWebView2SourceChangedEventHandler@@EAAJPEAUICoreWebView2@@PEAUICoreWebView2SourceChangedEventArgs@@@Z@Details@WRL@Microsoft@@
+  .?AU?$DelegateInvokeHelper@UICoreWebView2WebResourceRequestedEventHandler@@V<lambda_e00e21bb4e7b984c968cfe01f73ff8ff>@@$00PEAUICoreWebView2@@PEAUICoreWebView2WebResourceRequestedEventArgs@@@?$DelegateArgTraits@P8ICoreWebView2WebResourceRequestedEventHandler@@EAAJPEAUICoreWebView2@@PEAUICoreWebView2WebResourceRequestedEventArgs@@@Z@Details@WRL@Microsoft@@
+  .?AU?$Implements@U?$RuntimeClassFlags@$01@WRL@Microsoft@@UICoreWebView2EnvironmentOptions@@UICoreWebView2EnvironmentOptions2@@UICoreWebView2EnvironmentOptions3@@UICoreWebView2EnvironmentOptions4@@UICoreWebView2EnvironmentOptions5@@UICoreWebView2EnvironmentOptions6@@UICoreWebView2EnvironmentOptions7@@UICoreWebView2EnvironmentOptions8@@@WRL@Microsoft@@
+  .?AU?$ImplementsHelper@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$00$$V@Details@WRL@Microsoft@@
+  .?AU?$ImplementsHelper@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$00UICoreWebView2EnvironmentOptions2@@UICoreWebView2EnvironmentOptions3@@UICoreWebView2EnvironmentOptions4@@UICoreWebView2EnvironmentOptions5@@UICoreWebView2EnvironmentOptions6@@UICoreWebView2EnvironmentOptions7@@UICoreWebView2EnvironmentOptions8@@@Details@WRL@Microsoft@@
+  .?AU?$ImplementsHelper@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$00UICoreWebView2EnvironmentOptions3@@UICoreWebView2EnvironmentOptions4@@UICoreWebView2EnvironmentOptions5@@UICoreWebView2EnvironmentOptions6@@UICoreWebView2EnvironmentOptions7@@UICoreWebView2EnvironmentOptions8@@@Details@WRL@Microsoft@@
+  .?AU?$ImplementsHelper@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$00UICoreWebView2EnvironmentOptions4@@UICoreWebView2EnvironmentOptions5@@UICoreWebView2EnvironmentOptions6@@UICoreWebView2EnvironmentOptions7@@UICoreWebView2EnvironmentOptions8@@@Details@WRL@Microsoft@@
+  .?AU?$ImplementsHelper@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$00UICoreWebView2EnvironmentOptions5@@UICoreWebView2EnvironmentOptions6@@UICoreWebView2EnvironmentOptions7@@UICoreWebView2EnvironmentOptions8@@@Details@WRL@Microsoft@@
+  .?AU?$ImplementsHelper@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$00UICoreWebView2EnvironmentOptions6@@UICoreWebView2EnvironmentOptions7@@UICoreWebView2EnvironmentOptions8@@@Details@WRL@Microsoft@@
+  .?AU?$ImplementsHelper@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$00UICoreWebView2EnvironmentOptions7@@UICoreWebView2EnvironmentOptions8@@@Details@WRL@Microsoft@@
+  .?AU?$ImplementsHelper@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$00UICoreWebView2EnvironmentOptions8@@@Details@WRL@Microsoft@@
+  .?AU?$ImplementsHelper@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$00UICoreWebView2EnvironmentOptions@@UICoreWebView2EnvironmentOptions2@@UICoreWebView2EnvironmentOptions3@@UICoreWebView2EnvironmentOptions4@@UICoreWebView2EnvironmentOptions5@@UICoreWebView2EnvironmentOptions6@@UICoreWebView2EnvironmentOptions7@@UICoreWebView2EnvironmentOptions8@@@Details@WRL@Microsoft@@
+  .?AU?$ImplementsHelper@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$0A@U?$ImplementsMarker@V?$CoreWebView2EnvironmentOptionsBase@P6APEAX_K@Z$1?CoTaskMemAlloc@@YAPEAX0@ZP6AXPEAX@Z$1?CoTaskMemFree@@YAX1@Z@@@Details@23@@Details@WRL@Microsoft@@
+  .?AU?$ImplementsHelper@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$0A@UICoreWebView2AddScriptToExecuteOnDocumentCreatedCompletedHandler@@@Details@WRL@Microsoft@@
+  .?AU?$ImplementsHelper@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$0A@UICoreWebView2CallDevToolsProtocolMethodCompletedHandler@@@Details@WRL@Microsoft@@
+  .?AU?$ImplementsHelper@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$0A@UICoreWebView2ClearBrowsingDataCompletedHandler@@@Details@WRL@Microsoft@@
+  .?AU?$ImplementsHelper@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$0A@UICoreWebView2CreateCoreWebView2CompositionControllerCompletedHandler@@@Details@WRL@Microsoft@@
+  .?AU?$ImplementsHelper@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$0A@UICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler@@@Details@WRL@Microsoft@@
+  .?AU?$ImplementsHelper@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$0A@UICoreWebView2CursorChangedEventHandler@@@Details@WRL@Microsoft@@
+  .?AU?$ImplementsHelper@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$0A@UICoreWebView2DocumentTitleChangedEventHandler@@@Details@WRL@Microsoft@@
+  .?AU?$ImplementsHelper@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$0A@UICoreWebView2DownloadStartingEventHandler@@@Details@WRL@Microsoft@@
+  .?AU?$ImplementsHelper@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$0A@UICoreWebView2ExecuteScriptCompletedHandler@@@Details@WRL@Microsoft@@
+  .?AU?$ImplementsHelper@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$0A@UICoreWebView2HistoryChangedEventHandler@@@Details@WRL@Microsoft@@
+  .?AU?$ImplementsHelper@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$0A@UICoreWebView2NavigationCompletedEventHandler@@@Details@WRL@Microsoft@@
+  .?AU?$ImplementsHelper@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$0A@UICoreWebView2NavigationStartingEventHandler@@@Details@WRL@Microsoft@@
+  .?AU?$ImplementsHelper@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$0A@UICoreWebView2NewWindowRequestedEventHandler@@@Details@WRL@Microsoft@@
+  .?AU?$ImplementsHelper@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$0A@UICoreWebView2PermissionRequestedEventHandler@@@Details@WRL@Microsoft@@
+  .?AU?$ImplementsHelper@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$0A@UICoreWebView2ProcessFailedEventHandler@@@Details@WRL@Microsoft@@
+  .?AU?$ImplementsHelper@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$0A@UICoreWebView2SourceChangedEventHandler@@@Details@WRL@Microsoft@@
+  .?AU?$ImplementsHelper@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$0A@UICoreWebView2WebResourceRequestedEventHandler@@@Details@WRL@Microsoft@@
+  .?AU?$RuntimeClassFlags@$03@WRL@Microsoft@@
+  .?AU?$Selector@U?$ImplementsHelper@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$00$$V@Details@WRL@Microsoft@@U?$ImplementsHelper@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$0A@U?$ImplementsMarker@V?$CoreWebView2EnvironmentOptionsBase@P6APEAX_K@Z$1?CoTaskMemAlloc@@YAPEAX0@ZP6AXPEAX@Z$1?CoTaskMemFree@@YAX1@Z@@@Details@23@@234@@Details@WRL@Microsoft@@
+  .?AU?$Selector@V?$CoreWebView2EnvironmentOptionsBase@P6APEAX_K@Z$1?CoTaskMemAlloc@@YAPEAX0@ZP6AXPEAX@Z$1?CoTaskMemFree@@YAX1@Z@@U?$ImplementsHelper@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$0A@U?$ImplementsMarker@V?$CoreWebView2EnvironmentOptionsBase@P6APEAX_K@Z$1?CoTaskMemAlloc@@YAPEAX0@ZP6AXPEAX@Z$1?CoTaskMemFree@@YAX1@Z@@@Details@23@@Details@WRL@Microsoft@@@Details@WRL@Microsoft@@
+  .?AUImplementsBase@Details@WRL@Microsoft@@
+  .?AV?$RuntimeClass@U?$RuntimeClassFlags@$01@WRL@Microsoft@@UICoreWebView2AddScriptToExecuteOnDocumentCreatedCompletedHandler@@@WRL@Microsoft@@
+  .?AV?$RuntimeClass@U?$RuntimeClassFlags@$01@WRL@Microsoft@@UICoreWebView2CallDevToolsProtocolMethodCompletedHandler@@@WRL@Microsoft@@
+  .?AV?$RuntimeClass@U?$RuntimeClassFlags@$01@WRL@Microsoft@@UICoreWebView2ClearBrowsingDataCompletedHandler@@@WRL@Microsoft@@
+  .?AV?$RuntimeClass@U?$RuntimeClassFlags@$01@WRL@Microsoft@@UICoreWebView2CreateCoreWebView2CompositionControllerCompletedHandler@@@WRL@Microsoft@@
+  .?AV?$RuntimeClass@U?$RuntimeClassFlags@$01@WRL@Microsoft@@UICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler@@@WRL@Microsoft@@
+  .?AV?$RuntimeClass@U?$RuntimeClassFlags@$01@WRL@Microsoft@@UICoreWebView2CursorChangedEventHandler@@@WRL@Microsoft@@
+  .?AV?$RuntimeClass@U?$RuntimeClassFlags@$01@WRL@Microsoft@@UICoreWebView2DocumentTitleChangedEventHandler@@@WRL@Microsoft@@
+  .?AV?$RuntimeClass@U?$RuntimeClassFlags@$01@WRL@Microsoft@@UICoreWebView2DownloadStartingEventHandler@@@WRL@Microsoft@@
+  .?AV?$RuntimeClass@U?$RuntimeClassFlags@$01@WRL@Microsoft@@UICoreWebView2ExecuteScriptCompletedHandler@@@WRL@Microsoft@@
+  .?AV?$RuntimeClass@U?$RuntimeClassFlags@$01@WRL@Microsoft@@UICoreWebView2HistoryChangedEventHandler@@@WRL@Microsoft@@
+  .?AV?$RuntimeClass@U?$RuntimeClassFlags@$01@WRL@Microsoft@@UICoreWebView2NavigationCompletedEventHandler@@@WRL@Microsoft@@
+  .?AV?$RuntimeClass@U?$RuntimeClassFlags@$01@WRL@Microsoft@@UICoreWebView2NavigationStartingEventHandler@@@WRL@Microsoft@@
+  .?AV?$RuntimeClass@U?$RuntimeClassFlags@$01@WRL@Microsoft@@UICoreWebView2NewWindowRequestedEventHandler@@@WRL@Microsoft@@
+  .?AV?$RuntimeClass@U?$RuntimeClassFlags@$01@WRL@Microsoft@@UICoreWebView2PermissionRequestedEventHandler@@@WRL@Microsoft@@
+  .?AV?$RuntimeClass@U?$RuntimeClassFlags@$01@WRL@Microsoft@@UICoreWebView2ProcessFailedEventHandler@@@WRL@Microsoft@@
+  .?AV?$RuntimeClass@U?$RuntimeClassFlags@$01@WRL@Microsoft@@UICoreWebView2SourceChangedEventHandler@@@WRL@Microsoft@@
+  .?AV?$RuntimeClass@U?$RuntimeClassFlags@$01@WRL@Microsoft@@UICoreWebView2WebResourceRequestedEventHandler@@@WRL@Microsoft@@
+  .?AV?$RuntimeClass@U?$RuntimeClassFlags@$01@WRL@Microsoft@@V?$CoreWebView2EnvironmentOptionsBase@P6APEAX_K@Z$1?CoTaskMemAlloc@@YAPEAX0@ZP6AXPEAX@Z$1?CoTaskMemFree@@YAX1@Z@@@WRL@Microsoft@@
+  .?AV?$RuntimeClassBaseT@$01@Details@WRL@Microsoft@@
+  .?AV?$RuntimeClassImpl@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$00$0A@$00UICoreWebView2AddScriptToExecuteOnDocumentCreatedCompletedHandler@@@Details@WRL@Microsoft@@
+  .?AV?$RuntimeClassImpl@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$00$0A@$00UICoreWebView2CallDevToolsProtocolMethodCompletedHandler@@@Details@WRL@Microsoft@@
+  .?AV?$RuntimeClassImpl@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$00$0A@$00UICoreWebView2ClearBrowsingDataCompletedHandler@@@Details@WRL@Microsoft@@
+  .?AV?$RuntimeClassImpl@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$00$0A@$00UICoreWebView2CreateCoreWebView2CompositionControllerCompletedHandler@@@Details@WRL@Microsoft@@
+  .?AV?$RuntimeClassImpl@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$00$0A@$00UICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler@@@Details@WRL@Microsoft@@
+  .?AV?$RuntimeClassImpl@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$00$0A@$00UICoreWebView2CursorChangedEventHandler@@@Details@WRL@Microsoft@@
+  .?AV?$RuntimeClassImpl@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$00$0A@$00UICoreWebView2DocumentTitleChangedEventHandler@@@Details@WRL@Microsoft@@
+  .?AV?$RuntimeClassImpl@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$00$0A@$00UICoreWebView2DownloadStartingEventHandler@@@Details@WRL@Microsoft@@
+  .?AV?$RuntimeClassImpl@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$00$0A@$00UICoreWebView2ExecuteScriptCompletedHandler@@@Details@WRL@Microsoft@@
+  .?AV?$RuntimeClassImpl@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$00$0A@$00UICoreWebView2HistoryChangedEventHandler@@@Details@WRL@Microsoft@@
+  .?AV?$RuntimeClassImpl@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$00$0A@$00UICoreWebView2NavigationCompletedEventHandler@@@Details@WRL@Microsoft@@
+  .?AV?$RuntimeClassImpl@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$00$0A@$00UICoreWebView2NavigationStartingEventHandler@@@Details@WRL@Microsoft@@
+  .?AV?$RuntimeClassImpl@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$00$0A@$00UICoreWebView2NewWindowRequestedEventHandler@@@Details@WRL@Microsoft@@
+  .?AV?$RuntimeClassImpl@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$00$0A@$00UICoreWebView2PermissionRequestedEventHandler@@@Details@WRL@Microsoft@@
+  .?AV?$RuntimeClassImpl@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$00$0A@$00UICoreWebView2ProcessFailedEventHandler@@@Details@WRL@Microsoft@@
+  .?AV?$RuntimeClassImpl@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$00$0A@$00UICoreWebView2SourceChangedEventHandler@@@Details@WRL@Microsoft@@
+  .?AV?$RuntimeClassImpl@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$00$0A@$00UICoreWebView2WebResourceRequestedEventHandler@@@Details@WRL@Microsoft@@
+  .?AV?$RuntimeClassImpl@U?$RuntimeClassFlags@$01@WRL@Microsoft@@$00$0A@$00V?$CoreWebView2EnvironmentOptionsBase@P6APEAX_K@Z$1?CoTaskMemAlloc@@YAPEAX0@ZP6AXPEAX@Z$1?CoTaskMemFree@@YAX1@Z@@@Details@WRL@Microsoft@@
+  .?AVDontUseNewUseMake@Details@WRL@Microsoft@@
+  .?AVRuntimeClassBase@Details@WRL@Microsoft@@
+  /ws/transcribe?source=system
+  <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0"><trustInfo xmlns="urn:schemas-microsoft-com:asm.v3"><security><requestedPrivileges><requestedExecutionLevel level="requireAdministrator" uiAccess="false"></requestedExecutionLevel></requestedPrivileges></security></trustInfo><compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1"><application><supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"></supportedOS></application></compatibility></assembly>
+  Answers appear here automatically when the interviewer finishes a question (or press AI Help). Screenshots in the bundle are attached for coding questions.
+  Audio stream start failed
+  Could not bind loopback port
+  IAudioCaptureClient unavailable
+  IAudioClient activate failed
+  IAudioClient initialize failed
+  Interviewer
+  Interviewer stream lost: 
+  Listening... the interviewer (system audio) will appear here. Your own voice is not captured.
+  Listening... the interviewer's speech appears here.
+  Make sure the Microsoft Edge WebView2 Runtime is installed, then try again.
+  Microsoft.MSEdgeWebView.Loader
+  Microsoft.WebView2Runtime.Beta_8wekyb3d8bbwe
+  Microsoft.WebView2Runtime.Canary_8wekyb3d8bbwe
+  Microsoft.WebView2Runtime.Dev_8wekyb3d8bbwe
+  Microsoft.WebView2Runtime.Internal_8wekyb3d8bbwe
+  Microsoft.WebView2Runtime.Stable_8wekyb3d8bbwe
+  MicrosoftEdgeWebview2Setup.exe
+  Multilingual interviews require Pro or Premium - the %s plan transcribes English only. Upgrade from the web dashboard.
+  No default microphone
+  RendererHasTextures == false && "Not supported for dynamic atlases, but you may call Clear()."
+  SOFTWARE\Microsoft\Cryptography
+  SOFTWARE\Microsoft\EdgeUpdate\ClientState\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}
+  Semicolon
+  Software\Microsoft\EdgeUpdate\ClientState\
+  Software\Microsoft\EdgeUpdate\Clients\{56EB18F8-B008-4CBD-B6D2-8C97FE7E9062}
+  Software\Policies\Microsoft\Edge\WebView2\
+  Software\Policies\Microsoft\Edge\WebView2\DowngradeVersion
+  Speech
+  Speech language applies when the next session starts
+  Start a session to begin live transcription of the interviewer's audio.
+  Start a session to transcribe the interviewer.
+  System audio capture failed: 
+  WebView2: Failed to find an installed WebView2 runtime or non-stable Microsoft Edge installation.
+  [interviewer: live]
+  [interviewer: off]
+  `dynamic atexit destructor for '
+  `dynamic initializer for '
+  https://go.microsoft.com/fwlink/p/?LinkId=2124703
+
+======================================================================
+CATEGORY: AI Models & Providers (73 items)
+======================================================================
+   Billing to unlock premium models, longer interviews, and more.
+   model(s).
+   on /v1/models.
+   plan includes fast models (Groq + Gemini Flash). Locked entries show the plan that unlocks them - upgrade from the web dashboard 
+   returned no text. If you sent a screenshot, make sure this is a VISION model (e.g. llava, qwen2.5-vl, gemma3, minicpm-v) - text-only models can't read images.
+   start Ollama or LM Studio, then try again.
+  "models"
+  ##local_model
+  ##set_model
+  ##set_provider
+  , but it has no models. Pull one first (e.g. `ollama pull llava`).
+  /api/v0/models
+  /v1/models
+  API Error: No local model selected (Settings 
+  Answer with your own model instead of the cloud. Works with Ollama, LM Studio, llama.cpp and vLLM. Nothing reaches Hintlens' servers, answers aren't saved to your history, and it keeps working with no internet once you've signed in on this PC.
+  Best results come from a vision model - llava, qwen2.5-vl, gemma3 or minicpm-v - which reads the screenshot itself.
+  ChatGPT
+  Claude
+  Claude models require the Pro plan - every other model is included in your 
+  Connect first to list the models you have installed.
+  Cycle AI Model
+  Cycle AI Provider
+  DeepSeek
+  Detect scans Ollama 11434, LM Studio 1234, llama.cpp 8080, vLLM 8000. Connect uses exactly what you typed above.
+  Gemini
+  GetClassLongPtrW
+  GetCurrentApplicationUserModelId
+  GetCurrentProcessExplicitAppUserModelID
+  GetWindowLongPtrW
+  Local models are a 
+  Model
+  Model set to 
+  Model switched to 
+  Model: 
+  No local model server found on 
+  Offline - switch to your local model
+  Ollama
+  Provider
+  Provider switched to 
+  Provider: 
+  Provider: Local (
+  Runs on this PC, nothing is uploaded. Good for text questions and MCQs; diagrams and handwriting still need a vision model.
+  SetWindowLongPtrW
+  Text-only models
+  The provider and model used to answer your screenshots and questions.
+  Use this model
+  Vision capability unknown (only Ollama and LM Studio report it). Screenshots are sent as images.
+  You're offline. Cloud providers need internet - switch the provider to Local (Ctrl+Shift+P) to answer with the model on this PC.
+  [LocalLLM] %s:%d -> runtime='%s', %d model(s)
+  api-ms-win-appmodel-runtime-l1-1-2
+  claude-haiku-4-5
+  claude-opus-5-5
+  claude-sonnet-5
+  deepseek-flash
+  gemini-3.1-pro-preview
+  gemini-3.5-flash
+  gemini-3.8-flash
+  gpt-4.1
+  gpt-6-sol
+  https://chatgpt.com/
+  https://claude.ai/new
+  https://gemini.google.com/
+  llama.cpp
+  mllama
+  model
+  model 
+  model %s
+  openai/gpt-oss-120b
+  premiumModels
+  provider
+  qwen/qwen3.8-27b
+  switch_model
+  switch_provider
+
+======================================================================
+CATEGORY: Auto-Type & Human Typing (102 items)
+======================================================================
+    The auto-typer is a paid feature - upgrade from the web dashboard 
+   Type
+   Type Descriptor'
+   stopping to avoid typing into wrong window
+  !(var_info->DataType == ImGuiDataType_Float && var_info->Count == 1) && "Calling PushStyleVar() variant with wrong type!"
+  "subtype": 
+  %d WPM
+  (function(){try{if(window.chrome&&window.chrome.webview){try{delete window.chrome.webview}catch(e){}if(window.chrome.webview){try{Object.defineProperty(window.chrome,'webview',{value:undefined,writable:false,configurable:false,enumerable:false})}catch(e){}}}if(navigator.userAgentData){var ua=navigator.userAgentData;var f=function(a){return a.filter(function(b){return b.brand.indexOf('WebView2')===-1})};try{var fb=Object.freeze(f(ua.brands));Object.defineProperty(ua,'brands',{get:function(){return fb},configurable:false,enumerable:true})}catch(e){}if(ua.getHighEntropyValues){var gh=ua.getHighEntropyValues.bind(ua);try{Object.defineProperty(ua,'getHighEntropyValues',{value:function(h){return gh(h).then(function(v){if(v.brands)v.brands=f(v.brands);if(v.fullVersionList)v.fullVersionList=f(v.fullVersionList);return v})},writable:false,configurable:false})}catch(e){}}try{Object.defineProperty(ua,'toJSON',{value:function(){return{brands:fb,mobile:ua.mobile,platform:ua.platform}},writable:false,configurable:false})}catch(e){}}var wp=Window.prototype;try{var dw=Object.getOwnPropertyDescriptor(wp,'outerWidth');if(dw)Object.defineProperty(wp,'outerWidth',{get:function(){return this.innerWidth+16},enumerable:dw.enumerable,configurable:true})}catch(e){}try{var dh=Object.getOwnPropertyDescriptor(wp,'outerHeight');if(dh)Object.defineProperty(wp,'outerHeight',{get:function(){return this.innerHeight+89},enumerable:dh.enumerable,configurable:true})}catch(e){}}catch(e){}})();
+  (function(){var b=function(e){var t=e.target;if(t&&t.tagName==='INPUT'&&(t.type||'').toLowerCase()==='file'){e.preventDefault();e.stopImmediatePropagation();}};document.addEventListener('click',b,true);try{var p=HTMLInputElement.prototype,s=p.showPicker;if(s){p.showPicker=function(){if((this.type||'').toLowerCase()==='file')return;return s.apply(this,arguments);};}}catch(_){}})();
+  (var_info->DataType == ImGuiDataType_Float && var_info->Count == 2) && "Calling PushStyleVar() variant with wrong type!"
+  .?AUmarshaler@?1??make_marshaler@impl@winrt@@YAHPEAUtype@?$abi@UIUnknown@Foundation@Windows@winrt@@X@23@PEAPEAX@Z@
+  .?AUtype@?$abi@U?$AsyncOperationCompletedHandler@I@Foundation@Windows@winrt@@X@impl@winrt@@
+  .?AUtype@?$abi@U?$AsyncOperationCompletedHandler@UBitmapDecoder@Imaging@Graphics@Windows@winrt@@@Foundation@Windows@winrt@@X@impl@winrt@@
+  .?AUtype@?$abi@U?$AsyncOperationCompletedHandler@UOcrResult@Ocr@Media@Windows@winrt@@@Foundation@Windows@winrt@@X@impl@winrt@@
+  .?AUtype@?$abi@U?$AsyncOperationCompletedHandler@USoftwareBitmap@Imaging@Graphics@Windows@winrt@@@Foundation@Windows@winrt@@X@impl@winrt@@
+  .?AUtype@?$abi@U?$AsyncOperationCompletedHandler@_N@Foundation@Windows@winrt@@X@impl@winrt@@
+  .?AUtype@?$abi@UIUnknown@Foundation@Windows@winrt@@X@impl@winrt@@
+  .?AVtype_error@detail@json_abi_v3_12_0@nlohmann@@
+  .?AVtype_info@@
+  ;var dt=new DataTransfer();for(var i=0;i<imgs.length;i++){var bs=atob(imgs[i]);var arr=new Uint8Array(bs.length);for(var j=0;j<bs.length;j++)arr[j]=bs.charCodeAt(j);var blob=new Blob([arr],{type:'image/png'});dt.items.add(new File([blob],'screenshot-'+(i+1)+'.png',{type:'image/png'}));}var fi=document.querySelector('input[type=file]');if(fi){fi.files=dt.files;fi.dispatchEvent(new Event('change',{bubbles:true}));}else{var el=document.activeElement||document.body;el.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:dt}));}if(note){var el2=document.activeElement;if(el2&&(el2.tagName=='TEXTAREA'||el2.tagName=='INPUT')){var st=el2.selectionStart==null?el2.value.length:el2.selectionStart;el2.value=el2.value.slice(0,st)+note+el2.value.slice(st);el2.dispatchEvent(new Event('input',{bubbles:true}));}else if(el2&&el2.isContentEditable){document.execCommand('insertText',false,note);}}return 'ok';}catch(e){return 'error: '+e.message;}})();
+  <!doctype html><html><head><meta charset='utf-8'><title>Hintlens</title><style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0a0c12;background-image:radial-gradient(640px 420px at 18% 8%,rgba(24,104,219,.18),transparent 60%),radial-gradient(640px 420px at 85% 92%,rgba(191,99,243,.14),transparent 60%);font-family:'Segoe UI',system-ui,sans-serif;color:#e8eaf2}.card{text-align:center;padding:56px 64px;border-radius:20px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.09);box-shadow:0 24px 60px rgba(0,0,0,.45);animation:in .5s ease}.brand{font-size:14px;font-weight:700;letter-spacing:.35em;text-transform:uppercase;background:linear-gradient(90deg,#5ea2ff,#bf63f3);-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:28px}h1{font-size:22px;font-weight:600;margin:0 0 8px}p{font-size:14px;color:#9aa1b5;margin:0}.hint{margin-top:18px;font-size:12px;color:#6b7286}.badge{width:64px;height:64px;margin:0 auto 24px;border-radius:50%;display:flex;align-items:center;justify-content:center;animation:pop .45s cubic-bezier(.2,1.4,.4,1)}.spin{width:44px;height:44px;margin:0 auto 22px;border-radius:50%;border:3px solid rgba(255,255,255,.12);border-top-color:#5ea2ff;animation:rot 1s linear infinite}@keyframes rot{to{transform:rotate(360deg)}}@keyframes pop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}@keyframes draw{to{stroke-dashoffset:0}}@keyframes in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}</style></head><body><div class='card'><div class='brand'>Hintlens</div><div class='badge' style='background:linear-gradient(135deg,#16a34a,#22c55e);box-shadow:0 10px 30px rgba(34,197,94,.35)'><svg width='30' height='30' viewBox='0 0 24 24' fill='none'><path d='M4 12.5l5 5L20 6.5' stroke='#fff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' style='stroke-dasharray:30;stroke-dashoffset:30;animation:draw .5s .25s ease forwards'/></svg></div><h1>You&#8217;re signed in</h1><p>Head back to the Hintlens app &#8212; it&#8217;s ready for you.</p><div class='hint'>This window will try to close itself.</div></div><script>setTimeout(function(){window.close();},2200);</script></body></html>
+  <!doctype html><html><head><meta charset='utf-8'><title>Hintlens</title><style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0a0c12;background-image:radial-gradient(640px 420px at 18% 8%,rgba(24,104,219,.18),transparent 60%),radial-gradient(640px 420px at 85% 92%,rgba(191,99,243,.14),transparent 60%);font-family:'Segoe UI',system-ui,sans-serif;color:#e8eaf2}.card{text-align:center;padding:56px 64px;border-radius:20px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.09);box-shadow:0 24px 60px rgba(0,0,0,.45);animation:in .5s ease}.brand{font-size:14px;font-weight:700;letter-spacing:.35em;text-transform:uppercase;background:linear-gradient(90deg,#5ea2ff,#bf63f3);-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:28px}h1{font-size:22px;font-weight:600;margin:0 0 8px}p{font-size:14px;color:#9aa1b5;margin:0}.hint{margin-top:18px;font-size:12px;color:#6b7286}.badge{width:64px;height:64px;margin:0 auto 24px;border-radius:50%;display:flex;align-items:center;justify-content:center;animation:pop .45s cubic-bezier(.2,1.4,.4,1)}.spin{width:44px;height:44px;margin:0 auto 22px;border-radius:50%;border:3px solid rgba(255,255,255,.12);border-top-color:#5ea2ff;animation:rot 1s linear infinite}@keyframes rot{to{transform:rotate(360deg)}}@keyframes pop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}@keyframes draw{to{stroke-dashoffset:0}}@keyframes in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}</style></head><body><div class='card'><div class='brand'>Hintlens</div><div class='badge' style='background:linear-gradient(135deg,#b91c1c,#ef4444);box-shadow:0 10px 30px rgba(239,68,68,.35)'><svg width='26' height='26' viewBox='0 0 24 24' fill='none'><path d='M6 6l12 12M18 6L6 18' stroke='#fff' stroke-width='3' stroke-linecap='round'/></svg></div><h1>Sign-in failed</h1><p>Close this window and try again from the Hintlens app.</p></div></body></html>
+  <!doctype html><html><head><meta charset='utf-8'><title>Hintlens</title><style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0a0c12;background-image:radial-gradient(640px 420px at 18% 8%,rgba(24,104,219,.18),transparent 60%),radial-gradient(640px 420px at 85% 92%,rgba(191,99,243,.14),transparent 60%);font-family:'Segoe UI',system-ui,sans-serif;color:#e8eaf2}.card{text-align:center;padding:56px 64px;border-radius:20px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.09);box-shadow:0 24px 60px rgba(0,0,0,.45);animation:in .5s ease}.brand{font-size:14px;font-weight:700;letter-spacing:.35em;text-transform:uppercase;background:linear-gradient(90deg,#5ea2ff,#bf63f3);-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:28px}h1{font-size:22px;font-weight:600;margin:0 0 8px}p{font-size:14px;color:#9aa1b5;margin:0}.hint{margin-top:18px;font-size:12px;color:#6b7286}.badge{width:64px;height:64px;margin:0 auto 24px;border-radius:50%;display:flex;align-items:center;justify-content:center;animation:pop .45s cubic-bezier(.2,1.4,.4,1)}.spin{width:44px;height:44px;margin:0 auto 22px;border-radius:50%;border:3px solid rgba(255,255,255,.12);border-top-color:#5ea2ff;animation:rot 1s linear infinite}@keyframes rot{to{transform:rotate(360deg)}}@keyframes pop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}@keyframes draw{to{stroke-dashoffset:0}}@keyframes in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}</style></head><body><div class='card'><div class='brand'>Hintlens</div><div class='spin'></div><h1>Completing sign-in&#8230;</h1><p>Just a moment.</p></div><script>var h=location.hash?location.hash.substring(1):'';if(h){location.replace('/done?'+h);}else{document.querySelector('h1').textContent='No token received.';document.querySelector('p').textContent='You can close this window and try again from Hintlens.';}</script></body></html>
+  <!doctype html><title>Hintlens</title>OK
+  A keyboard-free way to fire the main actions - useful when typing hotkeys is risky. Hold the trigger button to pop a wheel at the cursor, move toward an action, and release to run it. Release in the center to cancel.
+  Auto-typer
+  Calling PushStyleVar() variant with wrong type!
+  Content-Type: application/json
+  Content-Type: text/html; charset=utf-8
+  D$8type
+  D:\New Folder (2)\native\imgui\imstb_truetype.h
+  Detect scans Ollama 11434, LM Studio 1234, llama.cpp 8080, vLLM 8000. Connect uses exactly what you typed above.
+  FindSettingsHandler(handler->TypeName) == 0
+  GetFileType
+  GetStringTypeW
+  How often it makes and fixes human-like typos/slips. 0% types flawlessly; higher adds more slips and corrections.
+  How the Type hotkey enters an answer into the focused app. Pick a preset, or fine-tune the pace and how human the typing looks. Changes apply to the next Type.
+  ImIsPowerOfTwo(flags & ImGuiInputFlags_RouteTypeMask_)
+  Instructions sent with every screenshot answer request. Click the box below and type to edit.
+  Keystroke-to-keystroke timing variation (log-normal, like real typing). 0% is metronome-steady; higher makes the rhythm more uneven.
+  No AI answer to type yet.
+  Primary text color of the overlay - chat text, headers and answers - for each theme. Drag the wheel or type a hex code; changes apply live.
+  Resuming typing...
+  SendInput
+  Stop Type
+  Stop Typing
+  Thinking pauses at words, punctuation and new lines. 0% types straight through; higher adds more hesitation.
+  Type
+  Type (Restart)
+  Type / Auto-type Answer
+  Type this answer again from the beginning
+  Typing
+  Typing cancelled
+  Typing complete
+  Typing pace in words per minute. The real speed varies a little around this so it never looks mechanical.
+  Typing paused
+  Typing simulator isn't included in the 
+  Typing simulator requires a paid plan - upgrade from the web dashboard.
+  Typing simulator requires a paid plan.
+  Typing...
+  Typing... | 
+  Typing... | %s (%s) | %d captures
+  [CODE] Typing...
+  [TEXT] Typing...
+  [TYPING] Cancelled.
+  [TYPING] Paused - press Type to resume, or Restart to start over.
+  [TYPING] Resuming
+  [TypeSim] Focus drifted 
+  [TypingSim] Fullscreen target 
+  ],"subtype":
+  _set_app_type
+  `typeof'
+  char_traits<char_type>::to_char_type(current) == literal_text[0]
+  data_type == ImGuiDataType_Float || data_type == ImGuiDataType_Double
+  data_type >= 0 && data_type < ImGuiDataType_COUNT
+  incompatible ReferenceType for get_ref, actual type is 
+  last - first >= 2 + (-kMinExp - 1) + std::numeric_limits<FloatType>::max_digits10
+  last - first >= std::numeric_limits<FloatType>::max_digits10
+  last - first >= std::numeric_limits<FloatType>::max_digits10 + 6
+  len <= std::numeric_limits<FloatType>::max_digits10
+  m_data.m_type != value_t::array || m_data.m_value.array != nullptr
+  m_data.m_type != value_t::binary || m_data.m_value.binary != nullptr
+  m_data.m_type != value_t::object || m_data.m_value.object != nullptr
+  m_data.m_type != value_t::string || m_data.m_value.string != nullptr
+  stb_truetype
+  strlen(type) < ((int)(sizeof(payload.DataType) / sizeof(*(payload.DataType)))) && "Payload type can be at most 32 characters long"
+  type
+  type != 0
+  type must be boolean, but is 
+  type must be number, but is 
+  type must be string, but is 
+  type_error
+  type_simulate
+  typing
+  typing %d %d %d
+  typingSimulator
+  typing_jitter
+  typing_mistakes
+  typing_pauses
+  typing_wpm
+  typingp
+  typingp %d 0 0
+
+======================================================================
+CATEGORY: Auth, Login, Tokens & Subscriptions (83 items)
+======================================================================
+    The auto-typer is a paid feature - upgrade from the web dashboard 
+   RDP session
+   Start Session
+   attempting token elevation via winlogon
+   feature. Upgrade from the web dashboard 
+   plan
+   plan (
+   plan - upgrade from the web dashboard 
+   plan includes fast models (Groq + Gemini Flash). Locked entries show the plan that unlocks them - upgrade from the web dashboard 
+   plan sends up to 
+   plan.
+   plan. Upgrade from the web dashboard 
+   screenshot(s) per answer. Get the answer, remove one, or upgrade.
+   upgrade from the web dashboard for more.
+  ##login_email
+  ##login_pwd
+  ##loginpanel
+  &token=
+  ). Remove a device in the Hintlens dashboard, or upgrade, then retry.
+  /api/v1/auth/google/url?redirect=%s
+  /api/v1/auth/login
+  /api/v1/auth/refresh
+  0!token_string.empty()
+  <!doctype html><html><head><meta charset='utf-8'><title>Hintlens</title><style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0a0c12;background-image:radial-gradient(640px 420px at 18% 8%,rgba(24,104,219,.18),transparent 60%),radial-gradient(640px 420px at 85% 92%,rgba(191,99,243,.14),transparent 60%);font-family:'Segoe UI',system-ui,sans-serif;color:#e8eaf2}.card{text-align:center;padding:56px 64px;border-radius:20px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.09);box-shadow:0 24px 60px rgba(0,0,0,.45);animation:in .5s ease}.brand{font-size:14px;font-weight:700;letter-spacing:.35em;text-transform:uppercase;background:linear-gradient(90deg,#5ea2ff,#bf63f3);-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:28px}h1{font-size:22px;font-weight:600;margin:0 0 8px}p{font-size:14px;color:#9aa1b5;margin:0}.hint{margin-top:18px;font-size:12px;color:#6b7286}.badge{width:64px;height:64px;margin:0 auto 24px;border-radius:50%;display:flex;align-items:center;justify-content:center;animation:pop .45s cubic-bezier(.2,1.4,.4,1)}.spin{width:44px;height:44px;margin:0 auto 22px;border-radius:50%;border:3px solid rgba(255,255,255,.12);border-top-color:#5ea2ff;animation:rot 1s linear infinite}@keyframes rot{to{transform:rotate(360deg)}}@keyframes pop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}@keyframes draw{to{stroke-dashoffset:0}}@keyframes in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}</style></head><body><div class='card'><div class='brand'>Hintlens</div><div class='spin'></div><h1>Completing sign-in&#8230;</h1><p>Just a moment.</p></div><script>var h=location.hash?location.hash.substring(1):'';if(h){location.replace('/done?'+h);}else{document.querySelector('h1').textContent='No token received.';document.querySelector('p').textContent='You can close this window and try again from Hintlens.';}</script></body></html>
+  Analyse the provided screenshot(s) or question and provide the correct answer. For MCQs, give the correct option with a brief explanation if helpful. For coding/debugging, return the complete correct code. For descriptive questions, provide a clear and accurate answer.
+  Authorization: Bearer 
+  Browser mode time included in the %s plan. Upgrade for unlimited access.
+  Browser mode time is used up for today on the Free plan - upgrade for unlimited browser access
+  Claude models require the Pro plan - every other model is included in your 
+  Clears the in-overlay browser's cookies, cache and saved logins - you'll be signed out of every site there. The app and your Hintlens account are not affected.
+  CreateUIAccessToken FAILED (err=%lu) 
+  DuplicateTokenEx
+  GetSidSubAuthority
+  GetSidSubAuthorityCount
+  GetTokenInformation
+  Hintlens session
+  Hintlens-Auth/1.0
+  Hintlens-session-v1
+  Interview time is used up for %s on the %s plan 
+  Interview transcription time included in the %s plan. Upgrade from the web dashboard for more.
+  Malformed session from server
+  Multilingual interviews require Pro or Premium - the %s plan transcribes English only. Upgrade from the web dashboard.
+  OpenProcessToken
+  Permanently erases everything on this PC - settings, saved logins, browser data and screenshots - and removes the app. This cannot be undone. Your online account is not affected.
+  Plan
+  Respawning with UIAccess token: %ls
+  Restoring your session
+  Session stopped
+  SetThreadToken
+  SetTokenInformation
+  Signing in%.*s  (a browser may open for Google)
+  Speech language applies when the next session starts
+  Start Session
+  Start a session to begin live transcription of the interviewer's audio.
+  Start a session to begin transcribing
+  Start a session to transcribe the interviewer.
+  Stop Session
+  This permanently removes all Hintlens data from this computer - your settings, saved logins and browser data, and captured screenshots - then uninstalls the app. It cannot be undone. Your online account is left untouched.
+  Typing simulator requires a paid plan - upgrade from the web dashboard.
+  Typing simulator requires a paid plan.
+  Upgrade
+  Upgrade from the web dashboard 
+  WINHTTP_OPTION_UPGRADE_TO_WEB_SOCKET failed
+  When enabled, each answered screenshot (the image plus the AI response) is saved to your account, grouped by session, so you can review it from the web dashboard on any device. Requires sign-in.
+  WinHttpWebSocketCompleteUpgrade
+  WinHttpWebSocketCompleteUpgrade failed
+  You're signed in on the maximum number of devices for your plan. Remove a device in the Hintlens dashboard, or upgrade, then retry.
+  [Logos] Failed to decode login logo
+  [Logos] Loaded login logo (%dx%d)
+  [RdpWrapper] Tier 1 active 
+  [RdpWrapper] Tier 2 active 
+  [RdpWrapper] Tier 3 active 
+  \plan.json
+  \session.json
+  access_token
+  device_id
+  endptr == token_buffer.data() + token_buffer.size()
+  plan
+  refresh_token
+  session-%04d%02d%02d-%02d%02d%02d
+  session_id
+  this plan period
+  unknown token
+
+======================================================================
+CATEGORY: Stealth & Proctoring (Window Protection, Z-order, Hooks) (14 items)
+======================================================================
+   falling back to z-order thread
+  (size & 1) == 0 && "GlyphExcludeRanges[] size must be multiple of two!"
+  (size <= 64) && "GlyphExcludeRanges[] size must be small!"
+  /api/v1/stealth/targets
+  CallNextHookEx
+  GetWindowDisplayAffinity
+  SetWinEventHook
+  SetWindowDisplayAffinity
+  SetWindowsHookExW
+  Stealth
+  Toggle Stealth Mode
+  UnhookWinEvent
+  UnhookWindowsHookEx
+  stealth_mode
+
+======================================================================
+CATEGORY: UI Elements, Buttons, Tooltips & Labels (0 items)
+======================================================================
+
+======================================================================
+CATEGORY: API Endpoints & Network URLs (36 items)
+======================================================================
+   on /v1/models.
+  "/api/v1/billing/subscription
+  /api/show
+  /api/tags
+  /api/v0/models
+  /api/v1/ai/stream
+  /api/v1/auth/google/url?redirect=%s
+  /api/v1/auth/login
+  /api/v1/auth/refresh
+  /api/v1/devices/claim
+  /api/v1/history
+  /api/v1/interview/answer
+  /api/v1/settings
+  /api/v1/stealth/targets
+  /api/v1/version/check?v=
+  /api/version
+  /v1/chat/completions
+  /v1/models
+  Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" | Where-Object { $_.CommandLine -like '*\Hintlens\browser*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+  api.hintlens.com
+  http://
+  http://*
+  http://127.0.0.1:
+  https://
+  https://*
+  https://chatgpt.com/
+  https://claude.ai/new
+  https://duckduckgo.com/?q=
+  https://gemini.google.com/
+  https://github.com/ocornut/imgui/blob/master/docs/FAQ.md#qa-usage
+  https://go.microsoft.com/fwlink/p/?LinkId=2124703
+  https://hintlens.com/dashboard/account
+  https://www.bing.com/search?q=
+  https://www.google.com
+  https://www.google.com/search?q=
+  name@company.com
+
+======================================================================
+CATEGORY: Data & Storage (Sessions, History, Cache, Deletion) (0 items)
+======================================================================

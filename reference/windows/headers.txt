@@ -1,0 +1,863 @@
+
+/Users/vivek/new repo/LensDesk2.0/reference/windows/TiWorker.exe:	file format coff-x86-64
+Characteristics 0x22
+	executable
+	large address aware
+
+Time/Date               Mon Oct  5 05:44:45 2026
+Magic                   020b	(PE32+)
+MajorLinkerVersion      14
+MinorLinkerVersion      29
+SizeOfCode              0000000000124000
+SizeOfInitializedData   00000000000e9200
+SizeOfUninitializedData 0000000000000000
+AddressOfEntryPoint     000000000011adc0
+BaseOfCode              0000000000001000
+ImageBase               0000000140000000
+SectionAlignment        00001000
+FileAlignment           00000200
+MajorOSystemVersion     6
+MinorOSystemVersion     0
+MajorImageVersion       0
+MinorImageVersion       0
+MajorSubsystemVersion   6
+MinorSubsystemVersion   0
+Win32Version            00000000
+SizeOfImage             00210000
+SizeOfHeaders           00000400
+CheckSum                00000000
+Subsystem               00000002	(Windows GUI)
+DllCharacteristics      00008160
+					HIGH_ENTROPY_VA
+					DYNAMIC_BASE
+					NX_COMPAT
+					TERMINAL_SERVER_AWARE
+SizeOfStackReserve      0000000000100000
+SizeOfStackCommit       0000000000001000
+SizeOfHeapReserve       0000000000100000
+SizeOfHeapCommit        0000000000001000
+LoaderFlags             00000000
+NumberOfRvaAndSizes     00000010
+
+The Data Directory
+Entry 0 0000000000000000 00000000 Export Directory [.edata (or where ever we found it)]
+Entry 1 00000000001efe88 000004b0 Import Directory [parts of .idata]
+Entry 2 000000000020e000 00000288 Resource Directory [.rsrc]
+Entry 3 0000000000203000 0000afc8 Exception Directory [.pdata]
+Entry 4 0000000000000000 00000000 Security Directory
+Entry 5 000000000020f000 00000bf4 Base Relocation Directory [.reloc]
+Entry 6 00000000001d0624 0000001c Debug Directory
+Entry 7 0000000000000000 00000000 Description Directory
+Entry 8 0000000000000000 00000000 Special Directory
+Entry 9 00000000001d0780 00000028 Thread Storage Directory [.tls]
+Entry a 00000000001d0640 00000138 Load Configuration Directory
+Entry b 0000000000000000 00000000 Bound Import Directory
+Entry c 0000000000125000 00001170 Import Address Table Directory
+Entry d 0000000000000000 00000000 Delay Import Directory
+Entry e 0000000000000000 00000000 CLR Runtime Header
+Entry f 0000000000000000 00000000 Reserved
+TLS directory:
+  StartAddressOfRawData: 0x000001401d95a8
+  EndAddressOfRawData: 0x000001401d95b0
+  AddressOfIndex: 0x00000140202c88
+  AddressOfCallBacks: 0x000001401263e0
+  SizeOfZeroFill: 0
+  Characteristics: 3145728
+  Alignment: 4
+
+
+The Import Tables:
+  lookup 001f0740 time 00000000 fwd 00000000 name 001f1a7e addr 00125408
+
+    DLL Name: USER32.dll
+    Hint/Ord  Name
+         671  OpenDesktopW
+         232  EmptyClipboard
+         310  GetClipboardData
+         804  SetClipboardData
+          79  CloseClipboard
+         669  OpenClipboard
+         254  EnumDisplayMonitors
+         655  MonitorFromPoint
+         266  EnumWindows
+         481  GetWindowDisplayAffinity
+         395  GetMonitorInfoW
+         657  MonitorFromWindow
+         764  ReleaseDC
+         322  GetDC
+         964  UpdateLayeredWindow
+         359  GetKeyNameTextW
+         345  GetGUIThreadInfo
+         504  GetWindowThreadProcessId
+         638  MapVirtualKeyW
+         786  SendInput
+         983  VkKeyScanW
+         472  GetUserObjectInformationW
+         460  GetThreadDesktop
+         673  OpenInputDesktop
+         286  GetAncestor
+          89  CopyIcon
+         175  DestroyCursor
+          31  CallNextHookEx
+         946  UnhookWindowsHookEx
+         934  TrackMouseEvent
+          77  ClientToScreen
+         892  SetWindowRgn
+         503  GetWindowTextW
+         344  GetForegroundWindow
+         932  ToUnicode
+         360  GetKeyState
+         808  SetCursor
+         810  SetCursorPos
+         390  GetMessageExtraInfo
+         293  GetCapture
+         796  SetCapture
+         763  ReleaseCapture
+         588  IsWindowUnicode
+         361  GetKeyboardLayout
+         967  UpdateWindow
+         909  ShowWindow
+         118  CreateWindowExW
+         734  RegisterClassExW
+         167  DefWindowProcW
+         688  PostQuitMessage
+         475  GetWindow
+         573  IsRectEmpty
+         545  IntersectRect
+         891  SetWindowPos
+         690  PostThreadMessageW
+         393  GetMessageW
+         944  UnhookWinEvent
+         879  SetWinEventHook
+         888  SetWindowLongPtrW
+         488  GetWindowLongPtrW
+         697  PtInRect
+         777  ScreenToClient
+         321  GetCursorPos
+         496  GetWindowRect
+         307  GetClientRect
+         901  SetWindowsHookExW
+         455  GetSystemMetrics
+         592  KillTimer
+         875  SetTimer
+         660  MsgWaitForMultipleObjectsEx
+         289  GetAsyncKeyState
+         589  IsWindowVisible
+         830  SetLayeredWindowAttributes
+         181  DestroyWindow
+         583  IsWindow
+         952  UnregisterClassW
+         687  PostMessageW
+         683  PeekMessageW
+         189  DispatchMessageW
+         941  TranslateMessage
+         762  RegisterWindowMessageW
+          80  CloseDesktop
+         871  SetThreadDesktop
+         600  LoadCursorW
+
+  lookup 001f0430 time 00000000 fwd 00000000 name 001f1b2c addr 001250f8
+
+    DLL Name: GDI32.dll
+    Hint/Ord  Name
+          85  CreateRoundRectRgn
+         871  SelectObject
+          55  CreateDIBSection
+          19  BitBlt
+         705  GetStockObject
+         387  DeleteObject
+          49  CreateCompatibleDC
+         384  DeleteDC
+          48  CreateCompatibleBitmap
+
+  lookup 001f12c8 time 00000000 fwd 00000000 name 001f1b4a addr 00125f90
+
+    DLL Name: d3d11.dll
+    Hint/Ord  Name
+           6  D3D11CreateDevice
+
+  lookup 001f0420 time 00000000 fwd 00000000 name 001f1b62 addr 001250e8
+
+    DLL Name: D3DCOMPILER_47.dll
+    Hint/Ord  Name
+           1  D3DCompile
+
+  lookup 001f12e8 time 00000000 fwd 00000000 name 001f1bae addr 00125fb0
+
+    DLL Name: dwmapi.dll
+    Hint/Ord  Name
+          16  DwmGetWindowAttribute
+           8  DwmExtendFrameIntoClientArea
+
+  lookup 001f0a80 time 00000000 fwd 00000000 name 001f1cde addr 00125748
+
+    DLL Name: WINHTTP.dll
+    Hint/Ord  Name
+          66  WinHttpWebSocketSend
+          63  WinHttpWebSocketCompleteUpgrade
+          44  WinHttpQueryHeaders
+          65  WinHttpWebSocketReceive
+          62  WinHttpWebSocketClose
+          52  WinHttpSendRequest
+          39  WinHttpOpenRequest
+          55  WinHttpSetOption
+          46  WinHttpReadData
+           9  WinHttpConnect
+           8  WinHttpCloseHandle
+          38  WinHttpOpen
+          49  WinHttpReceiveResponse
+
+  lookup 001f1450 time 00000000 fwd 00000000 name 001f1d5c addr 00126118
+
+    DLL Name: ole32.dll
+    Hint/Ord  Name
+          97  CoInitializeEx
+         171  CreateStreamOnHGlobal
+         144  CoUninitialize
+          95  CoIncrementMTAUsage
+          41  CoCreateFreeThreadedMarshaler
+          43  CoCreateInstance
+         139  CoTaskMemAlloc
+         140  CoTaskMemFree
+
+  lookup 001f1300 time 00000000 fwd 00000000 name 001f20f4 addr 00125fc8
+
+    DLL Name: gdiplus.dll
+    Hint/Ord  Name
+         122  GdipCreatePen1
+         148  GdipDeletePen
+         289  GdipGetImageGraphicsContext
+          80  GdipCreateBitmapFromScan0
+         144  GdipDeleteGraphics
+         585  GdipSetSmoothingMode
+         596  GdipSetTextRenderingHint
+         620  GdipTranslateWorldTransform
+         503  GdipScaleWorldTransform
+         187  GdipDrawLine
+         172  GdipDrawEllipse
+         405  GdipGraphicsClear
+         224  GdipFillPolygon
+         152  GdipDisposeImage
+          54  GdipCloneImage
+         237  GdipFree
+         222  GdipFillPie
+          33  GdipAlloc
+          87  GdipCreateFontFamilyFromName
+         143  GdipDeleteFontFamily
+          86  GdipCreateFont
+         629  GdiplusStartup
+          46  GdipBitmapUnlockBits
+         286  GdipGetImageEncoders
+         287  GdipGetImageEncodersSize
+          77  GdipCreateBitmapFromHBITMAP
+         130  GdipCreateSolidFill
+          43  GdipBitmapLockBits
+          81  GdipCreateBitmapFromStream
+         290  GdipGetImageHeight
+         497  GdipSaveImageToStream
+         591  GdipSetStringFormatLineAlign
+         219  GdipFillEllipse
+         300  GdipGetImageWidth
+         138  GdipDeleteBrush
+         142  GdipDeleteFont
+         200  GdipDrawString
+         132  GdipCreateStringFormat
+         151  GdipDeleteStringFormat
+         587  GdipSetStringFormatAlign
+         628  GdiplusShutdown
+
+  lookup 001f0708 time 00000000 fwd 00000000 name 001f2174 addr 001253d0
+
+    DLL Name: SHELL32.dll
+    Hint/Ord  Name
+         346  SHGetKnownFolderPath
+         313  SHFileOperationW
+         430  ShellExecuteExW
+         431  ShellExecuteW
+         427  ShellExecuteA
+           9  CommandLineToArgvW
+
+  lookup 001f0338 time 00000000 fwd 00000000 name 001f22a6 addr 00125000
+
+    DLL Name: ADVAPI32.dll
+    Hint/Ord  Name
+         655  RegOpenKeyExW
+         668  RegQueryValueExW
+         606  RegCloseKey
+         644  RegGetValueW
+         365  GetSidSubAuthorityCount
+         364  GetSidSubAuthority
+         291  EventUnregister
+         297  EventWriteTransfer
+         290  EventSetInformation
+         708  RevertToSelf
+         289  EventRegister
+         759  SetTokenInformation
+          32  AllocateAndInitializeSid
+         308  FreeSid
+         731  SetEntriesInAclW
+         355  GetSecurityInfo
+         752  SetSecurityInfo
+         643  RegGetValueA
+         139  CreateProcessAsUserW
+         758  SetThreadToken
+         536  OpenProcessToken
+         241  DuplicateTokenEx
+         368  GetTokenInformation
+         431  LookupPrivilegeValueW
+         576  PrivilegeCheck
+
+  lookup 001f0480 time 00000000 fwd 00000000 name 001f230a addr 00125148
+
+    DLL Name: IMM32.dll
+    Hint/Ord  Name
+         107  ImmReleaseContext
+         119  ImmSetCompositionWindow
+         114  ImmSetCandidateWindow
+          59  ImmGetContext
+
+  lookup 001f12d8 time 00000000 fwd 00000000 name 001f2330 addr 00125fa0
+
+    DLL Name: dcomp.dll
+    Hint/Ord  Name
+           3  DCompositionCreateDevice2
+
+  lookup 001f0d20 time 00000000 fwd 00000000 name 001f290c addr 001259e8
+
+    DLL Name: api-ms-win-core-processenvironment-l1-1-0.dll
+    Hint/Ord  Name
+         434  GetEnvironmentVariableW
+         354  GetCommandLineW
+
+  lookup 001f0b90 time 00000000 fwd 00000000 name 001f293a addr 00125858
+
+    DLL Name: api-ms-win-core-file-l1-1-0.dll
+    Hint/Ord  Name
+         180  DeleteFileW
+         924  ReadFile
+         441  GetFileAttributesExA
+          99  CreateDirectoryW
+         440  GetFileAttributesA
+         116  CreateFileW
+         178  DeleteFileA
+        1245  WriteFile
+         285  FindNextFileA
+         271  FindFirstFileA
+         451  GetFileSizeEx
+          95  CreateDirectoryA
+         267  FindClose
+
+  lookup 001f0c10 time 00000000 fwd 00000000 name 001f295a addr 001258d8
+
+    DLL Name: api-ms-win-core-handle-l1-1-0.dll
+    Hint/Ord  Name
+          58  CloseHandle
+
+  lookup 001f0b80 time 00000000 fwd 00000000 name 001f297c addr 00125848
+
+    DLL Name: api-ms-win-core-errorhandling-l1-1-0.dll
+    Hint/Ord  Name
+         470  GetLastError
+
+  lookup 001f0e00 time 00000000 fwd 00000000 name 001f29a6 addr 00125ac8
+
+    DLL Name: api-ms-win-core-synch-l1-1-0.dll
+    Hint/Ord  Name
+         832  OpenEventW
+         104  CreateEventW
+        1192  WaitForSingleObject
+         963  ResetEvent
+        1035  SetEvent
+         129  CreateMutexW
+
+  lookup 001f0e38 time 00000000 fwd 00000000 name 001f29c8 addr 00125b00
+
+    DLL Name: api-ms-win-core-synch-l1-2-0.dll
+    Hint/Ord  Name
+        1127  Sleep
+
+  lookup 001f0e48 time 00000000 fwd 00000000 name 001f29ea addr 00125b10
+
+    DLL Name: api-ms-win-core-sysinfo-l1-1-0.dll
+    Hint/Ord  Name
+         583  GetSystemDirectoryW
+         651  GetWindowsDirectoryA
+         623  GetTickCount64
+         471  GetLocalTime
+         590  GetSystemTime
+
+  lookup 001f0c78 time 00000000 fwd 00000000 name 001f2a0e addr 00125940
+
+    DLL Name: api-ms-win-core-libraryloader-l1-2-0.dll
+    Hint/Ord  Name
+         489  GetModuleHandleA
+         488  GetModuleFileNameW
+         492  GetModuleHandleW
+         536  GetProcAddress
+         318  FreeLibrary
+
+  lookup 001f0c20 time 00000000 fwd 00000000 name 001f2a38 addr 001258e8
+
+    DLL Name: api-ms-win-core-heap-l2-1-0.dll
+    Hint/Ord  Name
+           2  GlobalFree
+          10  LocalFree
+           0  GlobalAlloc
+
+  lookup 001f0de8 time 00000000 fwd 00000000 name 001f2a58 addr 00125ab0
+
+    DLL Name: api-ms-win-core-string-l1-1-0.dll
+    Hint/Ord  Name
+         824  MultiByteToWideChar
+        1228  WideCharToMultiByte
+
+  lookup 001f0d38 time 00000000 fwd 00000000 name 001f2a7a addr 00125a00
+
+    DLL Name: api-ms-win-core-processthreads-l1-1-0.dll
+    Hint/Ord  Name
+         406  GetCurrentProcess
+         136  CreateProcessW
+         971  ResumeThread
+         407  GetCurrentProcessId
+         148  CreateThread
+         543  GetProcessId
+        1140  TerminateProcess
+         411  GetCurrentThreadId
+         436  GetExitCodeProcess
+         138  CreateRemoteThread
+        1133  SuspendThread
+         848  OpenThread
+
+  lookup 001f0c40 time 00000000 fwd 00000000 name 001f2aa4 addr 00125908
+
+    DLL Name: api-ms-win-core-heap-obsolete-l1-1-0.dll
+    Hint/Ord  Name
+           7  GlobalUnlock
+           4  GlobalLock
+
+  lookup 001f0c00 time 00000000 fwd 00000000 name 001f2ace addr 001258c8
+
+    DLL Name: api-ms-win-core-file-l1-2-0.dll
+    Hint/Ord  Name
+         605  GetTempPathW
+
+  lookup 001f0c68 time 00000000 fwd 00000000 name 001f2aee addr 00125930
+
+    DLL Name: api-ms-win-core-kernel32-legacy-l1-1-0.dll
+    Hint/Ord  Name
+          33  GetComputerNameA
+
+  lookup 001f0cd8 time 00000000 fwd 00000000 name 001f2b1a addr 001259a0
+
+    DLL Name: api-ms-win-core-memory-l1-1-0.dll
+    Hint/Ord  Name
+         927  ReadProcessMemory
+        1181  VirtualProtect
+        1179  VirtualFreeEx
+        1253  WriteProcessMemory
+        1178  VirtualFree
+        1182  VirtualProtectEx
+        1176  VirtualAllocEx
+        1175  VirtualAlloc
+
+  lookup 001f0e78 time 00000000 fwd 00000000 name 001f2b3c addr 00125b40
+
+    DLL Name: api-ms-win-core-toolhelp-l1-1-0.dll
+    Hint/Ord  Name
+           0  CreateToolhelp32Snapshot
+           8  Process32NextW
+          10  Thread32Next
+           7  Process32FirstW
+           9  Thread32First
+
+  lookup 001f0da0 time 00000000 fwd 00000000 name 001f2b60 addr 00125a68
+
+    DLL Name: api-ms-win-core-processthreads-l1-1-1.dll
+    Hint/Ord  Name
+         606  GetThreadContext
+        1089  SetThreadContext
+         844  OpenProcess
+
+  lookup 001f0f20 time 00000000 fwd 00000000 name 001f2b8a addr 00125be8
+
+    DLL Name: api-ms-win-core-wow64-l1-1-0.dll
+    Hint/Ord  Name
+         739  IsWow64Process
+
+  lookup 001f0ca8 time 00000000 fwd 00000000 name 001f2bac addr 00125970
+
+    DLL Name: api-ms-win-core-libraryloader-l1-2-1.dll
+    Hint/Ord  Name
+          61  LoadLibraryA
+
+  lookup 001f12b8 time 00000000 fwd 00000000 name 001f2bd6 addr 00125f80
+
+    DLL Name: bcrypt.dll
+    Hint/Ord  Name
+          29  BCryptGenRandom
+
+  lookup 001f0dd8 time 00000000 fwd 00000000 name 001f2be2 addr 00125aa0
+
+    DLL Name: api-ms-win-core-psapi-ansi-l1-1-0.dll
+    Hint/Ord  Name
+           4  K32GetModuleBaseNameA
+
+  lookup 001f0408 time 00000000 fwd 00000000 name 001f2c08 addr 001250d0
+
+    DLL Name: CRYPT32.dll
+    Hint/Ord  Name
+         225  CryptUnprotectData
+         195  CryptProtectData
+
+  lookup 001f0af0 time 00000000 fwd 00000000 name 001f2c14 addr 001257b8
+
+    DLL Name: WS2_32.dll
+    Hint/Ord  Name
+         115
+          23
+          21
+          19
+          18
+          16
+          15
+          13
+           9
+           6
+           3
+           2
+           1
+         182  inet_pton
+         116
+
+  lookup 001f0b70 time 00000000 fwd 00000000 name 001f2c20 addr 00125838
+
+    DLL Name: api-ms-win-core-debug-l1-1-0.dll
+    Hint/Ord  Name
+         851  OutputDebugStringA
+
+  lookup 001f0dc0 time 00000000 fwd 00000000 name 001f2c42 addr 00125a88
+
+    DLL Name: api-ms-win-core-profile-l1-1-0.dll
+    Hint/Ord  Name
+         898  QueryPerformanceCounter
+         899  QueryPerformanceFrequency
+
+  lookup 001f0cb8 time 00000000 fwd 00000000 name 001f2c66 addr 00125980
+
+    DLL Name: api-ms-win-core-localization-l1-2-0.dll
+    Hint/Ord  Name
+         314  FormatMessageW
+         720  IsDBCSLeadByte
+         472  GetLocaleInfoA
+
+  lookup 001f0578 time 00000000 fwd 00000000 name 001f35ec addr 00125240
+
+    DLL Name: MSVCP140.dll
+    Hint/Ord  Name
+         586  ?_Pninc@?$basic_streambuf@DU?$char_traits@D@std@@@std@@IEAAPEADXZ
+        1221  ?setstate@?$basic_ios@DU?$char_traits@D@std@@@std@@QEAAXH_N@Z
+        1246  ?sputc@?$basic_streambuf@DU?$char_traits@D@std@@@std@@QEAAHD@Z
+         137  ??1?$basic_streambuf@DU?$char_traits@D@std@@@std@@UEAA@XZ
+          47  ??0?$basic_streambuf@DU?$char_traits@D@std@@@std@@IEAA@XZ
+        1310  ?uncaught_exception@std@@YA_NXZ
+        1484  _Xtime_get_ticks
+         652  ?_Xbad_function_call@std@@YAXXZ
+        1409  _Mtx_destroy_in_situ
+        1412  _Mtx_init_in_situ
+         605  ?_Random_device@std@@YAIXZ
+        1460  _Thrd_id
+          12  ??0?$basic_ios@DU?$char_traits@D@std@@@std@@IEAA@XZ
+          37  ??0?$basic_ostream@DU?$char_traits@D@std@@@std@@QEAA@PEAV?$basic_streambuf@DU?$char_traits@D@std@@@1@_N@Z
+         134  ??1?$basic_ostream@DU?$char_traits@D@std@@@std@@UEAA@XZ
+         580  ?_Osfx@?$basic_ostream@DU?$char_traits@D@std@@@std@@QEAAXXZ
+         258  ??6?$basic_ostream@DU?$char_traits@D@std@@@std@@QEAAAEAV01@K@Z
+         872  ?flush@?$basic_ostream@DU?$char_traits@D@std@@@std@@QEAAAEAV12@XZ
+         552  ?_Lock@?$basic_streambuf@DU?$char_traits@D@std@@@std@@UEAAXXZ
+         125  ??1?$basic_ios@DU?$char_traits@D@std@@@std@@UEAA@XZ
+        1173  ?sbumpc@?$basic_streambuf@DU?$char_traits@D@std@@@std@@QEAAHXZ
+        1231  ?sgetc@?$basic_streambuf@DU?$char_traits@D@std@@@std@@QEAAHXZ
+        1240  ?snextc@?$basic_streambuf@DU?$char_traits@D@std@@@std@@QEAAHXZ
+        1332  ?widen@?$basic_ios@DU?$char_traits@D@std@@@std@@QEBADD@Z
+        1461  _Thrd_join
+        1350  ?xsputn@?$basic_streambuf@DU?$char_traits@D@std@@@std@@MEAA_JPEBD_J@Z
+          26  ??0?$basic_istream@DU?$char_traits@D@std@@@std@@QEAA@PEAV?$basic_streambuf@DU?$char_traits@D@std@@@1@_N@Z
+         131  ??1?$basic_istream@DU?$char_traits@D@std@@@std@@UEAA@XZ
+        1347  ?xsgetn@?$basic_streambuf@DU?$char_traits@D@std@@@std@@MEAA_JPEAD_J@Z
+        1307  ?uflow@?$basic_streambuf@DU?$char_traits@D@std@@@std@@MEAAHXZ
+        1277  ?sync@?$basic_streambuf@DU?$char_traits@D@std@@@std@@MEAAHXZ
+        1237  ?showmanyc@?$basic_streambuf@DU?$char_traits@D@std@@@std@@MEAA_JXZ
+        1205  ?setbuf@?$basic_streambuf@DU?$char_traits@D@std@@@std@@MEAAPEAV12@PEAD_J@Z
+        1014  ?imbue@?$basic_streambuf@DU?$char_traits@D@std@@@std@@MEAAXAEBVlocale@2@@Z
+         537  ?_Ipfx@?$basic_istream@DU?$char_traits@D@std@@@std@@QEAA_N_N@Z
+         651  ?_Xbad_alloc@std@@YAXXZ
+         654  ?_Xlength_error@std@@YAXPEBD@Z
+         655  ?_Xout_of_range@std@@YAXPEBD@Z
+        1456  _Thrd_detach
+        1413  _Mtx_lock
+        1417  _Mtx_unlock
+        1358  _Cnd_do_broadcast_at_thread_exit
+         628  ?_Throw_C_error@std@@YAXH@Z
+         629  ?_Throw_Cpp_error@std@@YAXH@Z
+        1249  ?sputn@?$basic_streambuf@DU?$char_traits@D@std@@@std@@QEAA_JPEBD_J@Z
+         639  ?_Unlock@?$basic_streambuf@DU?$char_traits@D@std@@@std@@UEAAXXZ
+
+  lookup 001f1498 time 00000000 fwd 00000000 name 001f3610 addr 00126160
+
+    DLL Name: urlmon.dll
+    Hint/Ord  Name
+         116  URLDownloadToFileW
+
+  lookup 001f04a8 time 00000000 fwd 00000000 name 001f3848 addr 00125170
+
+    DLL Name: KERNEL32.dll
+    Hint/Ord  Name
+         971  LoadLibraryW
+        1238  RtlCaptureContext
+         405  FindNextFileW
+        1252  RtlVirtualUnwind
+        1473  UnhandledExceptionFilter
+        1408  SetUnhandledExceptionFilter
+         908  IsProcessorFeaturePresent
+         312  EnterCriticalSection
+         964  LeaveCriticalSection
+         875  InitializeCriticalSectionAndSpinCount
+         276  DeleteCriticalSection
+        1516  WaitForSingleObjectEx
+         901  IsDebuggerPresent
+         393  FindFirstFileW
+         755  GetSystemTimeAsFileTime
+         879  InitializeSListHead
+         970  LoadLibraryExW
+         853  HeapFree
+         702  GetProcessHeap
+        1054  OutputDebugStringW
+         591  GetFileAttributesW
+         927  K32EnumProcessModulesEx
+         977  LocalAlloc
+        1245  RtlLookupFunctionEntry
+         730  GetStartupInfoW
+
+  lookup 001f09e8 time 00000000 fwd 00000000 name 001f396e addr 001256b0
+
+    DLL Name: VCRUNTIME140.dll
+    Hint/Ord  Name
+          34  __std_exception_destroy
+           1  _CxxThrowException
+          33  __std_exception_copy
+          70  wcsstr
+          60  memcpy
+          61  memmove
+          62  memset
+          59  memcmp
+          35  __std_terminate
+          64  strchr
+          54  _purecall
+          69  wcsrchr
+           8  __C_specific_handler
+          27  __current_exception
+          28  __current_exception_context
+          58  memchr
+
+  lookup 001f0a70 time 00000000 fwd 00000000 name 001f3980 addr 00125738
+
+    DLL Name: VCRUNTIME140_1.dll
+    Hint/Ord  Name
+           0  __CxxFrameHandler4
+
+  lookup 001f1090 time 00000000 fwd 00000000 name 001f3ec8 addr 00125d58
+
+    DLL Name: api-ms-win-crt-runtime-l1-1-0.dll
+    Hint/Ord  Name
+          20  _beginthreadex
+          21  _c_exit
+          61  _register_thread_local_exe_atexit_callback
+         103  terminate
+          85  exit
+          57  _invalid_parameter_noinfo_noreturn
+          55  _initterm_e
+          66  _set_app_type
+          54  _initterm
+          43  _get_narrow_winmain_command_line
+          35  _exit
+          79  _wassert
+          24  _configure_narrow_argv
+          51  _initialize_narrow_environment
+          52  _initialize_onexit_table
+          60  _register_onexit_function
+          30  _crt_atexit
+          22  _cexit
+          84  abort
+          64  _seh_filter_exe
+          33  _errno
+
+  lookup 001f0f88 time 00000000 fwd 00000000 name 001f3eea addr 00125c50
+
+    DLL Name: api-ms-win-crt-heap-l1-1-0.dll
+    Hint/Ord  Name
+          24  free
+          25  malloc
+          22  _set_new_mode
+           8  _callnewh
+
+  lookup 001f1140 time 00000000 fwd 00000000 name 001f3f0a addr 00125e08
+
+    DLL Name: api-ms-win-crt-stdio-l1-1-0.dll
+    Hint/Ord  Name
+          98  _wfopen
+          17  __stdio_common_vswprintf
+           0  __acrt_iob_func
+         119  fflush
+          99  _wfopen_s
+         135  fseek
+         137  ftell
+          16  __stdio_common_vsscanf
+           1  __p__commode
+           6  __stdio_common_vfscanf
+           3  __stdio_common_vfprintf
+         138  fwrite
+         122  fgets
+         116  fclose
+         126  fopen_s
+          84  _set_fmode
+          13  __stdio_common_vsprintf
+         131  fread
+
+  lookup 001f1288 time 00000000 fwd 00000000 name 001f3f2a addr 00125f50
+
+    DLL Name: api-ms-win-crt-time-l1-1-0.dll
+    Hint/Ord  Name
+          48  _time64
+          36  _localtime64_s
+          70  strftime
+
+  lookup 001f0fc8 time 00000000 fwd 00000000 name 001f3f4a addr 00125c90
+
+    DLL Name: api-ms-win-crt-math-l1-1-0.dll
+    Hint/Ord  Name
+          85  atan2
+         144  cos
+         202  fmodf
+         279  sqrtf
+          75  acosf
+         190  floor
+          16  _dclass
+         125  ceilf
+           9  __setusermatherr
+         254  pow
+         274  sin
+         278  sqrt
+         218  log
+         255  powf
+         178  exp
+         124  ceil
+         205  ilogb
+         224  log2
+         230  logf
+         271  scalbn
+         145  cosf
+         275  sinf
+          86  atan2f
+          23  _dsign
+
+  lookup 001f11d8 time 00000000 fwd 00000000 name 001f3f6a addr 00125ea0
+
+    DLL Name: api-ms-win-crt-string-l1-1-0.dll
+    Hint/Ord  Name
+         124  iswupper
+         113  iswalpha
+         112  iswalnum
+         154  towlower
+          74  _wcsicmp
+         123  iswspace
+          42  _stricmp
+          52  _strnicmp
+         143  strncpy
+         100  isalnum
+         104  isdigit
+         151  tolower
+         152  toupper
+         101  isalpha
+         155  towupper
+         139  strlen
+         163  wcslen
+         144  strncpy_s
+         168  wcsncpy_s
+         134  strcmp
+         142  strncmp
+
+  lookup 001f0f30 time 00000000 fwd 00000000 name 001f3f8c addr 00125bf8
+
+    DLL Name: api-ms-win-crt-convert-l1-1-0.dll
+    Hint/Ord  Name
+          71  _wtoi
+          94  strtod
+          80  atoi
+          51  _ultow_s
+           6  _atoi64
+          79  atof
+          99  strtoll
+         101  strtoull
+
+  lookup 001f0f78 time 00000000 fwd 00000000 name 001f3fae addr 00125c40
+
+    DLL Name: api-ms-win-crt-environment-l1-1-0.dll
+    Hint/Ord  Name
+          16  getenv
+
+  lookup 001f0fb0 time 00000000 fwd 00000000 name 001f3fd4 addr 00125c78
+
+    DLL Name: api-ms-win-crt-locale-l1-1-0.dll
+    Hint/Ord  Name
+          18  localeconv
+           8  _configthreadlocale
+
+  lookup 001f12a8 time 00000000 fwd 00000000 name 001f3ff6 addr 00125f70
+
+    DLL Name: api-ms-win-crt-utility-l1-1-0.dll
+    Hint/Ord  Name
+          25  qsort
+
+  lookup 001f06f0 time 00000000 fwd 00000000 name 001f410e addr 001253b8
+
+    DLL Name: OLEAUT32.dll
+    Hint/Ord  Name
+           7
+           6
+
+  lookup 001f0ea8 time 00000000 fwd 00000000 name 001f427c addr 00125b70
+
+    DLL Name: api-ms-win-core-winrt-error-l1-1-0.dll
+    Hint/Ord  Name
+          18  SetRestrictedErrorInfo
+           0  GetRestrictedErrorInfo
+
+  lookup 001f0ed0 time 00000000 fwd 00000000 name 001f42a4 addr 00125b98
+
+    DLL Name: api-ms-win-core-winrt-l1-1-0.dll
+    Hint/Ord  Name
+           1  RoGetActivationFactory
+
+  lookup 001f0ec0 time 00000000 fwd 00000000 name 001f42c6 addr 00125b88
+
+    DLL Name: api-ms-win-core-winrt-error-l1-1-1.dll
+    Hint/Ord  Name
+          11  RoOriginateLanguageException
+
+  lookup 001f0ee0 time 00000000 fwd 00000000 name 001f42ee addr 00125ba8
+
+    DLL Name: api-ms-win-core-winrt-string-l1-1-0.dll
+    Hint/Ord  Name
+          20  WindowsPreallocateStringBuffer
+          12  WindowsDeleteString
+          11  WindowsCreateStringReference
+          10  WindowsCreateString
+          13  WindowsDeleteStringBuffer
+          21  WindowsPromoteStringBuffer
+          16  WindowsGetStringRawBuffer
+
+  lookup 001f0c58 time 00000000 fwd 00000000 name 001f4316 addr 00125920
+
+    DLL Name: api-ms-win-core-interlocked-l1-1-0.dll
+    Hint/Ord  Name
+         711  InterlockedPushEntrySList
+

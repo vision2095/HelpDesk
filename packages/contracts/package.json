@@ -1,0 +1,11 @@
+{
+  "name": "@lensdesk/contracts",
+  "version": "2.0.0",
+  "description": "Shared TypeScript Contracts and IPC Schemas for LensDesk 2.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}
