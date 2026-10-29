@@ -569,6 +569,16 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
             return;
         }
 
+        if (action == "desktop.opacity") {
+            float op = payload.value("opacity", 1.0f);
+            if (m_winMgr) {
+                m_winMgr->SetOpacity(op);
+            }
+            BroadcastEvent("lens:opacity-changed", op);
+            callback(json{{"ok", true}, {"opacity", op}}, false);
+            return;
+        }
+
         // --- 3. Profiles ---
         if (action == "profile.save") {
             bool ok = m_storageMgr->SaveProfile(payload);

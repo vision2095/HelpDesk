@@ -4332,17 +4332,13 @@ kbd {
 }
 
 /* Ghost mode with hover reveal */
-.overlay-hud-container.ghost-mode,
-.lensdesk-overlay-shell.ghost-mode,
-.hintlens-overlay-shell.ghost-mode {
-  opacity: 0.02 !important;
+.overlay-hud-container.ghost-mode {
+  opacity: 0.02;
   transition: opacity 0.2s ease;
 }
 
-.overlay-hud-container.ghost-mode:hover,
-.lensdesk-overlay-shell.ghost-mode:hover,
-.hintlens-overlay-shell.ghost-mode:hover {
-  opacity: 0.88 !important;
+.overlay-hud-container.ghost-mode:hover {
+  opacity: 0.88;
 }
 
 /* Panic Mode: Hide Answer */

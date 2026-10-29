@@ -188,8 +188,15 @@ void WindowManager::SetCaptureProtection(bool enable) {
 }
 
 void WindowManager::SetOpacity(float opacity) {
-    m_opacity = std::max(0.0f, std::min(1.0f, opacity));
-    // DirectComposition visual opacity handles fine-grained alpha without WS_EX_LAYERED artifacts
+    m_opacity = std::max(0.1f, std::min(1.0f, opacity));
+    if (m_hwnd) {
+        LONG_PTR exStyle = GetWindowLongPtrW(m_hwnd, GWL_EXSTYLE);
+        if (!(exStyle & WS_EX_LAYERED)) {
+            SetWindowLongPtrW(m_hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
+        }
+        BYTE alpha = static_cast<BYTE>(m_opacity * 255.0f);
+        SetLayeredWindowAttributes(m_hwnd, 0, alpha, LWA_ALPHA);
+    }
 }
 
 WindowBounds WindowManager::GetBounds() const {

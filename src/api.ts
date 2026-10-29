@@ -3,6 +3,14 @@ export async function api<T = any>(
   payload: unknown = {},
 ): Promise<T> {
   if (window.lens) return window.lens.invoke(action, payload);
+  if (typeof window !== "undefined" && (window as any).chrome?.webview) {
+    let attempts = 0;
+    while (!(window as any).lens && attempts < 15) {
+      await new Promise((r) => setTimeout(r, 10));
+      attempts++;
+    }
+    if ((window as any).lens) return (window as any).lens.invoke(action, payload);
+  }
   const response = await fetch(`/api/${action}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

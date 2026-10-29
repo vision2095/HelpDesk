@@ -1,3 +1,4 @@
+import "./bridge-init";
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
@@ -309,12 +310,22 @@ function getPathForPage(p: string): string {
 
 
 
+export const isDesktopApp = () => {
+  if (typeof window === "undefined") return false;
+  return (
+    Boolean(window.lens) ||
+    window.location.hostname === "lensdesk.local" ||
+    window.location.protocol === "file:" ||
+    Boolean((window as any).chrome?.webview)
+  );
+};
+
 function App() {
   const [state, setState] = useState<State | null>(null),
     [desktopShortcuts, setDesktopShortcuts] =
       useState<Record<string, string>>(),
     [page, setPage] = useState(() =>
-      getPageFromPath(window.location.pathname, Boolean(window.lens)),
+      getPageFromPath(window.location.pathname, isDesktopApp()),
     ),
     [showContext, setShowContext] = useState(true),
     [activeId, setActiveId] = useState<string | null>(null),
@@ -367,7 +378,7 @@ function App() {
     [settingsDraft, setSettingsDraft] = useState<Settings>(blankState.settings),
     [keyDraft, setKeyDraft] = useState(""),
     [confirmProfileDelete, setConfirmProfileDelete] = useState(false),
-    [floating, setFloating] = useState(Boolean(window.lens)),
+    [floating, setFloating] = useState(isDesktopApp()),
     [pipActive, setPipActive] = useState(false),
     [hideAnswer, setHideAnswer] = useState(false),
     [autoTyping, setAutoTyping] = useState(false),
@@ -441,7 +452,7 @@ function App() {
   stateRef.current = state;
   chatBusyRef.current = busy;
   const cloudStorage = state?.storage === "cloud";
-  const desktop = Boolean(window.lens),
+  const desktop = isDesktopApp(),
     mac =
       window.lens?.platform === "darwin" || navigator.platform.includes("Mac"),
     mod = mac ? "⌘" : "Ctrl";
@@ -1786,6 +1797,9 @@ function App() {
     const opacity = Math.max(0.1, Math.min(1, op));
     const next = { ...base, opacity };
     setSettingsDraft(next);
+    if (window.lens) {
+      window.lens.invoke("desktop.opacity", { opacity }).catch(() => {});
+    }
     if (opacityTimer.current) clearTimeout(opacityTimer.current);
     opacityTimer.current = setTimeout(() => {
       void run(async () => {

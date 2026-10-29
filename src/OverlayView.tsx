@@ -946,9 +946,10 @@ export function OverlayView({
     <div
       className={`lensdesk-overlay-shell hintlens-overlay-shell ${opacity <= 0.2 ? "ghost-mode" : ""} ${interviewLayout === "compact" ? "compact-interview-mode" : ""} ${notchDocked ? "mac-notch-docked" : ""}`}
       style={{
+        opacity: Math.max(0.12, opacity),
         backgroundColor: isDark
-          ? `rgba(15, 23, 42, ${Math.max(0.1, opacity)})`
-          : `rgba(255, 255, 255, ${Math.max(0.1, opacity)})`,
+          ? `rgba(15, 23, 42, 0.95)`
+          : `rgba(255, 255, 255, 0.95)`,
       }}
       onMouseDownCapture={() => {
         window.lens?.invoke?.("desktop.focusWindow")?.catch?.(() => {});
