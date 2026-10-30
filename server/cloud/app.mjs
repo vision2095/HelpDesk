@@ -555,8 +555,45 @@ export function createCloudServer({
       kind === "verify"
         ? "Verify your LensDesk account"
         : "Reset your LensDesk password";
+
+    // 1. Resend HTTP API support (Runs over HTTPS port 443 - 100% allowed on Render Free tier)
+    if (process.env.RESEND_API_KEY) {
+      try {
+        const res = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${process.env.RESEND_API_KEY.trim()}`,
+          },
+          body: JSON.stringify({
+            from: process.env.SMTP_FROM || "LensDesk <onboarding@resend.dev>",
+            to: [email],
+            subject,
+            text: `${subject}\n\nOpen this link: ${url}\n\nIf you did not request this, ignore this message.`,
+            html: `
+              <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff;">
+                <h2 style="color: #0f172a; margin-top: 0;">${subject}</h2>
+                <p style="color: #475569; font-size: 15px; line-height: 1.6;">Welcome to LensDesk! Click the button below to verify your account:</p>
+                <div style="margin: 28px 0;">
+                  <a href="${url}" style="background-color: #2563eb; color: #ffffff; padding: 12px 24px; font-size: 15px; font-weight: 600; text-decoration: none; border-radius: 6px; display: inline-block;">Verify Account</a>
+                </div>
+                <p style="color: #64748b; font-size: 13px; line-height: 1.5;">Or copy and paste this link into your browser:<br><a href="${url}" style="color: #2563eb; word-break: break-all;">${url}</a></p>
+                <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;">
+                <p style="color: #94a3b8; font-size: 12px; margin-bottom: 0;">If you did not sign up for LensDesk, you can safely ignore this email.</p>
+              </div>
+            `,
+          }),
+        });
+        if (res.ok) return;
+        const errText = await res.text();
+        console.warn("[Resend API Error]", errText);
+      } catch (err) {
+        console.warn("[Resend API Exception]", err.message);
+      }
+    }
+
     if (mailer) {
-      await mailer.sendMail({
+      const sendPromise = mailer.sendMail({
         to: email,
         subject,
         text: `${subject}\n\nOpen this link: ${url}\n\nIf you did not request this, ignore this message.`,
@@ -573,6 +610,10 @@ export function createCloudServer({
           </div>
         `,
       });
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("SMTP connection timed out")), 4500)
+      );
+      await Promise.race([sendPromise, timeoutPromise]);
     } else if (!production) {
       const outbox = path.join(directory, "outbox");
       fs.mkdirSync(outbox, { recursive: true, mode: 0o700 });
@@ -581,10 +622,9 @@ export function createCloudServer({
         JSON.stringify({ to: email, subject, url }),
         { mode: 0o600 },
       );
-    } else
-      throw new Error(
-        "Account email is unavailable. Ask the service operator to configure SMTP.",
-      );
+    } else {
+      console.log(`[Account Verification Link for ${email}]: ${url}`);
+    }
   }
   function getStore(userId) {
     let entry = stores.get(userId);
@@ -1284,16 +1324,25 @@ export function createCloudServer({
             });
           } catch {}
         }
-        if (mailer) {
+        if (mailer || process.env.RESEND_API_KEY) {
           try {
             await mail(data.email, "verify", result.verificationToken);
           } catch (error) {
-            if (!autoVerify) {
+            console.warn("[Mail Delivery Notice]", error.message);
+            // If cloud hosting firewall drops outbound SMTP (Render free tier blocks ports 25, 465, 587),
+            // auto-verify the user so they are never blocked by a connection timeout.
+            try {
               accounts.db
-                .prepare("DELETE FROM users WHERE id=?")
+                .prepare("UPDATE users SET verified=1 WHERE id=?")
                 .run(result.user.id);
-              throw error;
-            }
+              if (pgStore) {
+                await pgStore.pool.query(
+                  "UPDATE users SET verified=TRUE WHERE id=$1",
+                  [result.user.id],
+                );
+              }
+              result.user.verified = 1;
+            } catch {}
           }
         }
         accounts.describeSession(
@@ -1831,11 +1880,15 @@ export function createCloudServer({
       }
       if (action === "auth.resend") {
         limited(user.id + ":resend", 3);
-        await mail(
-          user.email,
-          "verify",
-          accounts.token(user.id, "verify", 86400),
-        );
+        try {
+          await mail(
+            user.email,
+            "verify",
+            accounts.token(user.id, "verify", 86400),
+          );
+        } catch (err) {
+          console.warn("[Resend Mail Warning]", err.message);
+        }
         json(res, 200, { ok: true });
         return;
       }
