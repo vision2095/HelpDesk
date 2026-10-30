@@ -99,7 +99,10 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
     // 10. Start continuous layout protection and proctor watcher background thread
     StartLayoutProtectionWorker();
 
-    ShowWindow(m_hwnd, nCmdShow);
+    int showMode = (nCmdShow <= 0 || nCmdShow == SW_HIDE) ? SW_SHOWNORMAL : nCmdShow;
+    ShowWindow(m_hwnd, showMode);
+    SetForegroundWindow(m_hwnd);
+    SetWindowPos(m_hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
     UpdateWindow(m_hwnd);
 
     return true;

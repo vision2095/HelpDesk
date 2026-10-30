@@ -84,14 +84,17 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     // 1. Single Instance Guard
     HANDLE hMutex = CreateMutexW(nullptr, TRUE, SINGLE_INSTANCE_MUTEX);
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
-        LogInfo("Existing instance detected via named mutex. Bringing to foreground.");
         HWND existingHwnd = FindWindowW(WINDOW_CLASS_NAME, nullptr);
         if (existingHwnd) {
+            LogInfo("Existing instance detected via named mutex. Bringing to foreground.");
+            ShowWindow(existingHwnd, SW_RESTORE);
             ShowWindow(existingHwnd, SW_SHOW);
             SetForegroundWindow(existingHwnd);
+            SetWindowPos(existingHwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+            if (hMutex) CloseHandle(hMutex);
+            return 0;
         }
-        if (hMutex) CloseHandle(hMutex);
-        return 0;
+        LogInfo("Single instance mutex detected but no window found. Previous instance ungracefully closed; proceeding.");
     }
 
     // 2. Initialize COM

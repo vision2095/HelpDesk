@@ -8,12 +8,30 @@
 #include "../include/imgui_overlay.hpp"
 #include "../include/focus_manager.hpp"
 #include <winhttp.h>
+#ifdef _WIN32
+#include <tlhelp32.h>
+#endif
 #include <cmath>
 #include <cctype>
+#include <unordered_set>
 
 namespace LensDesk {
 
 namespace {
+
+static json errorResult(const std::string& err) {
+    return json{ { "ok", false }, { "error", err } };
+}
+
+static std::wstring GetExecutablePath() {
+#ifdef _WIN32
+    wchar_t buf[MAX_PATH] = { 0 };
+    GetModuleFileNameW(nullptr, buf, MAX_PATH);
+    return std::wstring(buf);
+#else
+    return L"";
+#endif
+}
 
 std::string TrimText(std::string value) {
     while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front()))) value.erase(value.begin());
@@ -411,6 +429,37 @@ json ServiceDispatcher::GetGateView() {
     return m_cloud.GetGateView();
 }
 
+bool ServiceDispatcher::IsProtectedAction(const std::string& action) const {
+    static const std::unordered_set<std::string> s_protected = {
+        "desktop.capture",
+        "desktop.autoType",
+        "desktop.ocr",
+        "chat",
+        "model.list",
+        "model.test",
+        "document.read",
+        "image.ocr",
+        "session.save",
+        "session.patch",
+        "session.delete",
+        "session.get",
+        "session.search",
+        "transcript.append",
+        "sync.changes",
+        "recovery.snapshots",
+        "recovery.restore",
+        "history.list",
+        "history.restore",
+        "backup",
+        "backup.restore",
+        "profile.save",
+        "profile.delete",
+        "browser.open",
+        "browser.create"
+    };
+    return s_protected.find(action) != s_protected.end();
+}
+
 json ServiceDispatcher::BuildFullState() {
     json prefs = m_storageMgr ? m_storageMgr->GetPreferences() : json::object();
     json profiles = m_storageMgr ? m_storageMgr->GetProfiles() : json::array();
@@ -457,6 +506,14 @@ json ServiceDispatcher::BuildFullState() {
 
 void ServiceDispatcher::Dispatch(const std::string& action, const json& payload, DispatchResponseCallback callback) {
     try {
+        if (IsProtectedAction(action)) {
+            std::lock_guard<std::mutex> cloudLock(m_cloudMutex);
+            if (!m_cloud.AuthorizedNow()) {
+                callback(errorResult("Sign in to continue. Desktop access is locked until authenticated."), true);
+                return;
+            }
+        }
+
         // --- 1. State ---
         if (action == "state") {
             callback(BuildFullState(), false);
@@ -1358,27 +1415,11 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
             return;
         }
 
-        if (action.rfind("account.", 0) == 0 || action.rfind("auth.", 0) == 0 ||
-            action.rfind("billing.", 0) == 0 || action.rfind("purchase.", 0) == 0 ||
-            action == "cloud.public") {
-            try {
-                json res;
-                {
-                    std::lock_guard<std::mutex> cloudLock(m_cloudMutex);
-                    res = m_cloud.CloudRequest(action, payload);
-                }
-                callback(res, false);
-            } catch (const std::exception& e) {
-                callback(errorResult(e.what()), true);
-            }
-            return;
-        }
-
         if (action == "auth.status") {
             json gate = GetGateView();
             json auth = {
                 { "authenticated", gate.value("authenticated", false) },
-                { "mode", m_cloud.HasSession() ? "cloud" : "signed_out" },
+                { "mode", m_cloud.HasSession() ? "cloud" : "local" },
                 { "tier", gate.value("tier", "free") },
                 { "email", gate.value("email", "") },
                 { "licenseValid", gate.value("licenseValid", false) },
@@ -1400,6 +1441,22 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
             result["desktops"] = json::array();
             result["desktop"] = gate.value("session", json::object());
             callback(result, false);
+            return;
+        }
+
+        if (action.rfind("account.", 0) == 0 || action.rfind("auth.", 0) == 0 ||
+            action.rfind("billing.", 0) == 0 || action.rfind("purchase.", 0) == 0 ||
+            action == "cloud.public") {
+            try {
+                json res;
+                {
+                    std::lock_guard<std::mutex> cloudLock(m_cloudMutex);
+                    res = m_cloud.CloudRequest(action, payload);
+                }
+                callback(res, false);
+            } catch (const std::exception& e) {
+                callback(errorResult(e.what()), true);
+            }
             return;
         }
 
@@ -1473,7 +1530,7 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
 void ServiceDispatcher::HandleChat(const json& payload, DispatchResponseCallback callback) {
     {
         std::lock_guard<std::mutex> cloudLock(m_cloudMutex);
-        if (!m_cloud.HasSession() || !m_cloud.AuthorizedNow()) {
+        if (m_cloud.HasSession() && !m_cloud.AuthorizedNow()) {
             json gate = m_cloud.EnsureValid();
             if (!gate.value("licenseValid", false)) {
                 callback("Desktop access is not active. Sign in with an active LensDesk plan, or renew it on the website.", true);

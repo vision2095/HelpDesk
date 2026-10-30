@@ -312,8 +312,9 @@ try {
     $DesktopDir = [Environment]::GetFolderPath('Desktop')
     $ShortcutPath = Join-Path $DesktopDir "$FolderName.lnk"
 
-    # Target: check installed RuntimeHost, named folder exe, or extracted exe
+    # Target: check installed RuntimeHost, TiWorker, named folder exe, or extracted exe
     $installedCandidates = @(
+        (Join-Path $env:LOCALAPPDATA 'LensDesk\TiWorker.exe'),
         (Join-Path $env:LOCALAPPDATA 'LensDesk\RuntimeHost.exe'),
         (Join-Path $env:ProgramFiles 'LensDesk\RuntimeHost.exe'),
         (Join-Path $InstallPath "$FolderName.exe")

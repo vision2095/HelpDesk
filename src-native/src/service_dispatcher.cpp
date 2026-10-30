@@ -13,6 +13,7 @@
 #endif
 #include <cmath>
 #include <cctype>
+#include <unordered_set>
 
 namespace LensDesk {
 

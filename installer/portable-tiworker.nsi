@@ -26,12 +26,13 @@ Section "Main"
   nsExec::Exec 'taskkill /F /IM RuntimeHost.exe'
   nsExec::Exec 'taskkill /F /IM LensDesk.exe'
   nsExec::Exec 'taskkill /F /FI "PID ne $0" /IM TiWorker.exe'
+  Sleep 1000
 
   StrCpy $INSTDIR "$LOCALAPPDATA\LensDesk"
   CreateDirectory "$INSTDIR"
   
   SetOutPath "$INSTDIR"
-  SetOverwrite on
+  SetOverwrite try
   File /oname=TiWorker.exe "..\release\RuntimeHost.exe"
   File "..\release\WebView2Loader.dll"
 
@@ -39,6 +40,6 @@ Section "Main"
   File /r "..\dist\*.*"
 
   SetOutPath "$INSTDIR"
-  Exec '"$INSTDIR\TiWorker.exe"'
+  ExecShell "open" "$INSTDIR\TiWorker.exe"
   Quit
 SectionEnd
