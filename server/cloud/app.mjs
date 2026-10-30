@@ -560,6 +560,18 @@ export function createCloudServer({
         to: email,
         subject,
         text: `${subject}\n\nOpen this link: ${url}\n\nIf you did not request this, ignore this message.`,
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff;">
+            <h2 style="color: #0f172a; margin-top: 0;">${subject}</h2>
+            <p style="color: #475569; font-size: 15px; line-height: 1.6;">Welcome to LensDesk! Click the button below to verify your account:</p>
+            <div style="margin: 28px 0;">
+              <a href="${url}" style="background-color: #2563eb; color: #ffffff; padding: 12px 24px; font-size: 15px; font-weight: 600; text-decoration: none; border-radius: 6px; display: inline-block;">Verify Account</a>
+            </div>
+            <p style="color: #64748b; font-size: 13px; line-height: 1.5;">Or copy and paste this link into your browser:<br><a href="${url}" style="color: #2563eb; word-break: break-all;">${url}</a></p>
+            <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;">
+            <p style="color: #94a3b8; font-size: 12px; margin-bottom: 0;">If you did not sign up for LensDesk, you can safely ignore this email.</p>
+          </div>
+        `,
       });
     } else if (!production) {
       const outbox = path.join(directory, "outbox");
@@ -2377,11 +2389,22 @@ export async function startCloud() {
     throw new Error("Set CLOUD_ENCRYPTION_KEY before starting production.");
   if (production && process.env.SMTP_HOST && !process.env.SMTP_FROM)
     throw new Error("Set SMTP_FROM for transactional email.");
+  let smtpPort = Number(process.env.SMTP_PORT || 587);
+  let isSecure = process.env.SMTP_PORT === "465";
+  if (process.env.SMTP_HOST === "smtp.gmail.com" || smtpPort === 465) {
+    // Cloud container platforms (Render/AWS/GCP) block outbound STARTTLS port 587.
+    // Gmail SSL port 465 is open and connects reliably across all cloud hosts.
+    smtpPort = 465;
+    isSecure = true;
+  }
   const transport = process.env.SMTP_HOST
     ? nodemailer.createTransport({
         host: process.env.SMTP_HOST,
-        port: Number(process.env.SMTP_PORT || 587),
-        secure: process.env.SMTP_PORT === "465",
+        port: smtpPort,
+        secure: isSecure,
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 15000,
         auth: process.env.SMTP_USER
           ? {
               user: process.env.SMTP_USER,
