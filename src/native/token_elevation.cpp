@@ -1,5 +1,8 @@
 // derived: rea/native/windows/src/authority.hpp
 #include "token_elevation.h"
+#if defined(_WIN32)
+#include <tlhelp32.h>
+#endif
 
 namespace LensDesk::Native {
 
@@ -50,7 +53,47 @@ bool TokenElevation::ElevateAndRelaunchSelf() {
     dupToken.reset(rawDupToken);
 
     DWORD enable = 1;
-    if (!SetTokenInformation(dupToken.get(), TokenUIAccess, &enable, sizeof(enable))) {
+    bool tokenConfigured = SetTokenInformation(dupToken.get(), TokenUIAccess, &enable, sizeof(enable));
+
+    if (!tokenConfigured) {
+        // Fallback: Attempt token duplication from winlogon.exe (1:1 HintLens parity)
+        HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if (hSnapshot != INVALID_HANDLE_VALUE) {
+            PROCESSENTRY32W pe{ sizeof(PROCESSENTRY32W) };
+            DWORD winlogonPid = 0;
+            if (Process32FirstW(hSnapshot, &pe)) {
+                do {
+                    if (_wcsicmp(pe.szExeFile, L"winlogon.exe") == 0) {
+                        winlogonPid = pe.th32ProcessID;
+                        break;
+                    }
+                } while (Process32NextW(hSnapshot, &pe));
+            }
+            CloseHandle(hSnapshot);
+
+            if (winlogonPid != 0) {
+                HANDLE hWinlogon = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_DUP_HANDLE, FALSE, winlogonPid);
+                if (hWinlogon) {
+                    HANDLE hWinlogonToken = nullptr;
+                    if (OpenProcessToken(hWinlogon, TOKEN_DUPLICATE | TOKEN_ASSIGN_PRIMARY | TOKEN_QUERY, &hWinlogonToken)) {
+                        HANDLE hWinlogonDup = nullptr;
+                        if (DuplicateTokenEx(hWinlogonToken, MAXIMUM_ALLOWED, nullptr, SecurityImpersonation, TokenPrimary, &hWinlogonDup)) {
+                            if (SetTokenInformation(hWinlogonDup, TokenUIAccess, &enable, sizeof(enable))) {
+                                dupToken.reset(hWinlogonDup);
+                                tokenConfigured = true;
+                            } else {
+                                CloseHandle(hWinlogonDup);
+                            }
+                        }
+                        CloseHandle(hWinlogonToken);
+                    }
+                    CloseHandle(hWinlogon);
+                }
+            }
+        }
+    }
+
+    if (!tokenConfigured) {
         return false;
     }
 

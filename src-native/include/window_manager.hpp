@@ -73,6 +73,7 @@ private:
     HWND m_hwnd = nullptr;
     HINSTANCE m_hInstance = nullptr;
     HWINEVENTHOOK m_hForegroundHook = nullptr;
+    HWINEVENTHOOK m_hLocationHook = nullptr;
     static WindowManager* s_instance;
     bool m_isVisible = true;
     bool m_alwaysOnTop = true;

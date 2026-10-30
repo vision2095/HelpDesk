@@ -49,8 +49,8 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
     int initX = mi.rcWork.left + (screenW - initW) / 2;
     int initY = mi.rcWork.top + (screenH - initH) / 2;
 
-    // 4. Extended Window Styles: Topmost, ToolWindow (avoids alt-tab clutter if overlay), NoRedirectionBitmap for DirectComposition
-    DWORD exStyle = WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOREDIRECTIONBITMAP;
+    // 4. Extended Window Styles: Topmost, ToolWindow (avoids alt-tab clutter if overlay), NoRedirectionBitmap for DirectComposition, Layered, NoActivate (1:1 HintLens parity)
+    DWORD exStyle = WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOREDIRECTIONBITMAP | WS_EX_LAYERED | WS_EX_NOACTIVATE;
     DWORD style = WS_POPUP | WS_VISIBLE;
 
     m_hwnd = CreateWindowExW(
@@ -69,6 +69,9 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
         return false;
     }
 
+    // Set initial full opacity on layered overlay window (1:1 HintLens parity)
+    SetLayeredWindowAttributes(m_hwnd, 0, 255, LWA_ALPHA);
+
     // 5. Query initial DPI
     m_dpi = GetDpiForWindow(m_hwnd);
 
@@ -82,10 +85,20 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
 
     s_instance = this;
 
-    // 8. Foreground Event Hook for absolute 1:1 HintLens Z-order topmost parity
+    // 8. Foreground and Location Event Hooks for absolute 1:1 HintLens Z-order topmost parity
     m_hForegroundHook = SetWinEventHook(
         EVENT_SYSTEM_FOREGROUND,
         EVENT_SYSTEM_FOREGROUND,
+        nullptr,
+        StaticWinEventProc,
+        0,
+        0,
+        WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS
+    );
+
+    m_hLocationHook = SetWinEventHook(
+        EVENT_OBJECT_LOCATIONCHANGE,
+        EVENT_OBJECT_LOCATIONCHANGE,
         nullptr,
         StaticWinEventProc,
         0,
@@ -102,7 +115,7 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
     int showMode = (nCmdShow <= 0 || nCmdShow == SW_HIDE) ? SW_SHOWNORMAL : nCmdShow;
     ShowWindow(m_hwnd, showMode);
     SetForegroundWindow(m_hwnd);
-    SetWindowPos(m_hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+    SetWindowPos(m_hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW | SWP_NOSENDCHANGING);
     UpdateWindow(m_hwnd);
 
     return true;
@@ -116,6 +129,10 @@ void WindowManager::Shutdown() {
     if (m_hForegroundHook) {
         UnhookWinEvent(m_hForegroundHook);
         m_hForegroundHook = nullptr;
+    }
+    if (m_hLocationHook) {
+        UnhookWinEvent(m_hLocationHook);
+        m_hLocationHook = nullptr;
     }
     if (s_instance == this) {
         s_instance = nullptr;
@@ -134,20 +151,39 @@ void WindowManager::Shutdown() {
 void CALLBACK WindowManager::StaticWinEventProc(
     HWINEVENTHOOK,
     DWORD event,
-    HWND,
+    HWND hwndEvent,
     LONG,
     LONG,
     DWORD,
     DWORD
 ) {
-    if (event == EVENT_SYSTEM_FOREGROUND && s_instance) {
+    if (!s_instance || !s_instance->m_hwnd || !s_instance->m_alwaysOnTop || !s_instance->m_isVisible) {
+        return;
+    }
+
+    if (hwndEvent == s_instance->m_hwnd) {
+        return; // Don't react to our own window
+    }
+
+    if (event == EVENT_SYSTEM_FOREGROUND) {
         HWND fg = GetForegroundWindow();
-        if (fg && fg != s_instance->m_hwnd && s_instance->m_hwnd && s_instance->m_alwaysOnTop && s_instance->m_isVisible) {
+        if (fg && fg != s_instance->m_hwnd) {
             SetWindowPos(
                 s_instance->m_hwnd,
                 HWND_TOPMOST,
                 0, 0, 0, 0,
-                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOSENDCHANGING
+            );
+        }
+    } else if (event == EVENT_OBJECT_LOCATIONCHANGE) {
+        // HintLens 1:1: Check if any visible window is currently positioned in front of our window in Z-order
+        HWND prev = GetWindow(s_instance->m_hwnd, GW_HWNDPREV);
+        if (prev != nullptr) {
+            SetWindowPos(
+                s_instance->m_hwnd,
+                HWND_TOPMOST,
+                0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOSENDCHANGING
             );
         }
     }
@@ -311,8 +347,9 @@ LRESULT WindowManager::HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
         case WM_WINDOWPOSCHANGING: {
             if (m_alwaysOnTop && m_isVisible) {
                 auto* pwp = reinterpret_cast<WINDOWPOS*>(lParam);
-                if (pwp && pwp->hwndInsertAfter != HWND_TOPMOST && !(pwp->flags & SWP_NOZORDER)) {
+                if (pwp) {
                     pwp->hwndInsertAfter = HWND_TOPMOST;
+                    pwp->flags &= ~SWP_NOZORDER;
                 }
             }
             break;
@@ -321,12 +358,13 @@ LRESULT WindowManager::HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
         case WM_TIMER: {
             if (wParam == 1002 && m_alwaysOnTop && m_isVisible && m_hwnd) {
                 HWND fg = GetForegroundWindow();
-                if (fg != m_hwnd) {
+                HWND prev = GetWindow(m_hwnd, GW_HWNDPREV);
+                if ((fg && fg != m_hwnd) || prev != nullptr) {
                     SetWindowPos(
                         m_hwnd,
                         HWND_TOPMOST,
                         0, 0, 0, 0,
-                        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
+                        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOSENDCHANGING
                     );
                 }
             }
@@ -432,7 +470,7 @@ void WindowManager::LayoutProtectionWorkerLoop() {
                             m_hwnd,
                             HWND_TOPMOST,
                             0, 0, 0, 0,
-                            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
+                            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOSENDCHANGING
                         );
                     }
                     std::this_thread::sleep_for(std::chrono::milliseconds(5));
@@ -440,12 +478,13 @@ void WindowManager::LayoutProtectionWorkerLoop() {
                 continue;
             } else if (m_alwaysOnTop && m_isVisible) {
                 HWND fg = GetForegroundWindow();
-                if (fg != m_hwnd) {
+                HWND prev = GetWindow(m_hwnd, GW_HWNDPREV);
+                if ((fg && fg != m_hwnd) || prev != nullptr) {
                     SetWindowPos(
                         m_hwnd,
                         HWND_TOPMOST,
                         0, 0, 0, 0,
-                        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
+                        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOSENDCHANGING
                     );
                 }
             }

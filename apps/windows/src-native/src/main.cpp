@@ -10,6 +10,7 @@
 #include "../include/webview2_host.hpp"
 #include "../include/service_dispatcher.hpp"
 #include "../include/focus_manager.hpp"
+#include <tlhelp32.h>
 
 using namespace LensDesk;
 
@@ -43,25 +44,81 @@ static void ShowErrorDialog(HWND hwnd, const wchar_t* text, const wchar_t* title
     }
 }
 
-// UIAccess Token Duplication helper for elevated focus & SendInput priority
+// UIAccess Token Duplication helper for elevated focus & SendInput priority (1:1 HintLens parity)
 static bool TryEnableUIAccess() {
 #ifdef _WIN32
     HANDLE hToken = nullptr;
-    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY | TOKEN_ADJUST_DEFAULT | TOKEN_DUPLICATE | TOKEN_ASSIGN_PRIMARY, &hToken)) {
-        return false;
-    }
-    DWORD uia = 0;
-    DWORD retLen = 0;
-    if (GetTokenInformation(hToken, TokenUIAccess, &uia, sizeof(uia), &retLen) && uia != 0) {
+    if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY | TOKEN_ADJUST_DEFAULT | TOKEN_DUPLICATE | TOKEN_ASSIGN_PRIMARY, &hToken)) {
+        DWORD uia = 0;
+        DWORD retLen = 0;
+        if (GetTokenInformation(hToken, TokenUIAccess, &uia, sizeof(uia), &retLen) && uia != 0) {
+            CloseHandle(hToken);
+            LogInfo("UIAccess already active — continuing");
+            return true;
+        }
+
+        DWORD enable = 1;
+        if (SetTokenInformation(hToken, TokenUIAccess, &enable, sizeof(enable))) {
+            CloseHandle(hToken);
+            LogInfo("UIAccess enabled on current token");
+            return true;
+        }
         CloseHandle(hToken);
-        return true; // Already running with UIAccess elevation
     }
-    DWORD enable = 1;
-    if (SetTokenInformation(hToken, TokenUIAccess, &enable, sizeof(enable))) {
-        CloseHandle(hToken);
-        return true;
+
+    LogInfo("No UIAccess — attempting token elevation via winlogon");
+    HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (hSnapshot != INVALID_HANDLE_VALUE) {
+        PROCESSENTRY32W pe{ sizeof(PROCESSENTRY32W) };
+        DWORD winlogonPid = 0;
+        if (Process32FirstW(hSnapshot, &pe)) {
+            do {
+                if (_wcsicmp(pe.szExeFile, L"winlogon.exe") == 0) {
+                    winlogonPid = pe.th32ProcessID;
+                    break;
+                }
+            } while (Process32NextW(hSnapshot, &pe));
+        }
+        CloseHandle(hSnapshot);
+
+        if (winlogonPid != 0) {
+            HANDLE hWinlogon = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_DUP_HANDLE, FALSE, winlogonPid);
+            if (hWinlogon) {
+                HANDLE hWinlogonToken = nullptr;
+                if (OpenProcessToken(hWinlogon, TOKEN_DUPLICATE | TOKEN_ASSIGN_PRIMARY | TOKEN_QUERY, &hWinlogonToken)) {
+                    HANDLE hDupToken = nullptr;
+                    if (DuplicateTokenEx(hWinlogonToken, MAXIMUM_ALLOWED, nullptr, SecurityImpersonation, TokenPrimary, &hDupToken)) {
+                        DWORD enable = 1;
+                        if (SetTokenInformation(hDupToken, TokenUIAccess, &enable, sizeof(enable))) {
+                            wchar_t exePath[MAX_PATH]{};
+                            if (GetModuleFileNameW(nullptr, exePath, MAX_PATH)) {
+                                STARTUPINFOW si{ sizeof(STARTUPINFOW) };
+                                PROCESS_INFORMATION pi{};
+                                if (CreateProcessAsUserW(hDupToken, exePath, GetCommandLineW(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi)) {
+                                    LogInfo("Respawned with UIAccess token from winlogon — exiting parent instance");
+                                    CloseHandle(pi.hProcess);
+                                    CloseHandle(pi.hThread);
+                                    CloseHandle(hDupToken);
+                                    CloseHandle(hWinlogonToken);
+                                    CloseHandle(hWinlogon);
+                                    ExitProcess(0);
+                                    return true;
+                                }
+                            }
+                        }
+                        CloseHandle(hDupToken);
+                    }
+                    CloseHandle(hWinlogonToken);
+                }
+                CloseHandle(hWinlogon);
+            }
+        }
     }
-    CloseHandle(hToken);
+
+    DWORD err = GetLastError();
+    char errMsg[128];
+    snprintf(errMsg, sizeof(errMsg), "CreateUIAccessToken FAILED (err=%lu) — falling back to z-order thread", err);
+    LogInfo(errMsg);
 #endif
     return false;
 }
