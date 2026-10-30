@@ -425,41 +425,38 @@ void ServiceDispatcher::ProcessPendingUi() {
 
 json ServiceDispatcher::GetGateView() {
     std::lock_guard<std::mutex> cloudLock(m_cloudMutex);
-    json gate = m_cloud.GetGateView();
-    // HintLens parity: standalone desktop execution is always active & authorized.
-    // Cloud sync remains fully operational if the user explicitly signs into a cloud account.
-    if (!m_cloud.HasSession() || gate.value("phase", "") == "signed_out") {
-        gate["phase"] = "active";
-        gate["authenticated"] = true;
-        gate["licenseValid"] = true;
-        gate["tier"] = "pro";
-        gate["offlineGrace"] = true;
-        if (!gate.contains("email") || gate["email"].is_null() || (gate["email"].is_string() && gate["email"].get<std::string>().empty())) {
-            gate["email"] = "local@lensdesk.local";
-        }
-        if (!gate.contains("entitlement") || gate["entitlement"].is_null()) {
-            gate["entitlement"] = {
-                { "planId", "pro" },
-                { "activationTimestamp", 1700000000000LL },
-                { "expirationTimestamp", 2100000000000LL },
-                { "subscriptionStatus", "active" },
-                { "remainingSeconds", 31536000 },
-                { "serverTimeMs", 1700000000000LL }
-            };
-        }
-        if (!gate.contains("session") || gate["session"].is_null()) {
-            gate["session"] = {
-                { "id", "session_desktop_native" },
-                { "device", "LensDesk Native Windows Host" }
-            };
-        }
-        if (!gate.contains("user") || gate["user"].is_null()) {
-            gate["user"] = {
-                { "email", "local@lensdesk.local" }
-            };
-        }
-    }
-    return gate;
+    return m_cloud.GetGateView();
+}
+
+bool ServiceDispatcher::IsProtectedAction(const std::string& action) const {
+    static const std::unordered_set<std::string> s_protected = {
+        "desktop.capture",
+        "desktop.autoType",
+        "desktop.ocr",
+        "chat",
+        "model.list",
+        "model.test",
+        "document.read",
+        "image.ocr",
+        "session.save",
+        "session.patch",
+        "session.delete",
+        "session.get",
+        "session.search",
+        "transcript.append",
+        "sync.changes",
+        "recovery.snapshots",
+        "recovery.restore",
+        "history.list",
+        "history.restore",
+        "backup",
+        "backup.restore",
+        "profile.save",
+        "profile.delete",
+        "browser.open",
+        "browser.create"
+    };
+    return s_protected.find(action) != s_protected.end();
 }
 
 json ServiceDispatcher::BuildFullState() {
@@ -508,6 +505,14 @@ json ServiceDispatcher::BuildFullState() {
 
 void ServiceDispatcher::Dispatch(const std::string& action, const json& payload, DispatchResponseCallback callback) {
     try {
+        if (IsProtectedAction(action)) {
+            std::lock_guard<std::mutex> cloudLock(m_cloudMutex);
+            if (!m_cloud.AuthorizedNow()) {
+                callback(errorResult("Sign in to continue. Desktop access is locked until authenticated."), true);
+                return;
+            }
+        }
+
         // --- 1. State ---
         if (action == "state") {
             callback(BuildFullState(), false);
@@ -1412,11 +1417,11 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
         if (action == "auth.status") {
             json gate = GetGateView();
             json auth = {
-                { "authenticated", gate.value("authenticated", true) },
+                { "authenticated", gate.value("authenticated", false) },
                 { "mode", m_cloud.HasSession() ? "cloud" : "local" },
-                { "tier", gate.value("tier", "pro") },
-                { "email", gate.value("email", "local@lensdesk.local") },
-                { "licenseValid", gate.value("licenseValid", true) },
+                { "tier", gate.value("tier", "free") },
+                { "email", gate.value("email", "") },
+                { "licenseValid", gate.value("licenseValid", false) },
                 { "serverUrl", gate.value("serverUrl", "") }
             };
             callback(auth, false);

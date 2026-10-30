@@ -44,6 +44,7 @@ private:
     void HeartbeatLoop();
     json BuildFullState();
     json GetGateView();
+    bool IsProtectedAction(const std::string& action) const;
 
     WindowManager* m_winMgr = nullptr;
     WebView2Host* m_webHost = nullptr;

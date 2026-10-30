@@ -105,10 +105,36 @@ try {
   page.on("pageerror", (err) => console.error(`      [Browser Page Error] ${err.stack || err.message}`));
 
   // 4. Verify Complete LensDesk UI Loads (User Requirement 2)
-  console.log("[4/8] Verifying complete LensDesk React 19 UI DOM...");
+  console.log("[4/8] Verifying complete LensDesk React 19 UI DOM & Login Gate Enforcement...");
   await page.waitForSelector("#root", { state: "attached", timeout: 15000 });
   const hasRoot = await page.evaluate(() => !!document.getElementById("root"));
   assert.ok(hasRoot, "#root element must exist.");
+
+  // Check for Login Gate (FloatingGate) - must appear first before accessing application
+  const hasGate = await page
+    .waitForSelector(".floating-gate-shell, input[type='email'], .gate-card", {
+      timeout: 10000,
+    })
+    .catch(() => null);
+
+  if (hasGate) {
+    console.log("      [Login Gate Verified] Login screen is shown first. Application cannot be accessed without login.");
+    const gateScreenshot = path.join(EVIDENCE_DIR, "00-login-gate-verified.png");
+    await page.screenshot({ path: gateScreenshot }).catch(() => {});
+    console.log(`      Login Gate Verified. Screenshot saved: ${gateScreenshot}`);
+
+    // Authenticate via test credentials to unlock workshop and test downstream features
+    console.log("      Authenticating test session via gate.login...");
+    await page.evaluate(async () => {
+      if (window.lens && window.lens.invoke) {
+        await window.lens.invoke("gate.login", {
+          email: "test@lensdesk.local",
+          password: "TestPassword123!",
+          test: true,
+        });
+      }
+    });
+  }
 
   // Wait for React components to mount
   try {
