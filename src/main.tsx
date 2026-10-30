@@ -787,6 +787,17 @@ function App() {
       const unsubPreferences = window.lens.onPreferences?.((p) => {
         setDesktopShortcuts(p.shortcuts);
         setDesktopPreferences(p);
+        const pAny = p as any;
+        if (pAny && typeof pAny === "object") {
+          setSettingsDraft((old) => ({
+            ...old,
+            ...pAny,
+            theme: pAny.theme || old.theme,
+            alwaysOnTop: typeof pAny.alwaysOnTop === "boolean" ? pAny.alwaysOnTop : old.alwaysOnTop,
+            opacity: typeof pAny.opacity === "number" ? pAny.opacity : old.opacity,
+            captureProtection: typeof pAny.captureProtection === "boolean" ? pAny.captureProtection : old.captureProtection,
+          }));
+        }
       });
       window.lens
         .invoke("desktop.overlayState")

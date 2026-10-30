@@ -278,6 +278,22 @@ void ServiceDispatcher::Initialize(
     m_uiThreadId = GetCurrentThreadId();
     m_cloud.Initialize();
 
+    if (m_cloud.HasSession()) {
+        std::string userId = m_cloud.GetUserId();
+        std::string email = m_cloud.GetUserEmail();
+        if (!userId.empty() && m_storageMgr) {
+            m_storageMgr->SetCurrentAccount(userId, email);
+            json cloudSettings = m_cloud.GetUserSettings();
+            if (!cloudSettings.is_null() && cloudSettings.is_object() && !cloudSettings.empty()) {
+                json current = m_storageMgr->GetPreferences();
+                for (auto& [k, v] : cloudSettings.items()) {
+                    current[k] = v;
+                }
+                m_storageMgr->SavePreferences(current);
+            }
+        }
+    }
+
     // Apply persisted desktop preferences before the UI reads its initial state.
     // The window is created with safe defaults, so a saved opt-out must be
     // applied explicitly or it is silently ignored until the next settings save.
@@ -491,7 +507,11 @@ json ServiceDispatcher::BuildFullState() {
     state["settings"] = prefs;
     state["profiles"] = profiles;
     state["sessions"] = sessions;
-    state["storage"] = "local";
+    state["storage"] = m_cloud.HasSession() ? "cloud" : "local";
+    if (m_cloud.HasSession()) {
+        state["accountId"] = m_cloud.GetUserId();
+        state["userEmail"] = m_cloud.GetUserEmail();
+    }
     state["cloudConnected"] = m_cloud.HasSession();
     state["keys"] = keyStatus;
     state["ownedKeys"] = ownedKeys;
@@ -542,6 +562,14 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
                 m_storageMgr->SavePreferences(currentPrefs);
             }
 
+            if (m_cloud.HasSession()) {
+                std::thread([this, currentPrefs]() {
+                    try {
+                        m_cloud.SyncUserSettings(currentPrefs);
+                    } catch (...) {}
+                }).detach();
+            }
+
             if (m_winMgr) {
                 if (payload.contains("alwaysOnTop")) {
                     m_winMgr->SetAlwaysOnTop(payload["alwaysOnTop"].get<bool>());
@@ -589,6 +617,14 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
             }
             if (m_storageMgr) {
                 m_storageMgr->SavePreferences(currentPrefs);
+            }
+
+            if (m_cloud.HasSession()) {
+                std::thread([this, currentPrefs]() {
+                    try {
+                        m_cloud.SyncUserSettings(currentPrefs);
+                    } catch (...) {}
+                }).detach();
             }
 
             if (m_winMgr) {
@@ -1329,6 +1365,32 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
                 result = m_cloud.Login(payload);
                 gate = m_cloud.GetGateView();
             }
+            if (m_cloud.HasSession()) {
+                std::string userId = m_cloud.GetUserId();
+                std::string email = m_cloud.GetUserEmail();
+                if (m_storageMgr && !userId.empty()) {
+                    m_storageMgr->SetCurrentAccount(userId, email);
+                }
+                json cloudSettings = m_cloud.GetUserSettings();
+                if (result.contains("settings") && result["settings"].is_object()) {
+                    cloudSettings = result["settings"];
+                }
+                if (m_storageMgr && !cloudSettings.is_null() && cloudSettings.is_object() && !cloudSettings.empty()) {
+                    json current = m_storageMgr->GetPreferences();
+                    for (auto& [k, v] : cloudSettings.items()) {
+                        current[k] = v;
+                    }
+                    m_storageMgr->SavePreferences(current);
+                    if (m_winMgr) {
+                        if (current.contains("alwaysOnTop")) m_winMgr->SetAlwaysOnTop(current["alwaysOnTop"].get<bool>());
+                        if (current.contains("opacity")) m_winMgr->SetOpacity(current["opacity"].get<float>());
+                        if (current.contains("captureProtection")) m_winMgr->SetCaptureProtection(current["captureProtection"].get<bool>());
+                    }
+                }
+                if (m_storageMgr) {
+                    BroadcastEvent("lens:preferences", m_storageMgr->GetPreferences());
+                }
+            }
             BroadcastEvent("lens:gate", gate);
             callback(result, false);
             return;
@@ -1342,6 +1404,32 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
                 result = m_cloud.CompleteMfa(payload);
                 gate = m_cloud.GetGateView();
             }
+            if (m_cloud.HasSession()) {
+                std::string userId = m_cloud.GetUserId();
+                std::string email = m_cloud.GetUserEmail();
+                if (m_storageMgr && !userId.empty()) {
+                    m_storageMgr->SetCurrentAccount(userId, email);
+                }
+                json cloudSettings = m_cloud.GetUserSettings();
+                if (result.contains("settings") && result["settings"].is_object()) {
+                    cloudSettings = result["settings"];
+                }
+                if (m_storageMgr && !cloudSettings.is_null() && cloudSettings.is_object() && !cloudSettings.empty()) {
+                    json current = m_storageMgr->GetPreferences();
+                    for (auto& [k, v] : cloudSettings.items()) {
+                        current[k] = v;
+                    }
+                    m_storageMgr->SavePreferences(current);
+                    if (m_winMgr) {
+                        if (current.contains("alwaysOnTop")) m_winMgr->SetAlwaysOnTop(current["alwaysOnTop"].get<bool>());
+                        if (current.contains("opacity")) m_winMgr->SetOpacity(current["opacity"].get<float>());
+                        if (current.contains("captureProtection")) m_winMgr->SetCaptureProtection(current["captureProtection"].get<bool>());
+                    }
+                }
+                if (m_storageMgr) {
+                    BroadcastEvent("lens:preferences", m_storageMgr->GetPreferences());
+                }
+            }
             BroadcastEvent("lens:gate", gate);
             callback(result, false);
             return;
@@ -1354,11 +1442,15 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
             return;
         }
 
-        if (action == "gate.logout") {
+        if (action == "gate.logout" || action == "auth.logout") {
             json gate;
             {
                 std::lock_guard<std::mutex> cloudLock(m_cloudMutex);
                 gate = m_cloud.Logout();
+            }
+            if (m_storageMgr) {
+                m_storageMgr->SetCurrentAccount("", "");
+                BroadcastEvent("lens:preferences", m_storageMgr->GetPreferences());
             }
             BroadcastEvent("lens:gate", gate);
             callback(gate, false);

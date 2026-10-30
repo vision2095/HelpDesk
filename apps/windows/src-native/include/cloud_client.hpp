@@ -31,6 +31,13 @@ public:
     bool HasSession() const { return !m_token.empty() && !m_refreshToken.empty(); }
     std::string GetServerUrl() const { return m_serverUrl; }
     std::string GetPurchaseUrl() const;
+    std::string GetUserId() const {
+        return (!m_user.is_null() && m_user.is_object()) ? m_user.value("id", "") : "";
+    }
+    std::string GetUserEmail() const { return m_email; }
+    json GetUserSettings() const { return m_userSettings; }
+    json FetchUserSettings();
+    json SyncUserSettings(const json& settings);
 
 private:
     struct HttpResult {
@@ -44,7 +51,9 @@ private:
         const std::string& action,
         const json& payload,
         int timeoutMs = 10000,
-        const std::string& bearer = ""
+        const std::string& bearer = "",
+        const std::wstring& verb = L"POST",
+        const std::wstring& customPath = L""
     ) const;
     HttpResult Heartbeat();
     HttpResult Refresh();
@@ -73,6 +82,7 @@ private:
     json m_session = nullptr;
     json m_entitlement = nullptr;
     json m_takeover = nullptr;
+    json m_userSettings = nullptr;
     int64_t m_serverTimeMs = 0;
     int64_t m_lastVerifiedAtMs = 0;
 };

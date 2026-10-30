@@ -151,6 +151,9 @@ void CloudClient::Load() {
     if (!m_user.is_null() && m_user.is_object() && m_email.empty()) {
         m_email = m_user.value("email", "");
     }
+    if (saved.contains("settings") && saved["settings"].is_object()) {
+        m_userSettings = saved["settings"];
+    }
     if (!HasSession()) {
         m_token.clear();
         m_refreshToken.clear();
@@ -166,6 +169,7 @@ void CloudClient::Save() {
     saved["email"] = m_email;
     saved["user"] = m_user;
     saved["session"] = m_session;
+    saved["settings"] = m_userSettings;
 
     try {
         std::filesystem::path temp = m_configPath;
@@ -187,6 +191,7 @@ void CloudClient::ClearCredentials() {
     m_desktopSessionId.clear();
     m_entitlement = nullptr;
     m_takeover = nullptr;
+    m_userSettings = nullptr;
     m_lastVerifiedAtMs = 0;
     m_serverTimeMs = 0;
 }
@@ -195,7 +200,9 @@ CloudClient::HttpResult CloudClient::Request(
     const std::string& action,
     const json& payload,
     int timeoutMs,
-    const std::string& bearer
+    const std::string& bearer,
+    const std::wstring& verb,
+    const std::wstring& customPath
 ) const {
     HttpResult result;
 
@@ -214,10 +221,14 @@ CloudClient::HttpResult CloudClient::Request(
 
     const std::wstring host(components.lpszHostName, components.dwHostNameLength);
     std::wstring path(components.lpszUrlPath, components.dwUrlPathLength);
-    if (path.empty()) path = L"/";
-    if (path.back() == L'/') path.pop_back();
-    path += L"/api/";
-    path += Utf8ToWide(action);
+    if (!customPath.empty()) {
+        path = customPath;
+    } else {
+        if (path.empty()) path = L"/";
+        if (path.back() == L'/') path.pop_back();
+        path += L"/api/";
+        path += Utf8ToWide(action);
+    }
 
     const bool secure = components.nScheme == INTERNET_SCHEME_HTTPS;
     const int effectiveTimeout = std::max(timeoutMs, 45000);
@@ -259,7 +270,7 @@ CloudClient::HttpResult CloudClient::Request(
 
         HINTERNET request = WinHttpOpenRequest(
             connection,
-            L"POST",
+            verb.c_str(),
             path.c_str(),
             nullptr,
             WINHTTP_NO_REFERER,
@@ -284,12 +295,12 @@ CloudClient::HttpResult CloudClient::Request(
             headers += L"\r\n";
         }
 
-        const std::string body = payload.dump();
+        const std::string body = (verb == L"GET" || verb == L"HEAD") ? "" : payload.dump();
         BOOL sent = WinHttpSendRequest(
             request,
             headers.c_str(),
             static_cast<DWORD>(-1L),
-            const_cast<char*>(body.data()),
+            body.empty() ? nullptr : const_cast<char*>(body.data()),
             static_cast<DWORD>(body.size()),
             static_cast<DWORD>(body.size()),
             0
@@ -354,6 +365,9 @@ CloudClient::HttpResult CloudClient::Request(
 void CloudClient::ApplyAuthoritativeSnapshot(const json& data) {
     if (data.contains("user")) m_user = data["user"];
     if (data.contains("session")) m_session = data["session"];
+    if (data.contains("settings") && data["settings"].is_object()) {
+        m_userSettings = data["settings"];
+    }
     if (!m_user.is_null() && m_user.is_object()) {
         m_email = m_user.value("email", m_email);
     }
@@ -764,6 +778,60 @@ json CloudClient::CloudRequest(const std::string& action, const json& payload) {
         throw std::runtime_error(HttpErrorText(res.body, "Cloud request failed."));
     }
     return res.body;
+}
+
+json CloudClient::FetchUserSettings() {
+    if (!HasSession()) return json::object();
+
+    HttpResult res = Request("settings", json::object(), 15000, m_token, L"GET", L"/api/v1/settings");
+    if (res.status == 401) {
+        HttpResult ref = Refresh();
+        if (ref.status == 200) {
+            res = Request("settings", json::object(), 15000, m_token, L"GET", L"/api/v1/settings");
+        }
+    }
+    if (res.status == 200 && res.body.is_object() && res.body.contains("settings") && res.body["settings"].is_object()) {
+        m_userSettings = res.body["settings"];
+        Save();
+        return m_userSettings;
+    }
+
+    try {
+        json state = CloudRequest("state", json::object());
+        if (state.contains("settings") && state["settings"].is_object()) {
+            m_userSettings = state["settings"];
+            Save();
+            return m_userSettings;
+        }
+    } catch (...) {}
+
+    return m_userSettings.is_object() ? m_userSettings : json::object();
+}
+
+json CloudClient::SyncUserSettings(const json& settings) {
+    if (!HasSession()) return json::object();
+
+    m_userSettings = settings;
+    Save();
+
+    json payload;
+    payload["settings"] = settings;
+    HttpResult res = Request("settings", payload, 15000, m_token, L"PUT", L"/api/v1/settings");
+    if (res.status == 401) {
+        HttpResult ref = Refresh();
+        if (ref.status == 200) {
+            res = Request("settings", payload, 15000, m_token, L"PUT", L"/api/v1/settings");
+        }
+    }
+    if (res.status >= 200 && res.status < 300) {
+        return res.body;
+    }
+
+    try {
+        return CloudRequest("settings.save", settings);
+    } catch (...) {}
+
+    return json::object();
 }
 
 } // namespace LensDesk

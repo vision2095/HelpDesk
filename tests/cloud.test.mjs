@@ -799,3 +799,76 @@ test("desktop downloads require authentication and reject unauthenticated reques
   assert.notEqual(authStealth.status, 401);
   assert.notEqual(authStealth.status, 302);
 });
+
+test("cloud settings sync: /api/v1/settings GET/PUT and desktop login roam user preferences across machines", async (t) => {
+  const f = await fixture(t);
+  const user = await f.register("roaming@example.com");
+
+  // Unauthenticated requests are rejected
+  const unauthGet = await fetch(f.url + "/api/v1/settings");
+  assert.equal(unauthGet.status, 401);
+
+  // Authenticated GET returns default cloud settings bound to user account
+  const authGet = await fetch(f.url + "/api/v1/settings", {
+    headers: { Authorization: "Bearer " + user.token },
+  });
+  assert.equal(authGet.status, 200);
+  const getBody = await authGet.json();
+  assert.equal(getBody.ok, true);
+  assert.equal(getBody.storage, "cloud");
+  assert.equal(getBody.accountId, user.user.id);
+  assert.ok(getBody.settings);
+
+  // Authenticated PUT updates settings in the user's account
+  const putRes = await fetch(f.url + "/api/v1/settings", {
+    method: "PUT",
+    headers: {
+      Authorization: "Bearer " + user.token,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      settings: {
+        ...getBody.settings,
+        opacity: 0.85,
+        theme: "dark",
+        language: "French",
+      },
+    }),
+  });
+  assert.equal(putRes.status, 200);
+  const putBody = await putRes.json();
+  assert.equal(putBody.ok, true);
+  assert.equal(putBody.settings.opacity, 0.85);
+  assert.equal(putBody.settings.theme, "dark");
+  assert.equal(putBody.settings.language, "French");
+
+  // Verify GET now returns the updated settings from the user account
+  const secondGet = await fetch(f.url + "/api/v1/settings", {
+    headers: { Authorization: "Bearer " + user.token },
+  });
+  assert.equal(secondGet.status, 200);
+  const secondGetBody = await secondGet.json();
+  assert.equal(secondGetBody.settings.opacity, 0.85);
+  assert.equal(secondGetBody.settings.language, "French");
+
+  // Activate subscription so desktop.login succeeds
+  await f.call("purchase.devActivate", { planId: "monthly" }, user.token);
+
+  // Verify desktop.login returns user settings in payload for zero-roundtrip roaming
+  const desktopLogin = await f.call(
+    "desktop.login",
+    {
+      email: "roaming@example.com",
+      password: "long-test-password",
+      deviceLabel: "New Machine Laptop",
+      os: "Windows",
+      appVersion: "2.0.0",
+    },
+    null,
+  );
+  assert.equal(desktopLogin.status, 200);
+  assert.equal(desktopLogin.body.settings?.opacity, 0.85);
+  assert.equal(desktopLogin.body.settings?.language, "French");
+  assert.equal(desktopLogin.body.storage, "cloud");
+  assert.equal(desktopLogin.body.accountId, user.user.id);
+});

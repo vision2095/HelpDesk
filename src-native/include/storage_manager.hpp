@@ -21,6 +21,11 @@ public:
     bool ClearAllData();
     bool ClearAll() { return ClearAllData(); }
 
+    // Account-bound data scoping
+    bool SetCurrentAccount(const std::string& userId, const std::string& email = "");
+    std::string GetCurrentAccountId() const { return m_currentAccountId; }
+    std::string GetCurrentAccountEmail() const { return m_currentAccountEmail; }
+
     // Profiles
     json GetProfiles();
     bool SaveProfile(const json& profile);
@@ -52,6 +57,9 @@ private:
     std::filesystem::path m_profilesPath;
     std::filesystem::path m_sessionsPath;
     std::filesystem::path m_keysPath;
+
+    std::string m_currentAccountId;
+    std::string m_currentAccountEmail;
 
     std::mutex m_mutex;
 };

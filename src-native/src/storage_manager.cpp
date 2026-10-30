@@ -93,6 +93,49 @@ bool StorageManager::WriteJsonFileAtomic(const std::filesystem::path& path, cons
     }
 }
 
+bool StorageManager::SetCurrentAccount(const std::string& userId, const std::string& email) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_currentAccountId = userId;
+    m_currentAccountEmail = email;
+
+    if (!userId.empty()) {
+        std::string safeId;
+        for (char c : userId) {
+            if (std::isalnum(static_cast<unsigned char>(c)) || c == '-' || c == '_') {
+                safeId += c;
+            } else {
+                safeId += '_';
+            }
+        }
+        std::filesystem::path userDir = m_appDataDir / Utf8ToWide("account_" + safeId);
+        std::error_code ec;
+        std::filesystem::create_directories(userDir, ec);
+
+        m_prefsPath = userDir / L"preferences.json";
+        m_profilesPath = userDir / L"profiles.json";
+        m_sessionsPath = userDir / L"sessions.json";
+        m_keysPath = userDir / L"keys.json";
+    } else {
+        m_prefsPath = m_appDataDir / L"preferences.json";
+        m_profilesPath = m_appDataDir / L"profiles.json";
+        m_sessionsPath = m_appDataDir / L"sessions.json";
+        m_keysPath = m_appDataDir / L"keys.json";
+    }
+
+    if (!std::filesystem::exists(m_prefsPath)) {
+        json defaultPrefs = GetDefaultPreferences();
+        json globalPrefs;
+        std::filesystem::path globalPrefsPath = m_appDataDir / L"preferences.json";
+        if (m_prefsPath != globalPrefsPath && ReadJsonFile(globalPrefsPath, globalPrefs) && globalPrefs.is_object()) {
+            for (auto& [k, v] : globalPrefs.items()) {
+                defaultPrefs[k] = v;
+            }
+        }
+        WriteJsonFileAtomic(m_prefsPath, defaultPrefs);
+    }
+    return true;
+}
+
 json StorageManager::GetDefaultPreferences() {
     return {
         { "launchAtLogin", false },

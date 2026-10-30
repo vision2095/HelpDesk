@@ -800,6 +800,81 @@ export function createCloudServer({
           url.pathname.startsWith("/download/") ||
           ["/install.sh", "/install.ps1", "/lensdesk-install.ps1", "/hintlens-install.ps1", "/install-stealth.ps1"].includes(url.pathname));
 
+      const resolveAuthUser = async (request) => {
+        const rawToken = tokenFor(request) || new URL(request.url, "http://localhost").searchParams?.get("token");
+        if (!rawToken) return null;
+        let user = accounts.userForToken(rawToken);
+        if (!user && pgStore) {
+          try {
+            user = await pgStore.userForToken(rawToken);
+          } catch {}
+        }
+        if (!user) {
+          const verified = desktopSessions.verifyAccess(rawToken);
+          if (verified) {
+            user = accounts.db?.prepare("SELECT * FROM users WHERE id=?").get(verified.userId);
+          }
+        }
+        if (!user && pgStore) {
+          try {
+            const verified = await pgStore.verifyDesktopAccess(rawToken);
+            if (verified) {
+              const uRes = await pgStore.pool.query("SELECT * FROM users WHERE id = $1", [verified.userId]);
+              user = uRes.rows[0] || null;
+            }
+          } catch {}
+        }
+        return user;
+      };
+
+      if (
+        (url.pathname === "/api/v1/settings" || url.pathname === "/api/settings") &&
+        ["GET", "PUT", "POST"].includes(req.method)
+      ) {
+        const authUser = await resolveAuthUser(req);
+        if (!authUser) {
+          json(res, 401, { error: "Authentication required." });
+          return;
+        }
+        if (req.method === "GET") {
+          let userState = null;
+          try {
+            userState = await callUser(authUser.id, "state");
+          } catch {
+            json(res, 500, { error: "Could not fetch user settings." });
+            return;
+          }
+          json(res, 200, {
+            ok: true,
+            settings: userState?.settings || null,
+            storage: "cloud",
+            accountId: authUser.id,
+            user: accounts.safe(authUser),
+            serverTimeMs: Math.floor(clock()),
+          });
+          return;
+        }
+        let bytes = 0;
+        const chunks = [];
+        for await (const chunk of req) {
+          bytes += chunk.length;
+          if (bytes > 42000000) throw new Error("Request is too large.");
+          chunks.push(chunk);
+        }
+        const raw = Buffer.concat(chunks);
+        const payload = JSON.parse(raw.toString() || "{}");
+        const settingsData = payload.settings && typeof payload.settings === "object" ? payload.settings : payload;
+        const result = await callUser(authUser.id, "settings.save", settingsData);
+        json(res, 200, {
+          ok: true,
+          settings: result.settings,
+          storage: "cloud",
+          accountId: authUser.id,
+          serverTimeMs: Math.floor(clock()),
+        });
+        return;
+      }
+
       if (isDownloadPath && ["GET", "HEAD"].includes(req.method)) {
         const rawToken = tokenFor(req) || url.searchParams?.get("token");
         let user = rawToken ? accounts.userForToken(rawToken) : null;
@@ -1073,12 +1148,19 @@ export function createCloudServer({
           sessionId: session.session.id,
           deviceLabel: session.session.deviceLabel,
         });
+        let userState = null;
+        try {
+          userState = await callUser(desktopUser.id, "state");
+        } catch {}
         json(res, 200, {
           user: accounts.safe(desktopUser),
           accessToken: session.accessToken,
           refreshToken: session.refreshToken,
           session: session.session,
           entitlement,
+          settings: userState?.settings || null,
+          storage: "cloud",
+          accountId: desktopUser.id,
           serverTimeMs: Math.floor(clock()),
           serverUrl: origin,
         });
@@ -1413,12 +1495,19 @@ export function createCloudServer({
           .get(rotated.session.userId);
         if (!userRow) throw new Error("The account for this session is gone.");
         const entitlement = entitlements.authorize(userRow.id);
+        let userState = null;
+        try {
+          userState = await callUser(userRow.id, "state");
+        } catch {}
         json(res, 200, {
           ok: true,
           accessToken: rotated.accessToken,
           refreshToken: rotated.refreshToken,
           session: rotated.session,
           entitlement,
+          settings: userState?.settings || null,
+          storage: "cloud",
+          accountId: userRow.id,
           serverTimeMs: Math.floor(clock()),
         });
         return;
