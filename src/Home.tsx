@@ -946,7 +946,6 @@ export function Home({ navigate }: HomeProps) {
                           <a
                             className="site-button site-button-light"
                             href={build.artifact.url}
-                            download
                             onClick={handleDownloadClick}
                           >
                             <Download size={15} />

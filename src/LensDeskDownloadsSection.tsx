@@ -159,7 +159,6 @@ export function LensDeskDownloadsSection({
           <a
             href="/downloads/windows"
             className="hl-btn-download-primary"
-            download="LensDesk.zip"
             onClick={handleDownloadClick}
           >
             <Download size={16} />

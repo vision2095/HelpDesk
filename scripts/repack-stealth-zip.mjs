@@ -81,6 +81,11 @@ for (const target of STEALTH_TARGETS) {
     fs.unlinkSync(targetZip);
   }
   execFileSync(sevenZip, ["a", "-tzip", "-mx=9", targetZip, exeName], { cwd: staging });
+  // Also create clean-named zip in stealth and release directory
+  const cleanStealthZip = path.join(stealthDir, `${baseName}.zip`);
+  const cleanReleaseZip = path.join(releaseDir, `${baseName}.zip`);
+  fs.copyFileSync(targetZip, cleanStealthZip);
+  fs.copyFileSync(targetZip, cleanReleaseZip);
   fs.rmSync(staging, { recursive: true, force: true });
 }
 
