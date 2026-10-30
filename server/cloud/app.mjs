@@ -2383,7 +2383,12 @@ export async function startCloud() {
         port: Number(process.env.SMTP_PORT || 587),
         secure: process.env.SMTP_PORT === "465",
         auth: process.env.SMTP_USER
-          ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD }
+          ? {
+              user: process.env.SMTP_USER,
+              pass: process.env.SMTP_PASSWORD
+                ? process.env.SMTP_PASSWORD.replace(/\s+/g, "")
+                : "",
+            }
           : undefined,
         defaults: { from: process.env.SMTP_FROM },
       })
