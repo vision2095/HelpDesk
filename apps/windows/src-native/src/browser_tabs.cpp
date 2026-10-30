@@ -126,6 +126,16 @@ bool BrowserTabsManager::Initialize(
                 SetupDownloadHandling();
 
                 if (m_webView) {
+                    // HintLens parity: inject anti-detection and file picker guard into every embedded browser document
+                    const wchar_t* stealthScript =
+                        LR"JS((function(){try{if(window.chrome&&window.chrome.webview){try{delete window.chrome.webview}catch(e){}if(window.chrome.webview){try{Object.defineProperty(window.chrome,'webview',{value:undefined,writable:false,configurable:false,enumerable:false})}catch(e){}}}if(navigator.userAgentData){var ua=navigator.userAgentData;var f=function(a){return a.filter(function(b){return b.brand.indexOf('WebView2')===-1})};try{var fb=Object.freeze(f(ua.brands));Object.defineProperty(ua,'brands',{get:function(){return fb},configurable:false,enumerable:true})}catch(e){}if(ua.getHighEntropyValues){var gh=ua.getHighEntropyValues.bind(ua);try{Object.defineProperty(ua,'getHighEntropyValues',{value:function(h){return gh(h).then(function(v){if(v.brands)v.brands=f(v.brands);if(v.fullVersionList)v.fullVersionList=f(v.fullVersionList);return v})},writable:false,configurable:false})}catch(e){}}try{Object.defineProperty(ua,'toJSON',{value:function(){return{brands:fb,mobile:ua.mobile,platform:ua.platform}},writable:false,configurable:false})}catch(e){}}var wp=Window.prototype;try{var dw=Object.getOwnPropertyDescriptor(wp,'outerWidth');if(dw)Object.defineProperty(wp,'outerWidth',{get:function(){return this.innerWidth+16},enumerable:dw.enumerable,configurable:true})}catch(e){}try{var dh=Object.getOwnPropertyDescriptor(wp,'outerHeight');if(dh)Object.defineProperty(wp,'outerHeight',{get:function(){return this.innerHeight+89},enumerable:dh.enumerable,configurable:true})}catch(e){}}catch(e){}})();)JS";
+
+                    const wchar_t* filePickerGuardScript =
+                        LR"JS((function(){var b=function(e){var t=e.target;if(t&&t.tagName==='INPUT'&&(t.type||'').toLowerCase()==='file'){e.preventDefault();e.stopImmediatePropagation();}};document.addEventListener('click',b,true);try{var p=HTMLInputElement.prototype,s=p.showPicker;if(s){p.showPicker=function(){if((this.type||'').toLowerCase()==='file')return;return s.apply(this,arguments);};}}catch(_){}})();)JS";
+
+                    m_webView->AddScriptToExecuteOnDocumentCreated(stealthScript, nullptr);
+                    m_webView->AddScriptToExecuteOnDocumentCreated(filePickerGuardScript, nullptr);
+
                     m_webView->add_NavigationStarting(
                         Callback<ICoreWebView2NavigationStartingEventHandler>(
                             [this](ICoreWebView2* sender, ICoreWebView2NavigationStartingEventArgs* args) -> HRESULT {

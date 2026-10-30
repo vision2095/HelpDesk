@@ -872,3 +872,85 @@ test("cloud settings sync: /api/v1/settings GET/PUT and desktop login roam user 
   assert.equal(desktopLogin.body.storage, "cloud");
   assert.equal(desktopLogin.body.accountId, user.user.id);
 });
+
+test("HintLens REST API parity endpoints (/api/v1/version/check, /api/v1/billing/subscription, /api/v1/history, /api/v1/auth/google/url, snake_case tokens)", async (t) => {
+  const f = await fixture(t);
+  const user = await f.register("hintlens.user@example.com");
+
+  // 1. Version check with ?v= parameter
+  const versionRes = await fetch(f.url + "/api/v1/version/check?v=1.0.0");
+  assert.equal(versionRes.status, 200);
+  const versionBody = await versionRes.json();
+  assert.equal(versionBody.ok, true);
+  assert.equal(typeof versionBody.downloadUrl, "string");
+
+  // 2. Google OAuth URL endpoint
+  const googleRes = await fetch(f.url + "/api/v1/auth/google/url?redirect=/interview");
+  assert.equal(googleRes.status, 200);
+  const googleBody = await googleRes.json();
+  assert.equal(googleBody.ok, true);
+  assert.match(googleBody.url, /google=1/);
+
+  // 3. Billing subscription endpoint requires auth
+  const subUnauth = await fetch(f.url + "/api/v1/billing/subscription");
+  assert.equal(subUnauth.status, 401);
+
+  // Activate subscription
+  await f.call("purchase.devActivate", { planId: "monthly" }, user.token);
+
+  // Now authenticated subscription returns active status and quotas
+  const subAuth = await fetch(f.url + "/api/v1/billing/subscription", {
+    headers: { Authorization: "Bearer " + user.token },
+  });
+  assert.equal(subAuth.status, 200);
+  const subBody = await subAuth.json();
+  assert.equal(subBody.ok, true);
+  assert.equal(subBody.status, "active");
+  assert.equal(subBody.cloudHistory, true);
+  assert.equal(subBody.interviewSecondsRemaining, 86400);
+
+  // 4. History endpoint
+  const historyRes = await fetch(f.url + "/api/v1/history", {
+    headers: { Authorization: "Bearer " + user.token },
+  });
+  assert.equal(historyRes.status, 200);
+  const historyBody = await historyRes.json();
+  assert.equal(historyBody.ok, true);
+  assert.equal(Array.isArray(historyBody.history), true);
+
+  // 5. Desktop login returns both camelCase and snake_case tokens
+  const loginRes = await fetch(f.url + "/api/v1/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-LensDesk-Client": "desktop" },
+    body: JSON.stringify({
+      email: "hintlens.user@example.com",
+      password: "long-test-password",
+      deviceLabel: "HintLens Parity Device",
+      os: "Windows",
+      appVersion: "2.0.0",
+    }),
+  });
+  assert.equal(loginRes.status, 200);
+  const loginBody = await loginRes.json();
+  assert.equal(loginBody.ok, true);
+  assert.ok(loginBody.accessToken);
+  assert.ok(loginBody.access_token);
+  assert.equal(loginBody.accessToken, loginBody.access_token);
+  assert.ok(loginBody.refreshToken);
+  assert.ok(loginBody.refresh_token);
+  assert.equal(loginBody.refreshToken, loginBody.refresh_token);
+
+  // 6. Desktop token refresh accepting snake_case refresh_token
+  const refreshRes = await fetch(f.url + "/api/v1/auth/refresh", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-LensDesk-Client": "desktop" },
+    body: JSON.stringify({
+      refresh_token: loginBody.refresh_token,
+    }),
+  });
+  assert.equal(refreshRes.status, 200);
+  const refreshBody = await refreshRes.json();
+  assert.equal(refreshBody.ok, true);
+  assert.ok(refreshBody.accessToken);
+  assert.ok(refreshBody.access_token);
+});

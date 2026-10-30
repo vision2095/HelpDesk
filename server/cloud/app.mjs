@@ -768,10 +768,15 @@ export function createCloudServer({
       }
       if (
         url.pathname === "/api/v1/updates/check" ||
-        url.pathname === "/api/updates/check"
+        url.pathname === "/api/updates/check" ||
+        url.pathname === "/api/v1/version/check" ||
+        url.pathname === "/api/version/check"
       ) {
         const manifest = await releases.manifest();
-        const clientVersion = url.searchParams.get("version") || "1.0.0";
+        const clientVersion =
+          url.searchParams.get("v") ||
+          url.searchParams.get("version") ||
+          "1.0.0";
         const clientPlatform = url.searchParams.get("platform") || "windows";
         const normalizedPlatform = clientPlatform.includes("win")
           ? "windows"
@@ -781,11 +786,13 @@ export function createCloudServer({
         const rel = manifest[normalizedPlatform] || manifest.windows;
         const updateAvailable = rel ? rel.version !== clientVersion : false;
         json(res, 200, {
+          ok: true,
           updateAvailable,
           currentVersion: clientVersion,
           latestVersion: rel?.version || clientVersion,
           platform: normalizedPlatform,
           artifact: rel || null,
+          downloadUrl: rel?.downloadUrl || (origin + "/downloads/windows"),
         });
         return;
       }
@@ -871,6 +878,71 @@ export function createCloudServer({
           storage: "cloud",
           accountId: authUser.id,
           serverTimeMs: Math.floor(clock()),
+        });
+        return;
+      }
+
+      if (
+        (url.pathname === "/api/v1/billing/subscription" || url.pathname === "/api/billing/subscription") &&
+        ["GET", "HEAD"].includes(req.method)
+      ) {
+        const authUser = await resolveAuthUser(req);
+        if (!authUser) {
+          json(res, 401, { error: "Authentication required." });
+          return;
+        }
+        let entitlement = entitlements.authorize(authUser.id);
+        if (!entitlement && pgStore) {
+          try {
+            entitlement = await pgStore.authorizeSubscription(authUser.id);
+          } catch {}
+        }
+        json(res, 200, {
+          ok: true,
+          status: entitlement ? "active" : "inactive",
+          plan: entitlement?.planId || "free",
+          entitlement: entitlement || null,
+          interviewSecondsRemaining: entitlement ? 86400 : 0,
+          interviewSecondsPerDay: entitlement ? 86400 : 0,
+          cloudHistory: true,
+          storage: "cloud",
+          serverTimeMs: Math.floor(clock()),
+        });
+        return;
+      }
+
+      if (
+        (url.pathname === "/api/v1/history" || url.pathname === "/api/history") &&
+        ["GET", "POST"].includes(req.method)
+      ) {
+        const authUser = await resolveAuthUser(req);
+        if (!authUser) {
+          json(res, 401, { error: "Authentication required." });
+          return;
+        }
+        let userState = null;
+        try {
+          userState = await callUser(authUser.id, "state");
+        } catch {}
+        json(res, 200, {
+          ok: true,
+          history: userState?.sessions || [],
+          sessions: userState?.sessions || [],
+          cloudHistory: true,
+          storage: "cloud",
+          serverTimeMs: Math.floor(clock()),
+        });
+        return;
+      }
+
+      if (
+        (url.pathname === "/api/v1/auth/google/url" || url.pathname === "/api/auth/google/url") &&
+        ["GET", "HEAD"].includes(req.method)
+      ) {
+        const redirect = url.searchParams.get("redirect") || "/dashboard";
+        json(res, 200, {
+          ok: true,
+          url: origin + "/?google=1&redirect=" + encodeURIComponent(redirect),
         });
         return;
       }
@@ -1025,6 +1097,20 @@ export function createCloudServer({
       if ((action === "cloud.action" || !action) && payload.action) {
         action = payload.action;
       }
+      if (action === "v1/auth/login" || action === "auth/login") {
+        action = "desktop.login";
+      } else if (action === "v1/auth/refresh" || action === "auth/refresh") {
+        action = "desktop.refresh";
+      } else if (action === "v1/devices/claim" || action === "devices/claim") {
+        action = "desktop.login";
+      } else if (
+        action === "v1/interview/answer" ||
+        action === "interview/answer" ||
+        action === "v1/ai/stream" ||
+        action === "ai/stream"
+      ) {
+        action = "chat";
+      }
       const rawToken = tokenFor(req);
       let user = accounts.userForToken(rawToken);
       // Desktop application tokens are a separate credential family from
@@ -1153,9 +1239,12 @@ export function createCloudServer({
           userState = await callUser(desktopUser.id, "state");
         } catch {}
         json(res, 200, {
+          ok: true,
           user: accounts.safe(desktopUser),
           accessToken: session.accessToken,
           refreshToken: session.refreshToken,
+          access_token: session.accessToken,
+          refresh_token: session.refreshToken,
           session: session.session,
           entitlement,
           settings: userState?.settings || null,
@@ -1485,9 +1574,10 @@ export function createCloudServer({
       }
       if (action === "desktop.refresh") {
         limited(identity + ":desktop-refresh", 120);
+        const tokenString = String(payload.refreshToken || payload.refresh_token || "").trim();
         const data = z
           .object({ refreshToken: z.string().min(20).max(220) })
-          .parse(payload);
+          .parse({ refreshToken: tokenString });
         const rotated = desktopSessions.rotate(data.refreshToken);
         accounts.assertActive(rotated.session.userId);
         const userRow = accounts.db
@@ -1503,6 +1593,8 @@ export function createCloudServer({
           ok: true,
           accessToken: rotated.accessToken,
           refreshToken: rotated.refreshToken,
+          access_token: rotated.accessToken,
+          refresh_token: rotated.refreshToken,
           session: rotated.session,
           entitlement,
           settings: userState?.settings || null,
