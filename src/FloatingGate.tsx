@@ -50,10 +50,10 @@ export function FloatingGate({
         "Confirm the move here to sign the other desktop out, or leave it where it is.",
     },
     subscription_required: {
-      eyebrow: "PLAN REQUIRED",
-      title: "Your access needs a top-up.",
+      eyebrow: "PLAN EXPIRED",
+      title: "Plan Expired",
       description:
-        "Buy prepaid time on the website. This window unlocks as soon as the payment is verified.",
+        "Your active session has ended. Please renew from our website on your phone to continue.",
     },
     offline: {
       eyebrow: "CONNECTION PAUSED",
@@ -66,10 +66,10 @@ export function FloatingGate({
     copy[phase] ||
     (phase === "active" && !gate?.entitlement
       ? {
-          eyebrow: "PLAN REQUIRED",
-          title: "Choose your access.",
+          eyebrow: "PLAN EXPIRED",
+          title: "Plan Expired",
           description:
-            "This account has no remaining desktop time. Add a plan on the website to continue.",
+            "Your active session has ended. Please renew from our website on your phone to continue.",
         }
       : phase === "active"
         ? {

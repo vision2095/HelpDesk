@@ -229,8 +229,9 @@ export function GateAccess({
       }
       if (result?.subscriptionRequired) {
         clearSecrets();
-        await openPurchaseUrl();
-        onNotice("Choose a prepaid plan on the LensDesk website to continue.");
+        onNotice(
+          "Your active session has ended. Please renew from our website on your phone to continue.",
+        );
         return;
       }
       clearSecrets();
@@ -267,8 +268,9 @@ export function GateAccess({
       }
       if (result?.subscriptionRequired) {
         clearSecrets();
-        await openPurchaseUrl();
-        onNotice("Choose a prepaid plan on the LensDesk website to continue.");
+        onNotice(
+          "Your active session has ended. Please renew from our website on your phone to continue.",
+        );
         return;
       }
       if (result?.takeoverRequired) return; // blocked again by a newer device
@@ -306,8 +308,9 @@ export function GateAccess({
         setMfaCode("");
         setChallenge("");
         clearSecrets();
-        await openPurchaseUrl();
-        onNotice("Choose a prepaid plan on the LensDesk website to continue.");
+        onNotice(
+          "Your active session has ended. Please renew from our website on your phone to continue.",
+        );
         return;
       }
       setMfaCode("");
@@ -615,23 +618,11 @@ export function GateAccess({
         <div className="gate-sub-required">
           <AlertTriangle size={18} />
           <div>
-            <strong>
-              {view.reason === "expired"
-                ? "Your plan has expired."
-                : "No active plan."}
-            </strong>
+            <strong>Plan Expired</strong>
             <p className="muted">
-              Buy a prepaid plan on the LensDesk website — access starts as soon
-              as the payment is verified.
+              Your active session has ended. Please renew from our website on your phone to continue.
             </p>
           </div>
-          <button
-            className="button primary"
-            onClick={() => void openPurchaseUrl().catch(onError)}
-          >
-            <ExternalLink size={15} />
-            Choose a plan
-          </button>
           <button
             className="text-button"
             disabled={busy}

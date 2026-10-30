@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "generatedAt": "2026-10-30T07:16:24.367Z",
+  "generatedAt": "2026-10-30T07:50:45.982Z",
   "artifacts": [
     {
       "platform": "mac-arm64",
@@ -22,8 +22,8 @@
       "platform": "windows",
       "label": "Windows (x64)",
       "name": "LensDesk-2.0.0-Windows-x64.zip",
-      "size": 1024564,
-      "sha256": "d174e429cc6ecc1773a4bc88a4bf3b4ce5800d1a3e23e973693adb467f56a9e3",
+      "size": 1024880,
+      "sha256": "08df3f21dcf1003d44d7dc982ed039eae9ebe20121dba20b063757e95063ba1d",
       "url": "/downloads/windows"
     }
   ]

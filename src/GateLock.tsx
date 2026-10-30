@@ -94,7 +94,7 @@ export function GateLock({
           {phase === "signed_out"
             ? "Sign in to continue"
             : phase === "subscription_required"
-              ? "Your desktop access is paused"
+              ? "Plan Expired"
               : phase === "takeover"
                 ? "Active on another device"
                 : "Connection paused"}
@@ -103,9 +103,7 @@ export function GateLock({
           {phase === "signed_out" &&
             "Use your LensDesk account to sign in. Accounts are created on the website."}
           {phase === "subscription_required" &&
-            (reason === "expired"
-              ? "The prepaid plan time has run out. Buy time again on the LensDesk website to pick up where you left off."
-              : "Buy a prepaid plan on the LensDesk website — access starts as soon as payment is verified.")}
+            "Your active session has ended. Please renew from our website on your phone to continue."}
           {phase === "takeover" &&
             `${gate?.takeover?.deviceLabel || "Another device"} is currently signed in with this account. Open the account page to move the session here.`}
           {phase === "offline" &&
@@ -124,19 +122,9 @@ export function GateLock({
             </button>
           )}
           {phase === "subscription_required" && (
-            <>
-              <button
-                className="button primary"
-                disabled={busy}
-                onClick={() => void openPurchase().catch(() => {})}
-              >
-                <ExternalLink size={15} />
-                Renew on the website
-              </button>
-              <button className="button secondary" onClick={() => void navigate("account")}>
-                Account page
-              </button>
-            </>
+            <button className="button secondary" onClick={() => void navigate("account")}>
+              Account page
+            </button>
           )}
           {phase === "takeover" && (
             <button className="button primary" onClick={() => void navigate("account")}>
