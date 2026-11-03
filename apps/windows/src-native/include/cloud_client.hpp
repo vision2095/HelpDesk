@@ -22,6 +22,8 @@ public:
     json EnsureValid();
     json Configure(const std::string& serverUrl);
     json CloudRequest(const std::string& action, const json& payload);
+    json CheckForUpdate() const;
+    json DownloadAndInstallUpdate();
 
     json GetGateView() const;
     json GetAccountEntitlement() const;

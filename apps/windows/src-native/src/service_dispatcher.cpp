@@ -8,9 +8,6 @@
 #include "../include/imgui_overlay.hpp"
 #include "../include/focus_manager.hpp"
 #include <winhttp.h>
-#ifdef _WIN32
-#include <tlhelp32.h>
-#endif
 #include <cmath>
 #include <cctype>
 #include <unordered_set>
@@ -895,57 +892,24 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
         }
 
         if (action == "desktop.wipeAllData") {
-            // Atomic File-Handle Bypass Sanitization Routine:
-            // 1. Programmatically enumerate and forcibly isolate active processes holding open file lock handles (EBWebView)
+            // Remove only LensDesk-owned local state. Never terminate unrelated
+            // WebView2 processes and never delete another application's data.
 #ifdef _WIN32
-            HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-            if (hSnap != INVALID_HANDLE_VALUE) {
-                PROCESSENTRY32W pe{ sizeof(PROCESSENTRY32W) };
-                if (Process32FirstW(hSnap, &pe)) {
-                    DWORD currentPid = GetCurrentProcessId();
-                    do {
-                        if (pe.th32ProcessID != currentPid &&
-                            (_wcsicmp(pe.szExeFile, L"msedgewebview2.exe") == 0 ||
-                             _wcsicmp(pe.szExeFile, L"RuntimeHost.exe") == 0 ||
-                             _wcsicmp(pe.szExeFile, L"TiWorker.exe") == 0)) {
-                            HANDLE hProc = OpenProcess(PROCESS_TERMINATE, FALSE, pe.th32ProcessID);
-                            if (hProc) {
-                                TerminateProcess(hProc, 0);
-                                CloseHandle(hProc);
-                            }
-                        }
-                    } while (Process32NextW(hSnap, &pe));
-                }
-                CloseHandle(hSnap);
-            }
-
-            // 2. Multi-stage directory purge bypassing ERROR_SHARING_VIOLATION in %LOCALAPPDATA%\LensDesk & EBWebView
             wchar_t* localAppData = nullptr;
             if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &localAppData))) {
                 std::filesystem::path base(localAppData);
                 CoTaskMemFree(localAppData);
                 std::error_code ec;
-                for (int attempt = 0; attempt < 3; ++attempt) {
-                    std::filesystem::remove_all(base / L"LensDesk", ec);
-                    std::filesystem::remove_all(base / L"Hintlens", ec);
-                    std::filesystem::remove_all(base / L"RuntimeHost", ec);
-                    std::filesystem::remove_all(base / L"LensDesk 2.0", ec);
-                    if (!ec) break;
-                    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-                }
+                std::filesystem::remove_all(base / L"LensDesk", ec);
             }
-
-            // 3. Purge session clusters and recursively remove registry trees
             RegDeleteTreeW(HKEY_CURRENT_USER, L"Software\\LensDesk");
-            RegDeleteTreeW(HKEY_CURRENT_USER, L"Software\\Hintlens");
-            RegDeleteTreeW(HKEY_CURRENT_USER, L"Software\\LensDesk 2.0");
 #endif
             if (m_storageMgr) {
                 m_storageMgr->ClearAllData();
             }
             callback({ { "wiped", true } }, false);
 #ifdef _WIN32
-            ExitProcess(0);
+            PostQuitMessage(0);
 #endif
             return;
         }
@@ -959,12 +923,29 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
                 callback("OCR service is unavailable.", true);
                 return;
             }
-            std::string ocrText = m_captureSvc->PerformOcrOnBase64(imageB64);
-            if (ocrText.empty()) {
-                callback("OCR could not recognize text in the image.", true);
+            if (imageB64.empty()) {
+                callback("OCR requires an image.", true);
                 return;
             }
-            callback({ { "ok", true }, { "text", ocrText } }, false);
+            // OCR can take seconds on a large screenshot. Run WinRT recognition
+            // on a dedicated MTA worker and marshal only the result back to the
+            // UI thread so the WebView2 message loop stays responsive.
+            const std::string languageTag = payload.value("language", "");
+            m_workers.emplace_back([this, imageB64, languageTag, callback]() {
+                std::string ocrText;
+                try {
+                    ocrText = m_captureSvc->PerformOcrOnBase64(imageB64, languageTag);
+                } catch (...) {
+                    ocrText.clear();
+                }
+                PostToUi([callback, ocrText]() {
+                    if (ocrText.empty()) {
+                        callback("OCR could not recognize text in the image.", true);
+                    } else {
+                        callback(json{ { "ok", true }, { "text", ocrText } }, false);
+                    }
+                });
+            });
             return;
         }
 
@@ -1101,12 +1082,36 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
         }
 
         if (action == "desktop.updater.check") {
-            callback(json{{"updateAvailable", false}, {"currentVersion", "2.0.0"}}, false);
+            // Query the release manifest. This action is intentionally allowed
+            // before sign-in so users can update a locked installation.
+            m_workers.emplace_back([this, callback]() {
+                json result;
+                try {
+                    result = m_cloud.CheckForUpdate();
+                } catch (...) {
+                    result = json{{"ok", false}, {"updateAvailable", false},
+                                  {"currentVersion", APP_VERSION},
+                                  {"error", "Could not check for updates."}};
+                }
+                PostToUi([callback, result]() {
+                    callback(result, !result.value("ok", false));
+                });
+            });
             return;
         }
 
         if (action == "desktop.updater.downloadAndInstall") {
-            callback(json{{"downloaded", false}, {"error", "Already on latest version"}}, false);
+            m_workers.emplace_back([this, callback]() {
+                json result;
+                try {
+                    result = m_cloud.DownloadAndInstallUpdate();
+                } catch (...) {
+                    result = json{{"downloaded", false}, {"error", "Could not install the update."}};
+                }
+                PostToUi([callback, result]() {
+                    callback(result, result.contains("error"));
+                });
+            });
             return;
         }
 

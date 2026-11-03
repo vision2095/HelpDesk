@@ -3,6 +3,11 @@ import { createHash } from "node:crypto";
 
 const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 const LDAS_MAGIC = 0x5341444c; // 'LDAS' in little endian
+const MAX_FRAME_BYTES = 1024 * 1024;
+const MAX_BUFFER_BYTES = 2 * 1024 * 1024;
+const MAX_BATCH_BYTES = 20 * 1024 * 1024;
+const MAX_SESSION_SECONDS = 10 * 60;
+const TRANSCRIBE_TIMEOUT_MS = 90 * 1000;
 
 /**
  * Creates an unmasked WebSocket frame for server-to-client transmission (RFC 6455).
@@ -32,22 +37,100 @@ export function createWebSocketFrame(payload, opcode = 0x01) {
   return Buffer.concat([header, buf]);
 }
 
+function writeHttpError(socket, status, message) {
+  if (socket.destroyed || !socket.writable) return;
+  const reason =
+    status === 401
+      ? "Unauthorized"
+      : status === 403
+        ? "Forbidden"
+        : status === 503
+          ? "Service Unavailable"
+          : "Bad Request";
+  const body = JSON.stringify({ error: message || reason });
+  socket.write(
+    `HTTP/1.1 ${status} ${reason}\r\n` +
+      "Content-Type: application/json\r\n" +
+      `Content-Length: ${Buffer.byteLength(body)}\r\n` +
+      "Connection: close\r\n\r\n" +
+      body,
+  );
+  socket.destroy();
+}
+
+function closeFrame(code, reason = "") {
+  const text = Buffer.from(reason, "utf8").subarray(0, 120);
+  const payload = Buffer.alloc(2 + text.length);
+  payload.writeUInt16BE(code, 0);
+  text.copy(payload, 2);
+  return createWebSocketFrame(payload, 0x08);
+}
+
+function pcmToWav(pcm, sampleRate, channels) {
+  const header = Buffer.alloc(44);
+  const byteRate = sampleRate * channels * 2;
+  header.write("RIFF", 0);
+  header.writeUInt32LE(36 + pcm.length, 4);
+  header.write("WAVE", 8);
+  header.write("fmt ", 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(channels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(channels * 2, 32);
+  header.writeUInt16LE(16, 34);
+  header.write("data", 36);
+  header.writeUInt32LE(pcm.length, 40);
+  return Buffer.concat([header, pcm]);
+}
+
+function normalizeTranscript(result) {
+  if (typeof result === "string") return result.trim();
+  if (result && typeof result.text === "string") return result.text.trim();
+  return "";
+}
+
 /**
  * Handles HTTP Upgrade for WebSocket transcription stream (/ws/transcribe).
- * Ingests 16-byte AudioFrameHeader binary frames and replies with JSON partial transcripts.
+ *
+ * Authentication is mandatory. The caller supplies `authenticate(token)` and
+ * `transcribe(auth, payload, seconds)` callbacks, so this module never invents
+ * an account or starts a provider request without the server's authorization
+ * and quota checks. Incoming LDAS frames carry 16-bit PCM; batches are wrapped
+ * in a WAV container and sent to the configured hosted transcription provider.
  */
-export function handleWebSocketTranscribeUpgrade(req, socket, head, options = {}) {
+export async function handleWebSocketTranscribeUpgrade(req, socket, head, options = {}) {
   const url = new URL(req.url, "http://localhost");
   if (url.pathname !== "/ws/transcribe") {
-    socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
-    socket.destroy();
+    writeHttpError(socket, 404, "Not found");
+    return;
+  }
+
+  if (typeof options.authenticate !== "function" || typeof options.transcribe !== "function") {
+    writeHttpError(socket, 503, "Transcription is not configured.");
     return;
   }
 
   const key = req.headers["sec-websocket-key"];
   if (!key) {
-    socket.write("HTTP/1.1 400 Bad Request\r\n\r\n");
-    socket.destroy();
+    writeHttpError(socket, 400, "Missing WebSocket key.");
+    return;
+  }
+
+  const headerToken = String(req.headers.authorization || "").startsWith("Bearer ")
+    ? String(req.headers.authorization).slice(7)
+    : "";
+  const token = url.searchParams.get("token") || headerToken;
+  let auth;
+  try {
+    auth = await options.authenticate(token, req);
+  } catch (error) {
+    writeHttpError(socket, Number(error?.statusCode) || 401, error?.message || "Sign in required.");
+    return;
+  }
+  if (!auth) {
+    writeHttpError(socket, 401, "Sign in to use live transcription.");
     return;
   }
 
@@ -55,34 +138,148 @@ export function handleWebSocketTranscribeUpgrade(req, socket, head, options = {}
     .update(key.trim() + WS_GUID)
     .digest("base64");
 
-  const responseHeaders = [
-    "HTTP/1.1 101 Switching Protocols",
-    "Upgrade: websocket",
-    "Connection: Upgrade",
-    `Sec-WebSocket-Accept: ${acceptKey}`,
-    "\r\n",
-  ].join("\r\n");
+  socket.write(
+    [
+      "HTTP/1.1 101 Switching Protocols",
+      "Upgrade: websocket",
+      "Connection: Upgrade",
+      `Sec-WebSocket-Accept: ${acceptKey}`,
+      "\r\n",
+    ].join("\r\n"),
+  );
 
-  socket.write(responseHeaders);
-
-  const lang = url.searchParams.get("lang") || "en";
-  const source = url.searchParams.get("source") || "system";
-  const token = url.searchParams.get("token") || "";
+  const batchSeconds = Number(options.batchSeconds) > 0 ? Number(options.batchSeconds) : 5;
+  const maxSessionSeconds =
+    Number(options.maxSessionSeconds) > 0 ? Number(options.maxSessionSeconds) : MAX_SESSION_SECONDS;
+  const maxFrameBytes =
+    Number(options.maxFrameBytes) > 0 ? Number(options.maxFrameBytes) : MAX_FRAME_BYTES;
 
   let autoSeq = 1;
-  let totalBytesReceived = 0;
-  let sessionAudioChunks = [];
-  let currentTranscription = "";
+  let closed = false;
+  let buffer = head && head.length > 0 ? Buffer.from(head) : Buffer.alloc(0);
+  let batch = [];
+  let batchBytes = 0;
+  let batchSampleRate = 0;
+  let batchChannels = 0;
+  let batchSecondsActual = 0;
+  let totalSeconds = 0;
+  let transcript = "";
+  let inFlight = false;
+  let failures = 0;
+  let pendingSequences = [];
 
   function sendText(obj) {
-    if (socket.destroyed || !socket.writable) return;
-    const jsonStr = typeof obj === "string" ? obj : JSON.stringify(obj);
-    socket.write(createWebSocketFrame(jsonStr, 0x01));
+    if (closed || socket.destroyed || !socket.writable) return;
+    try {
+      socket.write(createWebSocketFrame(JSON.stringify(obj), 0x01));
+    } catch {
+      closed = true;
+    }
   }
 
-  let buffer = head && head.length > 0 ? Buffer.from(head) : Buffer.alloc(0);
+  function sendError(message, { fatal = false, code = 1008 } = {}) {
+    sendText({ type: "error", error: message });
+    if (fatal) {
+      closed = true;
+      try {
+        if (socket.writable) socket.write(closeFrame(code, message));
+      } catch {}
+      socket.end();
+    }
+  }
+
+  function resetBatch() {
+    batch = [];
+    batchBytes = 0;
+    batchSampleRate = 0;
+    batchChannels = 0;
+    batchSecondsActual = 0;
+  }
+
+  function appendBatch(payload, sampleRate, channels, seq) {
+    if (batch.length && (batchSampleRate !== sampleRate || batchChannels !== channels)) {
+      flushBatch().catch(() => {});
+    }
+    batchSampleRate = sampleRate;
+    batchChannels = channels;
+    batch.push(payload);
+    batchBytes += payload.length;
+    batchSecondsActual += payload.length / (sampleRate * channels * 2);
+    pendingSequences.push(seq);
+    if (totalSeconds + batchSecondsActual > maxSessionSeconds) {
+      sendError("The live transcription session reached its time limit.", { fatal: true, code: 1009 });
+      return;
+    }
+    if (!inFlight && batchSecondsActual >= batchSeconds) {
+      flushBatch().catch(() => {});
+    }
+  }
+
+  async function flushBatch() {
+    if (inFlight || closed || !batch.length) return;
+    inFlight = true;
+    const pcm = Buffer.concat(batch, batchBytes);
+    const sampleRate = batchSampleRate;
+    const channels = batchChannels;
+    const seconds = batchSecondsActual;
+    const sequences = pendingSequences;
+    resetBatch();
+    pendingSequences = [];
+    totalSeconds += seconds;
+
+    if (pcm.length > MAX_BATCH_BYTES) {
+      inFlight = false;
+      sendError("The audio batch is too large.", { fatal: true, code: 1009 });
+      return;
+    }
+
+    const data = pcmToWav(pcm, sampleRate, channels).toString("base64");
+    if (data.length > 28_000_000) {
+      inFlight = false;
+      sendError("The audio batch exceeds the transcription limit.", { fatal: true, code: 1009 });
+      return;
+    }
+
+    try {
+      const result = await Promise.race([
+        options.transcribe(auth, { data, mime: "audio/wav" }, seconds),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Transcription timed out.")), TRANSCRIBE_TIMEOUT_MS).unref?.(),
+        ),
+      ]);
+      const text = normalizeTranscript(result);
+      if (text) transcript = `${transcript} ${text}`.trim();
+      failures = 0;
+      sendText({
+        type: "transcript",
+        partial: true,
+        final: false,
+        seq: sequences.at(-1) ?? autoSeq - 1,
+        sampleRate,
+        channels,
+        text: transcript,
+      });
+    } catch (error) {
+      failures++;
+      if (failures >= 3) {
+        sendError("Live transcription failed repeatedly. Reconnect to try again.", { fatal: true, code: 1011 });
+      } else {
+        sendError(error?.message || "Transcription failed; continuing to buffer audio.");
+      }
+    } finally {
+      inFlight = false;
+      if (!closed && batchSecondsActual >= batchSeconds) {
+        flushBatch().catch(() => {});
+      }
+    }
+  }
 
   socket.on("data", (chunk) => {
+    if (closed) return;
+    if (buffer.length + chunk.length > MAX_BUFFER_BYTES + maxFrameBytes) {
+      sendError("The WebSocket buffer exceeded its limit.", { fatal: true, code: 1009 });
+      return;
+    }
     buffer = Buffer.concat([buffer, chunk]);
 
     while (buffer.length >= 2) {
@@ -99,8 +296,18 @@ export function handleWebSocketTranscribeUpgrade(req, socket, head, options = {}
         offset += 2;
       } else if (payloadLen === 127) {
         if (buffer.length < offset + 8) break;
-        payloadLen = Number(buffer.readBigUInt64BE(offset));
+        const wide = buffer.readBigUInt64BE(offset);
+        if (wide > BigInt(maxFrameBytes)) {
+          sendError("The WebSocket frame exceeded its limit.", { fatal: true, code: 1009 });
+          return;
+        }
+        payloadLen = Number(wide);
         offset += 8;
+      }
+
+      if (payloadLen > maxFrameBytes || payloadLen < 0) {
+        sendError("The WebSocket frame exceeded its limit.", { fatal: true, code: 1009 });
+        return;
       }
 
       let maskKey = null;
@@ -113,7 +320,7 @@ export function handleWebSocketTranscribeUpgrade(req, socket, head, options = {}
       if (buffer.length < offset + payloadLen) break;
 
       const rawPayload = buffer.subarray(offset, offset + payloadLen);
-      const payload = Buffer.alloc(payloadLen);
+      let payload = Buffer.alloc(payloadLen);
 
       if (masked && maskKey) {
         for (let i = 0; i < payloadLen; i++) {
@@ -125,58 +332,90 @@ export function handleWebSocketTranscribeUpgrade(req, socket, head, options = {}
 
       buffer = buffer.subarray(offset + payloadLen);
 
-      // Opcode handling
       if (opcode === 0x08) {
-        // Close frame
-        const closeFrame = Buffer.alloc(4);
-        closeFrame[0] = 0x88;
-        closeFrame[1] = 0x02;
-        closeFrame.writeUInt16BE(1000, 2);
+        closed = true;
         try {
-          socket.write(closeFrame);
+          if (socket.writable) socket.write(closeFrame(1000));
         } catch {}
         socket.end();
         return;
-      } else if (opcode === 0x09) {
-        // Ping frame
-        const pong = createWebSocketFrame(payload, 0x0a);
-        try {
-          socket.write(pong);
-        } catch {}
-      } else if (opcode === 0x02) {
-        // Binary frame containing 16-byte AudioFrameHeader or raw PCM audio
-        let seq = autoSeq++;
-        let sampleRate = 48000;
-        let channels = 2;
-        let byteCount = payload.length;
-        let audioChunk = payload;
-
-        if (payload.length >= 16 && payload.readUInt32LE(0) === LDAS_MAGIC) {
-          sampleRate = payload.readUInt16LE(4);
-          channels = payload.readUInt16LE(6);
-          byteCount = payload.readUInt32LE(8);
-          seq = payload.readUInt32LE(12);
-          audioChunk = payload.subarray(16);
-        }
-
-        sessionAudioChunks.push(audioChunk);
-        totalBytesReceived += audioChunk.length;
-
-        // Emit JSON transcript text frame per contract (matches both HintLens and LensDesk clients)
-        sendText({
-          type: "transcript",
-          partial: true,
-          seq,
-          sampleRate,
-          channels,
-          byteCount,
-          text: currentTranscription,
-        });
       }
+      if (opcode === 0x09) {
+        try {
+          if (socket.writable) socket.write(createWebSocketFrame(payload, 0x0a));
+        } catch {}
+        continue;
+      }
+      if (opcode === 0x01) {
+        // Text is accepted only as an explicit end-of-stream marker. This
+        // flushes buffered audio before the client closes the socket.
+        if (payload.toString("utf8").trim() === "stop") {
+          flushBatch()
+            .then(() => {
+              sendText({ type: "transcript", partial: false, final: true, text: transcript });
+              closed = true;
+              try {
+                if (socket.writable) socket.write(closeFrame(1000));
+              } catch {}
+              socket.end();
+            })
+            .catch(() => {});
+        }
+        continue;
+      }
+      if (opcode !== 0x02) continue;
+
+      let seq = autoSeq++;
+      let sampleRate = 48000;
+      let channels = 2;
+      let byteCount = payload.length;
+
+      if (payload.length >= 16 && payload.readUInt32LE(0) === LDAS_MAGIC) {
+        sampleRate = payload.readUInt16LE(4);
+        channels = payload.readUInt16LE(6);
+        byteCount = payload.readUInt32LE(8);
+        seq = payload.readUInt32LE(12);
+        if (
+          sampleRate < 8000 ||
+          sampleRate > 96000 ||
+          channels < 1 ||
+          channels > 2 ||
+          byteCount !== payload.length - 16 ||
+          byteCount === 0 ||
+          byteCount % (channels * 2) !== 0
+        ) {
+          sendError("The audio frame header is invalid.", { fatal: true, code: 1008 });
+          return;
+        }
+        payload = payload.subarray(16);
+      } else if (payload.length === 0 || payload.length % (channels * 2) !== 0) {
+        sendError("The audio frame is not valid 16-bit PCM.", { fatal: true, code: 1008 });
+        return;
+      }
+
+      // Acknowledge every frame with the transcript accumulated so far. The
+      // actual provider request runs asynchronously on the batch threshold.
+      sendText({
+        type: "transcript",
+        partial: true,
+        final: false,
+        seq,
+        sampleRate,
+        channels,
+        byteCount,
+        text: transcript,
+      });
+
+      appendBatch(payload, sampleRate, channels, seq);
     }
   });
 
   socket.on("error", () => {
+    closed = true;
     socket.destroy();
+  });
+
+  socket.on("close", () => {
+    closed = true;
   });
 }

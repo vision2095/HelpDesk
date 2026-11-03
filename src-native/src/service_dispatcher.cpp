@@ -1082,12 +1082,36 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
         }
 
         if (action == "desktop.updater.check") {
-            callback(json{{"updateAvailable", false}, {"currentVersion", "2.0.0"}}, false);
+            // Query the release manifest. This action is intentionally allowed
+            // before sign-in so users can update a locked installation.
+            m_workers.emplace_back([this, callback]() {
+                json result;
+                try {
+                    result = m_cloud.CheckForUpdate();
+                } catch (...) {
+                    result = json{{"ok", false}, {"updateAvailable", false},
+                                  {"currentVersion", APP_VERSION},
+                                  {"error", "Could not check for updates."}};
+                }
+                PostToUi([callback, result]() {
+                    callback(result, !result.value("ok", false));
+                });
+            });
             return;
         }
 
         if (action == "desktop.updater.downloadAndInstall") {
-            callback(json{{"downloaded", false}, {"error", "Already on latest version"}}, false);
+            m_workers.emplace_back([this, callback]() {
+                json result;
+                try {
+                    result = m_cloud.DownloadAndInstallUpdate();
+                } catch (...) {
+                    result = json{{"downloaded", false}, {"error", "Could not install the update."}};
+                }
+                PostToUi([callback, result]() {
+                    callback(result, result.contains("error"));
+                });
+            });
             return;
         }
 

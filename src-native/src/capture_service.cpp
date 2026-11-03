@@ -1,5 +1,5 @@
 #include "../include/capture_service.hpp"
-#include "../../src/native/ocr_pipeline.h"
+#include "ocr_pipeline.h"
 
 namespace LensDesk {
 

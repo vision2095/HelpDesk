@@ -78,6 +78,7 @@ target_link_libraries(RuntimeHost PRIVATE
     windowscodecs
     crypt32
     winhttp
+    bcrypt
     version
     d3dcompiler
     urlmon

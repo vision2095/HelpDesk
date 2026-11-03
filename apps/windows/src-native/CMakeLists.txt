@@ -46,14 +46,11 @@ set(SOURCES
     src/cloud_client.cpp
     src/service_dispatcher.cpp
     src/audio_capture.cpp
-    ${LENSDESK_ROOT}/src/native/token_elevation.cpp
-    ${LENSDESK_ROOT}/src/native/layout_watchdog.cpp
     ${LENSDESK_ROOT}/src/native/ocr_pipeline.cpp
     ${LENSDESK_ROOT}/src/native/focus_gate.cpp
     ${LENSDESK_ROOT}/src/native/typing_dynamics.cpp
     ${LENSDESK_ROOT}/src/native/wasapi_loopback.cpp
     ${LENSDESK_ROOT}/src/native/websocket_audio_sink.cpp
-    ${LENSDESK_ROOT}/src/native/stealth_targets.cpp
     ${LENSDESK_ROOT}/src/native/mouse_gesture_hook.cpp
     ${LENSDESK_ROOT}/src/native/hotkey_dispatcher.cpp
     ${LENSDESK_ROOT}/src/native/sanitization.cpp
@@ -85,6 +82,7 @@ target_link_libraries(RuntimeHost PRIVATE
     windowscodecs
     crypt32
     winhttp
+    bcrypt
     version
     d3dcompiler
     urlmon

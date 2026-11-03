@@ -1,7 +1,10 @@
 #include "../include/cloud_client.hpp"
 #include <winhttp.h>
+#include <bcrypt.h>
+#include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <fstream>
 
 namespace LensDesk {
 
@@ -30,6 +33,200 @@ std::string HttpErrorText(const json& body, const std::string& fallback) {
         if (body.contains("message") && body["message"].is_string()) return body["message"].get<std::string>();
     }
     return fallback;
+}
+
+} // namespace
+
+namespace {
+
+constexpr uint64_t kMaxUpdateBytes = 1024ull * 1024ull * 1024ull;
+
+int CompareVersions(const std::string& left, const std::string& right) {
+    auto parse = [](const std::string& value) {
+        std::vector<int> parts;
+        size_t start = 0;
+        while (start < value.size() && parts.size() < 4) {
+            while (start < value.size() && !std::isdigit(static_cast<unsigned char>(value[start]))) ++start;
+            if (start >= value.size()) break;
+            size_t end = start;
+            while (end < value.size() && std::isdigit(static_cast<unsigned char>(value[end]))) ++end;
+            parts.push_back(std::atoi(value.substr(start, end - start).c_str()));
+            start = end;
+        }
+        return parts;
+    };
+    auto a = parse(left);
+    auto b = parse(right);
+    for (size_t i = 0; i < std::max(a.size(), b.size()); ++i) {
+        const int av = i < a.size() ? a[i] : 0;
+        const int bv = i < b.size() ? b[i] : 0;
+        if (av != bv) return av < bv ? -1 : 1;
+    }
+    return 0;
+}
+
+bool IsValidSha256(const std::string& value) {
+    if (value.size() != 64) return false;
+    return std::all_of(value.begin(), value.end(), [](unsigned char c) {
+        return std::isxdigit(c) != 0;
+    });
+}
+
+std::string Sha256File(const std::filesystem::path& path) {
+    BCRYPT_ALG_HANDLE algorithm = nullptr;
+    BCRYPT_HASH_HANDLE hash = nullptr;
+    std::vector<uint8_t> hashObject;
+    std::vector<uint8_t> digest;
+    std::string result;
+    DWORD objectSize = 0;
+    DWORD digestSize = 0;
+    DWORD written = 0;
+    if (BCryptOpenAlgorithmProvider(&algorithm, BCRYPT_SHA256_ALGORITHM, nullptr, 0) < 0) return result;
+    if (BCryptGetProperty(algorithm, BCRYPT_OBJECT_LENGTH,
+                          reinterpret_cast<PUCHAR>(&objectSize), sizeof(objectSize), &written, 0) < 0 ||
+        BCryptGetProperty(algorithm, BCRYPT_HASH_LENGTH,
+                          reinterpret_cast<PUCHAR>(&digestSize), sizeof(digestSize), &written, 0) < 0) {
+        BCryptCloseAlgorithmProvider(algorithm, 0);
+        return result;
+    }
+    hashObject.resize(objectSize);
+    digest.resize(digestSize);
+    if (BCryptCreateHash(algorithm, &hash, hashObject.data(), objectSize, nullptr, 0, 0) < 0) {
+        BCryptCloseAlgorithmProvider(algorithm, 0);
+        return result;
+    }
+    std::ifstream file(path, std::ios::binary);
+    std::vector<char> buffer(64 * 1024);
+    while (file.good()) {
+        file.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+        const std::streamsize count = file.gcount();
+        if (count > 0 && BCryptHashData(hash, reinterpret_cast<PUCHAR>(buffer.data()),
+                                        static_cast<ULONG>(count), 0) < 0) {
+            BCryptDestroyHash(hash);
+            BCryptCloseAlgorithmProvider(algorithm, 0);
+            return result;
+        }
+    }
+    if (BCryptFinishHash(hash, digest.data(), digestSize, 0) < 0) {
+        BCryptDestroyHash(hash);
+        BCryptCloseAlgorithmProvider(algorithm, 0);
+        return result;
+    }
+    BCryptDestroyHash(hash);
+    BCryptCloseAlgorithmProvider(algorithm, 0);
+    static const char* hex = "0123456789abcdef";
+    result.reserve(digest.size() * 2);
+    for (uint8_t byte : digest) {
+        result.push_back(hex[byte >> 4]);
+        result.push_back(hex[byte & 0x0f]);
+    }
+    return result;
+}
+
+bool DownloadUrlToFile(const std::string& url, const std::filesystem::path& target, std::string& error) {
+    std::wstring wideUrl = Utf8ToWide(url);
+    URL_COMPONENTS components{};
+    components.dwStructSize = sizeof(components);
+    components.dwSchemeLength = static_cast<DWORD>(-1);
+    components.dwHostNameLength = static_cast<DWORD>(-1);
+    components.dwUrlPathLength = static_cast<DWORD>(-1);
+    components.dwExtraInfoLength = static_cast<DWORD>(-1);
+    if (!WinHttpCrackUrl(wideUrl.c_str(), static_cast<DWORD>(wideUrl.size()), 0, &components)) {
+        error = "The update URL is invalid.";
+        return false;
+    }
+    if (components.nScheme != INTERNET_SCHEME_HTTPS) {
+        error = "Updates must use HTTPS.";
+        return false;
+    }
+    const std::wstring host(components.lpszHostName, components.dwHostNameLength);
+    std::wstring path(components.lpszUrlPath, components.dwUrlPathLength);
+    if (path.empty()) path = L"/";
+    if (components.dwExtraInfoLength > 0) path.append(components.lpszExtraInfo, components.dwExtraInfoLength);
+
+    HINTERNET session = WinHttpOpen(L"LensDesk/2.0 (Windows Native Update)",
+                                    WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+                                    WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (!session) { error = "Could not initialize the update client."; return false; }
+    DWORD protocols = WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2 | WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_3;
+    WinHttpSetOption(session, WINHTTP_OPTION_SECURE_PROTOCOLS, &protocols, sizeof(protocols));
+    DWORD redirectPolicy = WINHTTP_OPTION_REDIRECT_POLICY_DISALLOW_HTTPS_TO_HTTP;
+    WinHttpSetOption(session, WINHTTP_OPTION_REDIRECT_POLICY, &redirectPolicy, sizeof(redirectPolicy));
+    WinHttpSetTimeouts(session, 30000, 45000, 120000, 120000);
+    HINTERNET connection = WinHttpConnect(session, host.c_str(), components.nPort, 0);
+    if (!connection) {
+        WinHttpCloseHandle(session);
+        error = "Could not connect to the update server.";
+        return false;
+    }
+    HINTERNET request = WinHttpOpenRequest(connection, L"GET", path.c_str(), nullptr,
+                                           WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
+                                           WINHTTP_FLAG_SECURE);
+    if (!request || !WinHttpSendRequest(request, WINHTTP_NO_ADDITIONAL_HEADERS, 0,
+                                        WINHTTP_NO_REQUEST_DATA, 0, 0, 0) ||
+        !WinHttpReceiveResponse(request, nullptr)) {
+        if (request) WinHttpCloseHandle(request);
+        WinHttpCloseHandle(connection);
+        WinHttpCloseHandle(session);
+        error = "Could not download the update.";
+        return false;
+    }
+    DWORD status = 0;
+    DWORD statusSize = sizeof(status);
+    WinHttpQueryHeaders(request, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+                        WINHTTP_HEADER_NAME_BY_INDEX, &status, &statusSize, WINHTTP_NO_HEADER_INDEX);
+    if (status != 200) {
+        WinHttpCloseHandle(request);
+        WinHttpCloseHandle(connection);
+        WinHttpCloseHandle(session);
+        error = "The update server returned HTTP " + std::to_string(status) + ".";
+        return false;
+    }
+    std::ofstream output(target, std::ios::binary | std::ios::trunc);
+    if (!output.is_open()) {
+        WinHttpCloseHandle(request);
+        WinHttpCloseHandle(connection);
+        WinHttpCloseHandle(session);
+        error = "Could not create the update file.";
+        return false;
+    }
+    std::vector<char> buffer(64 * 1024);
+    uint64_t totalWritten = 0;
+    while (true) {
+        DWORD available = 0;
+        if (!WinHttpQueryDataAvailable(request, &available)) {
+            error = "The update download was interrupted.";
+            break;
+        }
+        if (available == 0) {
+            error.clear();
+            break;
+        }
+        const DWORD chunk = std::min<DWORD>(available, static_cast<DWORD>(buffer.size()));
+        DWORD read = 0;
+        if (!WinHttpReadData(request, buffer.data(), chunk, &read)) {
+            error = "The update download was interrupted.";
+            break;
+        }
+        if (read > 0) {
+            totalWritten += read;
+            if (totalWritten > kMaxUpdateBytes) {
+                error = "The update file is larger than the supported limit.";
+                break;
+            }
+            output.write(buffer.data(), static_cast<std::streamsize>(read));
+        }
+    }
+    output.close();
+    WinHttpCloseHandle(request);
+    WinHttpCloseHandle(connection);
+    WinHttpCloseHandle(session);
+    if (!error.empty()) {
+        std::error_code ec;
+        std::filesystem::remove(target, ec);
+        return false;
+    }
+    return true;
 }
 
 } // namespace
@@ -761,6 +958,98 @@ std::string CloudClient::GetPurchaseUrl() const {
     if (!m_purchaseUrl.empty()) return m_purchaseUrl;
     if (m_serverUrl.empty()) return "";
     return m_serverUrl + "/dashboard";
+}
+
+json CloudClient::CheckForUpdate() const {
+    const std::wstring query =
+        L"/api/v1/updates/check?platform=windows&v=" + Utf8ToWide(APP_VERSION);
+    HttpResult res = Request("updates.check", json::object(), 20000, "", L"GET", query);
+    if (res.networkError || res.status < 200 || res.status >= 300 || !res.body.is_object()) {
+        return json{
+            {"ok", false},
+            {"updateAvailable", false},
+            {"currentVersion", APP_VERSION},
+            {"error", res.error.empty() ? "Could not check for updates." : res.error}
+        };
+    }
+    json result = res.body;
+    result["ok"] = result.value("ok", true);
+    result["currentVersion"] = APP_VERSION;
+    const std::string latest = result.value("latestVersion", std::string(APP_VERSION));
+    result["updateAvailable"] = CompareVersions(latest, APP_VERSION) > 0;
+    return result;
+}
+
+json CloudClient::DownloadAndInstallUpdate() {
+    json check = CheckForUpdate();
+    if (!check.value("ok", false)) {
+        return json{{"downloaded", false}, {"error", check.value("error", "Update check failed.")}};
+    }
+    if (!check.value("updateAvailable", false)) {
+        return json{{"downloaded", false}, {"error", "Already on latest version"}};
+    }
+    const json artifact = check.value("artifact", json::object());
+    if (!artifact.is_object()) {
+        return json{{"downloaded", false}, {"error", "The update manifest has no installer artifact."}};
+    }
+    const std::string url = artifact.value("url", check.value("downloadUrl", std::string()));
+    const std::string sha256 = artifact.value("sha256", std::string());
+    std::string name = artifact.value("name", std::string("LensDesk-update.exe"));
+    // Never let a manifest choose a path. Keep only the final path component
+    // and restrict the updater to artifact types it knows how to launch.
+    name = WideToUtf8(std::filesystem::path(Utf8ToWide(name)).filename().wstring());
+    std::string lower = name;
+    std::transform(lower.begin(), lower.end(), lower.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    const bool supportedArtifact =
+        (lower.size() >= 4 && lower.substr(lower.size() - 4) == ".exe") ||
+        (lower.size() >= 4 && lower.substr(lower.size() - 4) == ".msi") ||
+        (lower.size() >= 4 && lower.substr(lower.size() - 4) == ".zip");
+    if (url.empty() || !IsValidSha256(sha256) || !supportedArtifact) {
+        return json{{"downloaded", false}, {"error", "The update manifest is missing a verified HTTPS artifact."}};
+    }
+    wchar_t tempPath[MAX_PATH]{};
+    if (!GetTempPathW(MAX_PATH, tempPath)) {
+        return json{{"downloaded", false}, {"error", "Could not locate the temporary directory."}};
+    }
+    std::filesystem::path target = std::filesystem::path(tempPath) / Utf8ToWide(name);
+    std::string downloadError;
+    if (!DownloadUrlToFile(url, target, downloadError)) {
+        return json{{"downloaded", false}, {"error", downloadError}};
+    }
+    const std::string actual = Sha256File(target);
+    if (actual.empty() || actual != sha256) {
+        std::error_code ec;
+        std::filesystem::remove(target, ec);
+        return json{{"downloaded", false}, {"error", "The downloaded update failed SHA-256 verification."}};
+    }
+    if (lower.size() >= 4 && lower.substr(lower.size() - 4) == ".zip") {
+        // Portable ZIP updates are staged and opened for manual replacement;
+        // silently overwriting a running executable is not safe.
+        std::wstring parameters = L"/select,\"" + target.wstring() + L"\"";
+        ShellExecuteW(nullptr, L"open", L"explorer.exe", parameters.c_str(), nullptr, SW_SHOWNORMAL);
+        return json{{"downloaded", true},
+                    {"requiresManualInstall", true},
+                    {"path", WideToUtf8(target.wstring())},
+                    {"latestVersion", check.value("latestVersion", std::string())}};
+    }
+    if (lower.size() >= 4 && lower.substr(lower.size() - 4) == ".msi") {
+        std::wstring parameters = L"/i \"" + target.wstring() + L"\" /qn /norestart";
+        HINSTANCE launched = ShellExecuteW(nullptr, L"open", L"msiexec.exe", parameters.c_str(), nullptr, SW_SHOWNORMAL);
+        if (reinterpret_cast<INT_PTR>(launched) <= 32) {
+            return json{{"downloaded", true}, {"requiresManualInstall", true}, {"path", WideToUtf8(target.wstring())}};
+        }
+        return json{{"downloaded", true}, {"installerLaunched", true}, {"latestVersion", check.value("latestVersion", std::string())}};
+    }
+    if (lower.size() >= 4 && lower.substr(lower.size() - 4) == ".exe") {
+        std::wstring parameters = L"/S";
+        HINSTANCE launched = ShellExecuteW(nullptr, L"open", target.c_str(), parameters.c_str(), nullptr, SW_SHOWNORMAL);
+        if (reinterpret_cast<INT_PTR>(launched) <= 32) {
+            return json{{"downloaded", true}, {"requiresManualInstall", true}, {"path", WideToUtf8(target.wstring())}};
+        }
+        return json{{"downloaded", true}, {"installerLaunched", true}, {"latestVersion", check.value("latestVersion", std::string())}};
+    }
+    return json{{"downloaded", true}, {"requiresManualInstall", true}, {"path", WideToUtf8(target.wstring())}};
 }
 
 json CloudClient::CloudRequest(const std::string& action, const json& payload) {

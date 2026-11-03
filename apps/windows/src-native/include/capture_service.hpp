@@ -25,13 +25,14 @@ public:
 
     // Detached WinRT OCR Pipeline
     std::string PerformOcr(HBITMAP hBitmap, int width, int height);
-    std::string PerformOcrOnBase64(const std::string& base64Png);
+    std::string PerformOcrOnBase64(const std::string& base64Png, const std::string& languageTag = {});
     bool IsOcrSupported();
 
 private:
     std::string BitmapToPngBase64(HBITMAP hBitmap, HDC hdc, int width, int height);
 
     ComPtr<IWICImagingFactory> m_wicFactory;
+    std::mutex m_ocrMutex;
     bool m_initialized = false;
 };
 

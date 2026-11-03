@@ -664,6 +664,78 @@ export function createCloudServer({
       entry.pending--;
     }
   }
+  // Live transcription uses the same token families as the HTTP API. A
+  // website session token or a desktop access token can open the socket, but
+  // desktop access additionally requires a live entitlement.
+  async function authenticateTranscribeToken(rawToken) {
+    if (!rawToken) return null;
+    let user = accounts.userForToken(rawToken);
+    let desktopAccess = null;
+    if (!user && pgStore) {
+      try {
+        user = await pgStore.userForToken(rawToken);
+      } catch {}
+    }
+    if (!user) {
+      let verified = desktopSessions.verifyAccess(rawToken);
+      if (!verified && pgStore) {
+        try {
+          verified = await pgStore.verifyDesktopAccess(rawToken);
+        } catch {}
+      }
+      if (verified) {
+        desktopAccess = verified;
+        user = accounts.db
+          .prepare("SELECT * FROM users WHERE id=?")
+          .get(verified.userId);
+      }
+    }
+    if (!user) return null;
+    if (user.account_state === "suspended" || user.account_state === "deleting") {
+      const error = new Error("This account is not available.");
+      error.statusCode = 403;
+      throw error;
+    }
+    if (!user.verified) {
+      const error = new Error("Verify your email before using hosted transcription.");
+      error.statusCode = 403;
+      throw error;
+    }
+    if (desktopAccess) {
+      let entitlement = entitlements.authorize(user.id);
+      if (!entitlement && pgStore) {
+        try {
+          entitlement = await pgStore.authorizeSubscription(user.id);
+        } catch {}
+      }
+      if (!entitlement) {
+        const error = new Error(
+          "Your subscription is not active. Renew or purchase a plan, then try again.",
+        );
+        error.statusCode = 403;
+        throw error;
+      }
+    }
+    limited(user.id + ":ws-transcribe", 20);
+    return { user, desktopAccess };
+  }
+  async function transcribeWebSocket(auth, payload, seconds) {
+    accounts.assertActive(auth.user.id);
+    const info = accountInfo(auth.user, { desktopAccess: auth.desktopAccess });
+    const limit = info.limits.audioSeconds;
+    const reserved = accounts.reserve(
+      auth.user.id,
+      "audio",
+      Math.max(1, Math.ceil(seconds)),
+      limit,
+    );
+    try {
+      return await callUser(auth.user.id, "transcribe", payload);
+    } catch (error) {
+      reserved();
+      throw error;
+    }
+  }
   function accountInfo(user, { desktopAccess = null } = {}) {
     const paid =
       ["active", "trialing"].includes(user.subscription_status) &&
@@ -805,17 +877,8 @@ export function createCloudServer({
         return;
       }
       if (url.pathname === "/api/v1/stealth/targets" && req.method === "GET") {
-        json(res, 200, {
-          version: 1,
-          targets: [
-            "ProProctor.exe",
-            "Proctortrack.exe",
-            "ProctorU.exe",
-            "Proctor.exe",
-            "LockDownBrowser.exe",
-            "SafeExamBrowser.exe",
-          ],
-        });
+        // Removed: enumerating proctoring software is not a LensDesk feature.
+        json(res, 404, { error: "Not found" });
         return;
       }
       if (
@@ -2489,7 +2552,14 @@ export function createCloudServer({
   server.requestTimeout = 120000;
   server.headersTimeout = 15000;
   server.on("upgrade", (req, socket, head) => {
-    handleWebSocketTranscribeUpgrade(req, socket, head);
+    handleWebSocketTranscribeUpgrade(req, socket, head, {
+      authenticate: authenticateTranscribeToken,
+      transcribe: transcribeWebSocket,
+    }).catch(() => {
+      try {
+        socket.destroy();
+      } catch {}
+    });
   });
   return {
     server,

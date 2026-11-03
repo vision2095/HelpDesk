@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import http from "node:http";
 import net from "node:net";
 import { createHash } from "node:crypto";
@@ -49,134 +50,170 @@ test("Item C: Model Palette contract verification", () => {
   assert.equal(resolveModel("deepseek-chat"), "deepseek-chat");
 });
 
-test("Item B6 & D: Server routes (/api/v1/stealth/targets and /ws/transcribe)", async () => {
+test("Item B6 & D: /ws/transcribe requires authentication and transcribes real audio", async () => {
+  const transcriptions = [];
   const server = http.createServer((req, res) => {
-    const url = new URL(req.url, "http://localhost");
-    if (url.pathname === "/api/v1/stealth/targets" && req.method === "GET") {
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(
-        JSON.stringify({
-          version: 1,
-          targets: [
-            "ProProctor.exe",
-            "Proctortrack.exe",
-            "ProctorU.exe",
-            "Proctor.exe",
-            "LockDownBrowser.exe",
-            "SafeExamBrowser.exe",
-          ],
-        })
-      );
-      return;
-    }
     res.writeHead(404);
     res.end();
   });
 
   server.on("upgrade", (req, socket, head) => {
-    handleWebSocketTranscribeUpgrade(req, socket, head);
+    handleWebSocketTranscribeUpgrade(req, socket, head, {
+      authenticate: async (token) => (token === "valid-token" ? { user: { id: "user-1" } } : null),
+      transcribe: async (_auth, payload, seconds) => {
+        transcriptions.push({ payload, seconds });
+        return { text: "hello from the provider" };
+      },
+      batchSeconds: 0.0001,
+    }).catch(() => socket.destroy());
   });
 
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const port = server.address().port;
 
-  try {
-    // 1. Verify GET /api/v1/stealth/targets
-    const res = await fetch(`http://127.0.0.1:${port}/api/v1/stealth/targets`);
-    assert.equal(res.status, 200);
-    const data = await res.json();
-    assert.equal(data.version, 1);
-    assert.ok(Array.isArray(data.targets));
-    assert.ok(data.targets.includes("ProProctor.exe"));
-    assert.ok(data.targets.includes("Proctortrack.exe"));
-    assert.ok(data.targets.includes("ProctorU.exe"));
-    assert.ok(data.targets.includes("Proctor.exe"));
-
-    // 2. Verify WebSocket Upgrade on /ws/transcribe
-    const clientKey = Buffer.from("testkey1234567890").toString("base64");
+  function connect(path, { key = Buffer.from("testkey1234567890").toString("base64") } = {}) {
     const socket = net.createConnection({ port, host: "127.0.0.1" });
-
-    await new Promise((resolve, reject) => {
-      socket.on("connect", resolve);
+    return new Promise((resolve, reject) => {
+      socket.on("connect", () => {
+        socket.write(
+          [
+            `GET ${path} HTTP/1.1`,
+            `Host: 127.0.0.1:${port}`,
+            "Upgrade: websocket",
+            "Connection: Upgrade",
+            `Sec-WebSocket-Key: ${key}`,
+            "Sec-WebSocket-Version: 13",
+            "\r\n",
+          ].join("\r\n"),
+        );
+        socket.once("data", (chunk) => resolve({ socket, response: chunk.toString("utf8") }));
+      });
       socket.on("error", reject);
     });
+  }
 
-    const handshakeReq = [
-      "GET /ws/transcribe?source=system HTTP/1.1",
-      `Host: 127.0.0.1:${port}`,
-      "Upgrade: websocket",
-      "Connection: Upgrade",
-      `Sec-WebSocket-Key: ${clientKey}`,
-      "Sec-WebSocket-Version: 13",
-      "\r\n",
-    ].join("\r\n");
+  function encodeClientFrame(payload, opcode = 0x02) {
+    const maskKey = Buffer.from([0x12, 0x34, 0x56, 0x78]);
+    const masked = Buffer.alloc(payload.length);
+    for (let i = 0; i < payload.length; i++) {
+      masked[i] = payload[i] ^ maskKey[i % 4];
+    }
+    return Buffer.concat([
+      Buffer.from([0x80 | opcode, 0x80 | payload.length]),
+      maskKey,
+      masked,
+    ]);
+  }
 
-    socket.write(handshakeReq);
-
-    // Wait for handshake response
-    const handshakeResponse = await new Promise((resolve) => {
-      socket.once("data", (chunk) => resolve(chunk.toString("utf8")));
+  function frameParser(socket) {
+    let buffer = Buffer.alloc(0);
+    const messages = [];
+    const waiters = [];
+    socket.on("data", (chunk) => {
+      buffer = Buffer.concat([buffer, chunk]);
+      while (buffer.length >= 2) {
+        const opcode = buffer[0] & 0x0f;
+        let length = buffer[1] & 0x7f;
+        let offset = 2;
+        if (length === 126) {
+          if (buffer.length < 4) break;
+          length = buffer.readUInt16BE(2);
+          offset = 4;
+        } else if (length === 127) {
+          if (buffer.length < 10) break;
+          length = Number(buffer.readBigUInt64BE(2));
+          offset = 10;
+        }
+        if (buffer.length < offset + length) break;
+        const payload = buffer.subarray(offset, offset + length);
+        buffer = buffer.subarray(offset + length);
+        if (opcode === 0x01) {
+          messages.push(JSON.parse(payload.toString("utf8")));
+          for (const waiter of waiters.splice(0)) waiter();
+        }
+      }
     });
+    return {
+      next(predicate = () => true, timeoutMs = 3000) {
+        return new Promise((resolve, reject) => {
+          const check = () => {
+            const index = messages.findIndex(predicate);
+            if (index >= 0) {
+              resolve(messages.splice(index, 1)[0]);
+              return true;
+            }
+            return false;
+          };
+          if (check()) return;
+          const timer = setTimeout(() => reject(new Error("Timed out waiting for WebSocket message")), timeoutMs);
+          const waiter = () => {
+            if (check()) {
+              clearTimeout(timer);
+              waiters.splice(waiters.indexOf(waiter), 1);
+            }
+          };
+          waiters.push(waiter);
+        });
+      },
+    };
+  }
 
-    assert.ok(handshakeResponse.includes("101 Switching Protocols"));
-    assert.ok(handshakeResponse.includes("Upgrade: websocket"));
+  try {
+    const unauthenticated = await connect("/ws/transcribe?source=system");
+    assert.match(unauthenticated.response, /HTTP\/1\.1 401 Unauthorized/);
+    unauthenticated.socket.destroy();
 
-    // 3. Send masked binary frame with 16-byte AudioFrameHeader
-    const pcmBytes = Buffer.alloc(100, 0xaa);
+    const { socket, response } = await connect("/ws/transcribe?source=system&token=valid-token");
+    assert.match(response, /HTTP\/1\.1 101 Switching Protocols/);
+    assert.match(response, /Upgrade: websocket/);
+    const frames = frameParser(socket);
+
+    const pcmBytes = Buffer.alloc(100, 0x11);
     const frameHeader = Buffer.alloc(16);
     frameHeader.writeUInt32LE(0x5341444c, 0); // magic: 'LDAS'
-    frameHeader.writeUInt16LE(48000, 4);      // sampleRate: 48000
-    frameHeader.writeUInt16LE(2, 6);          // channels: 2
-    frameHeader.writeUInt32LE(100, 8);        // byteCount: 100
-    frameHeader.writeUInt32LE(42, 12);        // seq: 42
+    frameHeader.writeUInt16LE(48000, 4); // sampleRate: 48000
+    frameHeader.writeUInt16LE(2, 6); // channels: 2
+    frameHeader.writeUInt32LE(100, 8); // byteCount: 100
+    frameHeader.writeUInt32LE(42, 12); // seq: 42
 
-    const fullPayload = Buffer.concat([frameHeader, pcmBytes]);
+    socket.write(encodeClientFrame(Buffer.concat([frameHeader, pcmBytes])));
 
-    // Mask client frame
-    const maskKey = Buffer.from([0x12, 0x34, 0x56, 0x78]);
-    const maskedPayload = Buffer.alloc(fullPayload.length);
-    for (let i = 0; i < fullPayload.length; i++) {
-      maskedPayload[i] = fullPayload[i] ^ maskKey[i % 4];
-    }
+    const ack = await frames.next((message) => message.type === "transcript" && message.seq === 42);
+    assert.equal(ack.partial, true);
+    assert.equal(ack.sampleRate, 48000);
+    assert.equal(ack.channels, 2);
+    assert.equal(ack.byteCount, 100);
 
-    const wsFrame = Buffer.concat([
-      Buffer.from([0x82, 0x80 | fullPayload.length]), // FIN | binary, MASK | len
-      maskKey,
-      maskedPayload,
-    ]);
+    const transcribed = await frames.next(
+      (message) => message.type === "transcript" && message.text === "hello from the provider",
+    );
+    assert.equal(transcribed.final, false);
+    assert.equal(transcriptions.length, 1);
+    assert.equal(transcriptions[0].payload.mime, "audio/wav");
+    assert.ok(transcriptions[0].seconds > 0);
+    const wav = Buffer.from(transcriptions[0].payload.data, "base64");
+    assert.equal(wav.subarray(0, 4).toString("ascii"), "RIFF");
+    assert.equal(wav.subarray(8, 12).toString("ascii"), "WAVE");
+    assert.equal(wav.readUInt16LE(22), 2);
+    assert.equal(wav.readUInt32LE(24), 48000);
+    assert.equal(wav.readUInt32LE(40), 100);
 
-    // Wait for server's text response
-    const serverReplyPromise = new Promise((resolve) => {
-      socket.once("data", (chunk) => {
-        // chunk is an unmasked text frame: [0x81, len, ...json]
-        assert.equal(chunk[0], 0x81);
-        const len = chunk[1] & 0x7f;
-        const text = chunk.subarray(2, 2 + len).toString("utf8");
-        resolve(JSON.parse(text));
-      });
-    });
+    const invalidHeader = Buffer.alloc(16);
+    invalidHeader.writeUInt32LE(0x5341444c, 0);
+    invalidHeader.writeUInt16LE(48000, 4);
+    invalidHeader.writeUInt16LE(2, 6);
+    invalidHeader.writeUInt32LE(99, 8); // byteCount does not match payload
+    invalidHeader.writeUInt32LE(43, 12);
+    socket.write(encodeClientFrame(Buffer.concat([invalidHeader, Buffer.alloc(100)])));
+    const error = await frames.next((message) => message.type === "error");
+    assert.match(error.error, /header is invalid/i);
 
-    socket.write(wsFrame);
-    const reply = await serverReplyPromise;
+    socket.destroy();
 
-    assert.equal(reply.type, "transcript");
-    assert.equal(reply.partial, true);
-    assert.equal(reply.seq, 42);
-    assert.equal(reply.sampleRate, 48000);
-    assert.equal(reply.channels, 2);
-    assert.equal(reply.byteCount, 100);
-
-    // 4. Send close frame
-    const closeMask = Buffer.from([0x00, 0x00, 0x00, 0x00]);
-    const closeFrame = Buffer.concat([
-      Buffer.from([0x88, 0x82]), // FIN | close, MASK | 2
-      closeMask,
-      Buffer.from([0x03, 0xe8]), // 1000 normal closure
-    ]);
-    socket.write(closeFrame);
-
-    await new Promise((resolve) => socket.on("close", resolve));
+    const source = fs.readFileSync(new URL("../../server/cloud/app.mjs", import.meta.url), "utf8");
+    assert.doesNotMatch(source, /ProProctor\.exe/, "the cloud server must not ship proctoring target lists");
   } finally {
+    server.closeAllConnections?.();
     server.close();
   }
 });
