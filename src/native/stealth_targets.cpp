@@ -197,7 +197,7 @@ void StealthTargets::TriggerAsyncRefresh(const std::wstring& endpointUrl, const 
                     HINTERNET hConnect = WinHttpConnect(hSession, hostName, urlComp.nPort, 0);
                     if (hConnect) {
                         DWORD openFlags = (urlComp.nScheme == INTERNET_SCHEME_HTTPS) ? WINHTTP_FLAG_SECURE : 0;
-                        HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"GET", urlPath, nullptr, WINHTTP_NO_REFERRER, WINHTTP_DEFAULT_ACCEPT_TYPES, openFlags);
+                        HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"GET", urlPath, nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, openFlags);
                         if (hRequest) {
                             if (WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0) &&
                                 WinHttpReceiveResponse(hRequest, nullptr)) {
