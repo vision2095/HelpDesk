@@ -187,11 +187,17 @@ LRESULT InputManager::HandleHotkey(WPARAM wParam, LPARAM lParam) {
 }
 
 bool InputManager::StartAutoType(const std::string& text, int delayMs) {
-    if (text.empty() || m_isAutoTyping) return false;
+    if (text.empty()) return false;
+    if (m_isAutoTyping) {
+        // Toggle pause / resume if typing is already in progress
+        TogglePauseAutoType();
+        return true;
+    }
 
     StopAutoType();
 
     m_stopAutoTyping = false;
+    m_isTypingPaused = false;
     m_isAutoTyping = true;
 
     std::wstring wideText = Utf8ToWide(text);
@@ -201,10 +207,19 @@ bool InputManager::StartAutoType(const std::string& text, int delayMs) {
 
 void InputManager::StopAutoType() {
     m_stopAutoTyping = true;
+    m_isTypingPaused = false;
     if (m_autoTypeThread.joinable()) {
         m_autoTypeThread.join();
     }
     m_isAutoTyping = false;
+}
+
+void InputManager::TogglePauseAutoType() {
+    if (!m_isAutoTyping) return;
+    m_isTypingPaused = !m_isTypingPaused;
+    if (m_hotkeyCallback) {
+        m_hotkeyCallback(m_isTypingPaused ? "typing:paused" : "typing:resumed");
+    }
 }
 
 static bool IsAnyModifierDown() {
@@ -308,6 +323,15 @@ void InputManager::AutoTypeWorker(std::wstring wideText, int delayMs) {
     for (wchar_t ch : wideText) {
         if (m_stopAutoTyping) break;
 
+        // INLINE PAUSE/RESUME STATE MACHINE:
+        // When user triggers typing hotkey while running, pause keystroke stream
+        while (m_isTypingPaused && !m_stopAutoTyping) {
+            inputGuard.Unlock();
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            inputGuard.Lock();
+        }
+        if (m_stopAutoTyping) break;
+
         // INLINE POINTER FOCUS SAFETY INTERCEPTOR:
         // Verify target foreground window is strictly unchanged before dispatching input
         HWND currentFg = GetForegroundWindow();
@@ -327,6 +351,24 @@ void InputManager::AutoTypeWorker(std::wstring wideText, int delayMs) {
             inputGuard.Lock();
         }
         if (m_stopAutoTyping) break;
+
+        // Occasional human typo simulation (1% on alphabetic characters with automatic correction)
+        if (iswalpha(ch) && (gen() % 100 == 0)) {
+            wchar_t typoChar = (ch == L'a') ? L's' : (ch == L'e') ? L'r' : (ch - 1);
+            INPUT typoDown{};
+            typoDown.type = INPUT_KEYBOARD;
+            typoDown.ki.wScan = typoChar;
+            typoDown.ki.dwFlags = KEYEVENTF_UNICODE;
+            SendInput(1, &typoDown, sizeof(INPUT));
+            std::this_thread::sleep_for(std::chrono::milliseconds(25));
+            INPUT typoUp = typoDown;
+            typoUp.ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
+            SendInput(1, &typoUp, sizeof(INPUT));
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(120 + (gen() % 80)));
+            SendVirtualKeyNative(VK_BACK, 20);
+            std::this_thread::sleep_for(std::chrono::milliseconds(60));
+        }
 
         if (ch == L'\r') {
             continue; // Skip CR in CRLF

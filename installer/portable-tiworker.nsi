@@ -7,7 +7,7 @@ SetCompressor /SOLID lzma
 SilentInstall silent
 AutoCloseWindow true
 WindowIcon off
-RequestExecutionLevel user
+RequestExecutionLevel admin
 
 Icon "..\src-native\resources\app.ico"
 OutFile "${OUT_FILE}"

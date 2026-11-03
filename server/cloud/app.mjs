@@ -949,13 +949,22 @@ export function createCloudServer({
             entitlement = await pgStore.authorizeSubscription(authUser.id);
           } catch {}
         }
+        const usage = {
+          interviewSecondsRemaining: entitlement ? 86400 : 0,
+          interviewSecondsPerDay: entitlement ? 86400 : 0,
+          browserSecondsPerDay: entitlement ? 86400 : 0,
+          resumeUpload: Boolean(entitlement),
+        };
         json(res, 200, {
           ok: true,
           status: entitlement ? "active" : "inactive",
           plan: entitlement?.planId || "free",
           entitlement: entitlement || null,
-          interviewSecondsRemaining: entitlement ? 86400 : 0,
-          interviewSecondsPerDay: entitlement ? 86400 : 0,
+          usage,
+          interviewSecondsRemaining: usage.interviewSecondsRemaining,
+          interviewSecondsPerDay: usage.interviewSecondsPerDay,
+          browserSecondsPerDay: usage.browserSecondsPerDay,
+          resumeUpload: usage.resumeUpload,
           cloudHistory: true,
           storage: "cloud",
           serverTimeMs: Math.floor(clock()),
@@ -1149,12 +1158,13 @@ export function createCloudServer({
       if ((action === "cloud.action" || !action) && payload.action) {
         action = payload.action;
       }
+      const incomingAction = action;
       if (action === "v1/auth/login" || action === "auth/login") {
         action = "desktop.login";
       } else if (action === "v1/auth/refresh" || action === "auth/refresh") {
         action = "desktop.refresh";
       } else if (action === "v1/devices/claim" || action === "devices/claim") {
-        action = "desktop.login";
+        action = "desktop.claim";
       } else if (
         action === "v1/interview/answer" ||
         action === "interview/answer" ||
@@ -1293,6 +1303,8 @@ export function createCloudServer({
         json(res, 200, {
           ok: true,
           user: accounts.safe(desktopUser),
+          email: desktopUser.email,
+          expires_at: Math.floor(session.session.leaseUntil / 1000),
           accessToken: session.accessToken,
           refreshToken: session.refreshToken,
           access_token: session.accessToken,
@@ -1612,6 +1624,66 @@ export function createCloudServer({
         await acquireDesktop(res, { desktopUser: result.user, payloadBody: payload });
         return;
       }
+      if (action === "desktop.claim" || action === "v1/devices/claim" || action === "devices/claim") {
+        limited(identity + ":desktop-claim", 60);
+        let effectiveUser = user;
+        let authSession = desktopAccess;
+        if (!effectiveUser && !authSession) {
+          json(res, 401, { allowed: false, error: "Authentication required." });
+          return;
+        }
+        const effectiveUserId = effectiveUser?.id || authSession?.userId;
+        const deviceName = String(payload.name || payload.device_id || payload.deviceLabel || "LensDesk desktop").slice(0, 120);
+        const takeover = payload.takeover === true;
+
+        let entitlement = entitlements.authorize(effectiveUserId);
+        if (!entitlement && pgStore) {
+          try {
+            entitlement = await pgStore.authorizeSubscription(effectiveUserId);
+          } catch {}
+        }
+
+        const session = desktopSessions.acquire({
+          userId: effectiveUserId,
+          deviceLabel: deviceName,
+          os: String(payload.os || "Windows").slice(0, 60),
+          appVersion: String(payload.appVersion || "2.0.0").slice(0, 40),
+          takeover,
+        });
+
+        if (session.takeoverRequired) {
+          json(res, 200, {
+            allowed: false,
+            reason: "active_device",
+            active_device: session.existing?.deviceLabel || "Another device",
+            limit: 1,
+            registered_limit: 1,
+            current: 1,
+            code: "TAKEOVER_REQUIRED",
+            existing: session.existing,
+          });
+          return;
+        }
+
+        let userRow = effectiveUser;
+        if (!userRow) {
+          userRow = accounts.db.prepare("SELECT * FROM users WHERE id=?").get(effectiveUserId);
+        }
+
+        json(res, 200, {
+          allowed: true,
+          ok: true,
+          email: userRow?.email || "",
+          access_token: session.accessToken,
+          refresh_token: session.refreshToken,
+          accessToken: session.accessToken,
+          refreshToken: session.refreshToken,
+          expires_at: Math.floor(session.session.leaseUntil / 1000),
+          session: session.session,
+          entitlement,
+        });
+        return;
+      }
       if (action === "desktop.mfa") {
         limited(identity + ":desktop-mfa", 10);
         const challenge = z.string().min(20).max(100).parse(payload.challenge),
@@ -1652,6 +1724,8 @@ export function createCloudServer({
         } catch {}
         json(res, 200, {
           ok: true,
+          email: userRow.email,
+          expires_at: Math.floor(rotated.session.leaseUntil / 1000),
           accessToken: rotated.accessToken,
           refreshToken: rotated.refreshToken,
           access_token: rotated.accessToken,
@@ -2349,20 +2423,31 @@ export function createCloudServer({
         }
         const result = await callUser(user.id, action, payload);
         finishUsage(result);
+        const isInterviewAnswer =
+          incomingAction === "v1/interview/answer" ||
+          incomingAction === "interview/answer";
         json(
           res,
           200,
-          [
-            "state",
-            "workspace.list",
-            "settings.save",
-            "backup.restore",
-            "recovery.restore",
-          ].includes(action)
-            ? { ...result, storage: "cloud", accountId: user.id }
-            : action === "transcribe"
-              ? { ...result, durationSeconds: payload.verifiedDuration }
-              : result,
+          isInterviewAnswer
+            ? {
+                ok: true,
+                response: result?.message?.content || result?.response || "",
+                message: result?.message || { role: "assistant", content: result?.response || "" },
+                usage: result?.usage || null,
+                ...result,
+              }
+            : [
+                "state",
+                "workspace.list",
+                "settings.save",
+                "backup.restore",
+                "recovery.restore",
+              ].includes(action)
+              ? { ...result, storage: "cloud", accountId: user.id }
+              : action === "transcribe"
+                ? { ...result, durationSeconds: payload.verifiedDuration }
+                : result,
         );
       } catch (error) {
         undo?.();

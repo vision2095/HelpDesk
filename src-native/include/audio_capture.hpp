@@ -23,6 +23,8 @@ public:
 
     std::vector<uint8_t> GetAudioData(bool clear = true);
     std::string GetAudioDataBase64(bool clear = true);
+    std::vector<uint8_t> GetAudioDataPcm16(bool clear = true);
+    std::string GetAudioDataPcm16Base64(bool clear = true);
 
 private:
     void CaptureThreadLoop();

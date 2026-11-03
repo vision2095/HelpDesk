@@ -99,17 +99,33 @@ std::string OcrPipeline::ExtractText(const CapturedBuffer& buffer) {
         if (!engine) {
             engine = winrt::Windows::Media::Ocr::OcrEngine::TryCreateFromLanguage(winrt::Windows::Globalization::Language(L"en-US"));
         }
-        if (engine) {
-            auto softwareBitmap = winrt::Windows::Graphics::Imaging::SoftwareBitmap(
+        if (engine && !buffer.pixels.empty()) {
+            // Windows.Media.Ocr dimension clamp (max 2600x2600)
+            int targetWidth = std::min(buffer.width, 2600);
+            int targetHeight = std::min(buffer.height, 2600);
+
+            winrt::Windows::Storage::Streams::DataWriter dataWriter;
+            dataWriter.WriteBytes(winrt::array_view<const uint8_t>(
+                buffer.pixels.data(),
+                buffer.pixels.data() + buffer.pixels.size()
+            ));
+            auto iBuffer = dataWriter.DetachBuffer();
+
+            auto softwareBitmap = winrt::Windows::Graphics::Imaging::SoftwareBitmap::CreateCopyFromBuffer(
+                iBuffer,
                 winrt::Windows::Graphics::Imaging::BitmapPixelFormat::Bgra8,
-                buffer.width,
-                buffer.height,
+                targetWidth,
+                targetHeight,
                 winrt::Windows::Graphics::Imaging::BitmapAlphaMode::Premultiplied
             );
+
             auto asyncOp = engine.RecognizeAsync(softwareBitmap);
             auto result = asyncOp.get();
             if (result) {
-                return winrt::to_string(result.Text());
+                std::string extracted = winrt::to_string(result.Text());
+                if (!extracted.empty()) {
+                    return extracted;
+                }
             }
         }
     } catch (...) {

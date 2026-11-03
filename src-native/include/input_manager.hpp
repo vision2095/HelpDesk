@@ -34,7 +34,9 @@ public:
     // Destination-verified auto-typing
     bool StartAutoType(const std::string& text, int delayMs = 15);
     void StopAutoType();
+    void TogglePauseAutoType();
     bool IsAutoTyping() const { return m_isAutoTyping; }
+    bool IsAutoTypingPaused() const { return m_isTypingPaused; }
 
     using HotkeyCallback = std::function<void(const std::string& action)>;
     void SetHotkeyCallback(HotkeyCallback cb) { m_hotkeyCallback = cb; }
@@ -47,6 +49,7 @@ private:
     HotkeyCallback m_hotkeyCallback = nullptr;
 
     std::atomic<bool> m_isAutoTyping{ false };
+    std::atomic<bool> m_isTypingPaused{ false };
     std::atomic<bool> m_stopAutoTyping{ false };
     std::thread m_autoTypeThread;
 };

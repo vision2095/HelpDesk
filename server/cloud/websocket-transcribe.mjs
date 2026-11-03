@@ -65,13 +65,22 @@ export function handleWebSocketTranscribeUpgrade(req, socket, head, options = {}
 
   socket.write(responseHeaders);
 
-  let buffer = head && head.length > 0 ? Buffer.from(head) : Buffer.alloc(0);
+  const lang = url.searchParams.get("lang") || "en";
+  const source = url.searchParams.get("source") || "system";
+  const token = url.searchParams.get("token") || "";
+
+  let autoSeq = 1;
+  let totalBytesReceived = 0;
+  let sessionAudioChunks = [];
+  let currentTranscription = "";
 
   function sendText(obj) {
     if (socket.destroyed || !socket.writable) return;
     const jsonStr = typeof obj === "string" ? obj : JSON.stringify(obj);
     socket.write(createWebSocketFrame(jsonStr, 0x01));
   }
+
+  let buffer = head && head.length > 0 ? Buffer.from(head) : Buffer.alloc(0);
 
   socket.on("data", (chunk) => {
     buffer = Buffer.concat([buffer, chunk]);
@@ -135,27 +144,34 @@ export function handleWebSocketTranscribeUpgrade(req, socket, head, options = {}
           socket.write(pong);
         } catch {}
       } else if (opcode === 0x02) {
-        // Binary frame containing 16-byte AudioFrameHeader
-        if (payload.length >= 16) {
-          const magic = payload.readUInt32LE(0);
-          const sampleRate = payload.readUInt16LE(4);
-          const channels = payload.readUInt16LE(6);
-          const byteCount = payload.readUInt32LE(8);
-          const seq = payload.readUInt32LE(12);
+        // Binary frame containing 16-byte AudioFrameHeader or raw PCM audio
+        let seq = autoSeq++;
+        let sampleRate = 48000;
+        let channels = 2;
+        let byteCount = payload.length;
+        let audioChunk = payload;
 
-          if (magic === LDAS_MAGIC) {
-            // Emits JSON partial transcript text frames per contract
-            sendText({
-              type: "transcript",
-              partial: true,
-              seq,
-              sampleRate,
-              channels,
-              byteCount,
-              text: "",
-            });
-          }
+        if (payload.length >= 16 && payload.readUInt32LE(0) === LDAS_MAGIC) {
+          sampleRate = payload.readUInt16LE(4);
+          channels = payload.readUInt16LE(6);
+          byteCount = payload.readUInt32LE(8);
+          seq = payload.readUInt32LE(12);
+          audioChunk = payload.subarray(16);
         }
+
+        sessionAudioChunks.push(audioChunk);
+        totalBytesReceived += audioChunk.length;
+
+        // Emit JSON transcript text frame per contract (matches both HintLens and LensDesk clients)
+        sendText({
+          type: "transcript",
+          partial: true,
+          seq,
+          sampleRate,
+          channels,
+          byteCount,
+          text: currentTranscription,
+        });
       }
     }
   });

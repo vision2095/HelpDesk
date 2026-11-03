@@ -973,8 +973,15 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
         }
 
         if (action == "audio.getLoopbackChunk") {
-            std::string b64 = m_audioCapture.GetAudioDataBase64(true);
-            callback({ { "data", b64 }, { "sampleRate", 48000 }, { "channels", 2 } }, false);
+            bool wantPcm16 = (payload.contains("format") && payload["format"] == "pcm16");
+            std::string b64 = wantPcm16 ? m_audioCapture.GetAudioDataPcm16Base64(true) : m_audioCapture.GetAudioDataBase64(true);
+            callback({ { "data", b64 }, { "sampleRate", 48000 }, { "channels", 2 }, { "format", wantPcm16 ? "pcm16" : "float32" } }, false);
+            return;
+        }
+
+        if (action == "audio.getLoopbackChunkPcm16") {
+            std::string b64 = m_audioCapture.GetAudioDataPcm16Base64(true);
+            callback({ { "data", b64 }, { "sampleRate", 48000 }, { "channels", 2 }, { "format", "pcm16" } }, false);
             return;
         }
 
@@ -1594,7 +1601,10 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
 
         if (action == "desktop.models.detect") {
             json models = json::array({
-                { { "id", "local" }, { "name", "Ollama Local Endpoint" }, { "available", true } }
+                { { "id", "ollama" }, { "name", "Ollama Local (11434)" }, { "port", 11434 }, { "available", true }, { "supportsVision", true } },
+                { { "id", "lmstudio" }, { "name", "LM Studio (1234)" }, { "port", 1234 }, { "available", true }, { "supportsVision", true } },
+                { { "id", "llamacpp" }, { "name", "llama.cpp (8080)" }, { "port", 8080 }, { "available", true }, { "supportsVision", false } },
+                { { "id", "vllm" }, { "name", "vLLM (8000)" }, { "port", 8000 }, { "available", true }, { "supportsVision", true } }
             });
             callback(models, false);
             return;

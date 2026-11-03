@@ -226,4 +226,44 @@ std::string WasapiLoopbackCapture::GetAudioDataBase64(bool clear) {
     return Base64Encode(raw.data(), raw.size());
 }
 
+std::vector<uint8_t> WasapiLoopbackCapture::GetAudioDataPcm16(bool clear) {
+    std::vector<uint8_t> raw = GetAudioData(clear);
+    if (raw.empty()) return {};
+
+    bool isFloat = false;
+    if (m_waveFormat) {
+        if (m_waveFormat->wFormatTag == WAVE_FORMAT_IEEE_FLOAT) {
+            isFloat = true;
+        } else if (m_waveFormat->wFormatTag == WAVE_FORMAT_EXTENSIBLE) {
+            auto* pEx = reinterpret_cast<WAVEFORMATEXTENSIBLE*>(m_waveFormat);
+            if (pEx->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT) {
+                isFloat = true;
+            }
+        } else if (m_waveFormat->wBitsPerSample == 32) {
+            isFloat = true;
+        }
+    }
+
+    if (!isFloat) {
+        return raw;
+    }
+
+    size_t sampleCount = raw.size() / sizeof(float);
+    const float* fSamples = reinterpret_cast<const float*>(raw.data());
+    std::vector<uint8_t> pcm16(sampleCount * sizeof(int16_t));
+    int16_t* out16 = reinterpret_cast<int16_t*>(pcm16.data());
+
+    for (size_t i = 0; i < sampleCount; ++i) {
+        float sample = std::clamp(fSamples[i], -1.0f, 1.0f);
+        out16[i] = static_cast<int16_t>(std::clamp(sample * 32767.0f, -32768.0f, 32767.0f));
+    }
+    return pcm16;
+}
+
+std::string WasapiLoopbackCapture::GetAudioDataPcm16Base64(bool clear) {
+    std::vector<uint8_t> pcm = GetAudioDataPcm16(clear);
+    if (pcm.empty()) return "";
+    return Base64Encode(pcm.data(), pcm.size());
+}
+
 } // namespace LensDesk
