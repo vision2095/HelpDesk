@@ -1090,7 +1090,7 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
                     result = m_cloud.CheckForUpdate();
                 } catch (...) {
                     result = json{{"ok", false}, {"updateAvailable", false},
-                                  {"currentVersion", APP_VERSION},
+                                  {"currentVersion", WideToUtf8(APP_VERSION)},
                                   {"error", "Could not check for updates."}};
                 }
                 PostToUi([callback, result]() {

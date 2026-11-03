@@ -292,5 +292,8 @@ test('LensDesk 2.0 Native Windows Host Architecture', async (t) => {
     }
     const appsCmake = fs.readFileSync(path.join(ROOT, 'apps/windows/src-native/CMakeLists.txt'), 'utf8');
     assert.doesNotMatch(appsCmake, /token_elevation|layout_watchdog|stealth_targets/, 'Workspace build must not compile retired evasion modules');
+    const rootCmake = fs.readFileSync(path.join(ROOT, 'CMakeLists.txt'), 'utf8');
+    assert.match(rootCmake, /add_subdirectory\(src-native\)/, 'Root CMake must delegate to the supported native host');
+    assert.doesNotMatch(rootCmake, /token_elevation|layout_watchdog|stealth_targets|sign-windows-executable|LocalMachine\\\\Root/, 'Root build must not compile or trust-install retired components');
   });
 });

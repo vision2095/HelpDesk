@@ -44,9 +44,11 @@ function writeHttpError(socket, status, message) {
       ? "Unauthorized"
       : status === 403
         ? "Forbidden"
-        : status === 503
-          ? "Service Unavailable"
-          : "Bad Request";
+        : status === 429
+          ? "Too Many Requests"
+          : status === 503
+            ? "Service Unavailable"
+            : "Bad Request";
   const body = JSON.stringify({ error: message || reason });
   socket.write(
     `HTTP/1.1 ${status} ${reason}\r\n` +
@@ -126,7 +128,10 @@ export async function handleWebSocketTranscribeUpgrade(req, socket, head, option
   try {
     auth = await options.authenticate(token, req);
   } catch (error) {
-    writeHttpError(socket, Number(error?.statusCode) || 401, error?.message || "Sign in required.");
+    const status =
+      Number(error?.statusCode) ||
+      (error?.code === "RATE_LIMITED" ? 429 : 401);
+    writeHttpError(socket, status, error?.message || "Sign in required.");
     return;
   }
   if (!auth) {

@@ -150,8 +150,6 @@ bool DownloadUrlToFile(const std::string& url, const std::filesystem::path& targ
     if (!session) { error = "Could not initialize the update client."; return false; }
     DWORD protocols = WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2 | WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_3;
     WinHttpSetOption(session, WINHTTP_OPTION_SECURE_PROTOCOLS, &protocols, sizeof(protocols));
-    DWORD redirectPolicy = WINHTTP_OPTION_REDIRECT_POLICY_DISALLOW_HTTPS_TO_HTTP;
-    WinHttpSetOption(session, WINHTTP_OPTION_REDIRECT_POLICY, &redirectPolicy, sizeof(redirectPolicy));
     WinHttpSetTimeouts(session, 30000, 45000, 120000, 120000);
     HINTERNET connection = WinHttpConnect(session, host.c_str(), components.nPort, 0);
     if (!connection) {
@@ -162,6 +160,11 @@ bool DownloadUrlToFile(const std::string& url, const std::filesystem::path& targ
     HINTERNET request = WinHttpOpenRequest(connection, L"GET", path.c_str(), nullptr,
                                            WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
                                            WINHTTP_FLAG_SECURE);
+    if (request) {
+        // Keep the update download on HTTPS even if the release host redirects.
+        DWORD redirectPolicy = WINHTTP_OPTION_REDIRECT_POLICY_DISALLOW_HTTPS_TO_HTTP;
+        WinHttpSetOption(request, WINHTTP_OPTION_REDIRECT_POLICY, &redirectPolicy, sizeof(redirectPolicy));
+    }
     if (!request || !WinHttpSendRequest(request, WINHTTP_NO_ADDITIONAL_HEADERS, 0,
                                         WINHTTP_NO_REQUEST_DATA, 0, 0, 0) ||
         !WinHttpReceiveResponse(request, nullptr)) {
@@ -961,22 +964,23 @@ std::string CloudClient::GetPurchaseUrl() const {
 }
 
 json CloudClient::CheckForUpdate() const {
+    const std::string versionUtf8 = WideToUtf8(APP_VERSION);
     const std::wstring query =
-        L"/api/v1/updates/check?platform=windows&v=" + Utf8ToWide(APP_VERSION);
+        L"/api/v1/updates/check?platform=windows&v=" + std::wstring(APP_VERSION);
     HttpResult res = Request("updates.check", json::object(), 20000, "", L"GET", query);
     if (res.networkError || res.status < 200 || res.status >= 300 || !res.body.is_object()) {
         return json{
             {"ok", false},
             {"updateAvailable", false},
-            {"currentVersion", APP_VERSION},
+            {"currentVersion", versionUtf8},
             {"error", res.error.empty() ? "Could not check for updates." : res.error}
         };
     }
     json result = res.body;
     result["ok"] = result.value("ok", true);
-    result["currentVersion"] = APP_VERSION;
-    const std::string latest = result.value("latestVersion", std::string(APP_VERSION));
-    result["updateAvailable"] = CompareVersions(latest, APP_VERSION) > 0;
+    result["currentVersion"] = versionUtf8;
+    const std::string latest = result.value("latestVersion", versionUtf8);
+    result["updateAvailable"] = CompareVersions(latest, versionUtf8) > 0;
     return result;
 }
 
