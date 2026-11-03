@@ -144,31 +144,41 @@ test('LensDesk 2.0 Native Windows Host Architecture', async (t) => {
     assert.ok(fs.existsSync(path.join(ROOT, 'scripts/test-windows-distributions.ps1')), 'Missing test-windows-distributions.ps1');
   });
 
-  await t.test('12. Elevated Presentation System: uiAccess and Signing Scripts Exist', () => {
+  await t.test('12. Windows Security Boundary: standard-user manifest, no UIAccess token theft', () => {
     const manifest = fs.readFileSync(path.join(ROOT, 'src-native/resources/app.manifest'), 'utf8');
-    assert.match(manifest, /uiAccess="(false|true)"/, 'Manifest must specify uiAccess attribute');
-    assert.ok(fs.existsSync(path.join(ROOT, 'scripts/sign-windows-executable.ps1')), 'Missing sign-windows-executable.ps1');
-    const psScript = fs.readFileSync(path.join(ROOT, 'scripts/sign-windows-executable.ps1'), 'utf8');
-    assert.match(psScript, /Cert:\\LocalMachine\\Root/, 'Script must target LocalMachine root store');
-    assert.match(psScript, /Cert:\\CurrentUser\\Root/, 'Script must target CurrentUser root store');
+    assert.match(manifest, /level="asInvoker"/, 'Manifest must run as the invoking user');
+    assert.match(manifest, /uiAccess="false"/, 'Manifest must not request UIAccess elevation');
+    assert.doesNotMatch(manifest, /requireAdministrator/, 'Manifest must not require administrator rights');
+
     const mainCpp = fs.readFileSync(path.join(ROOT, 'src-native/src/main.cpp'), 'utf8');
-    assert.match(mainCpp, /TryEnableUIAccess/, 'main.cpp must call TryEnableUIAccess');
-    assert.match(mainCpp, /TokenUIAccess/, 'main.cpp must query TokenUIAccess');
+    assert.doesNotMatch(mainCpp, /winlogon/i, 'Host must not open or duplicate winlogon tokens');
+    assert.doesNotMatch(mainCpp, /TokenUIAccess/, 'Host must not rewrite its token UIAccess flag');
+    assert.doesNotMatch(mainCpp, /CreateProcessAsUserW/, 'Host must not relaunch itself with another process token');
   });
 
-  await t.test('13. Continuous Desktop Layout Protection: Toolhelp32Snapshot Proctor & Z-Order Loop', () => {
+  await t.test('13. Overlay Z-order without proctoring-process evasion', () => {
     const wmCpp = fs.readFileSync(path.join(ROOT, 'src-native/src/window_manager.cpp'), 'utf8');
-    assert.match(wmCpp, /CreateToolhelp32Snapshot/, 'Missing Toolhelp32Snapshot in window_manager.cpp');
-    assert.match(wmCpp, /LockDownBrowser\.exe/, 'Missing proctoring signatures');
-    assert.match(wmCpp, /LayoutProtectionWorkerLoop/, 'Missing LayoutProtectionWorkerLoop');
-    assert.match(wmCpp, /SetParent\(m_hwnd, GetDesktopWindow\(\)\)/, 'Must detach and reparent to Desktop to prevent layout suppression');
+    assert.match(wmCpp, /HWND_TOPMOST/, 'Overlay must use normal topmost z-order');
+    assert.match(wmCpp, /EVENT_SYSTEM_FOREGROUND/, 'Overlay must restore z-order on foreground changes');
+    assert.doesNotMatch(wmCpp, /CreateToolhelp32Snapshot/, 'Window manager must not enumerate other processes');
+    assert.doesNotMatch(wmCpp, /LockDownBrowser|SafeExamBrowser|Proctor/i, 'Window manager must not detect proctoring software');
+    assert.doesNotMatch(wmCpp, /OpenInputDesktop/, 'Window manager must not inspect or switch input desktops');
+    assert.doesNotMatch(wmCpp, /SetParent\(m_hwnd, GetDesktopWindow\(\)\)/, 'Window manager must not detach the overlay to evade window constraints');
   });
 
-  await t.test('14. Detached WinRT OCR Engines: capture_service.cpp has OCR Pipeline', () => {
+  await t.test('14. Detached WinRT OCR Engines: BGRA conversion and bounded recognition', () => {
     const capCpp = fs.readFileSync(path.join(ROOT, 'src-native/src/capture_service.cpp'), 'utf8');
     assert.match(capCpp, /PerformOcr/, 'Missing PerformOcr implementation in capture_service.cpp');
     assert.match(capCpp, /PerformOcrOnBase64/, 'Missing PerformOcrOnBase64');
-    assert.match(capCpp, /GetDpiForWindow/, 'Must include dynamic pixel-scaling recalculation via GetDpiForWindow');
+    assert.match(capCpp, /CreateFormatConverter/, 'OCR input must be converted to a known pixel format');
+    assert.match(capCpp, /GUID_WICPixelFormat32bppBGRA/, 'OCR input must be converted to BGRA');
+    assert.match(capCpp, /m_ocrMutex/, 'OCR execution must be serialized');
+
+    const ocrCpp = fs.readFileSync(path.join(ROOT, 'src/native/ocr_pipeline.cpp'), 'utf8');
+    assert.match(ocrCpp, /kMaxOcrDimension/, 'OCR must enforce the WinRT maximum image dimension');
+    assert.match(ocrCpp, /FitForOcr/, 'OCR must scale oversized images proportionally');
+    assert.match(ocrCpp, /multi_threaded/, 'OCR must run in an MTA-compatible worker');
+    assert.doesNotMatch(ocrCpp, /targetWidth = std::min\(buffer\.width/, 'OCR must not clip dimensions independently');
   });
 
   await t.test('15. Inline Pointer Focus Safety Interceptor & Log-Normal Typing Dynamics', () => {
@@ -215,8 +225,10 @@ test('LensDesk 2.0 Native Windows Host Architecture', async (t) => {
   await t.test('19. Local Sandbox Profile Sanitization in service_dispatcher.cpp', () => {
     const dispCpp = fs.readFileSync(path.join(ROOT, 'src-native/src/service_dispatcher.cpp'), 'utf8');
     assert.match(dispCpp, /desktop\.wipeAllData/, 'Missing desktop.wipeAllData handler');
-    assert.match(dispCpp, /RegDeleteTreeW/, 'Missing registry purge');
-    assert.match(dispCpp, /msedgewebview2\.exe/, 'Missing active process lock enumeration');
+    assert.match(dispCpp, /RegDeleteTreeW/, 'Missing LensDesk registry cleanup');
+    assert.doesNotMatch(dispCpp, /msedgewebview2\.exe/, 'Data wipe must not terminate unrelated WebView2 processes');
+    assert.doesNotMatch(dispCpp, /TerminateProcess/, 'Data wipe must not terminate other processes');
+    assert.match(dispCpp, /remove_all\(base \/ L"LensDesk"/, 'Data wipe must be scoped to LensDesk-owned data');
   });
 
   await t.test('20. Deployment Evergreen WebView2 Bootstrapper Verification Agent Exists', () => {

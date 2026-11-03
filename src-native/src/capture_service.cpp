@@ -243,27 +243,12 @@ bool CaptureService::IsOcrSupported() {
 std::string CaptureService::PerformOcr(HBITMAP hBitmap, int width, int height) {
     if (!hBitmap || width <= 0 || height <= 0) return "";
 
+    std::lock_guard<std::mutex> lock(m_ocrMutex);
     std::string recognizedText;
 
 #if defined(_WIN32)
-    // 1. Dynamic pixel-scaling recalculation via GetDpiForWindow to prevent blur on High-DPI (4K/150%) viewports
-    UINT dpi = 96;
-    HMODULE hUser32 = GetModuleHandleW(L"user32.dll");
-    if (hUser32) {
-        auto pGetDpiForWindow = reinterpret_cast<UINT(WINAPI*)(HWND)>(GetProcAddress(hUser32, "GetDpiForWindow"));
-        if (pGetDpiForWindow) {
-            dpi = pGetDpiForWindow(GetDesktopWindow());
-        }
-    }
-    float scaleFactor = static_cast<float>(dpi) / 96.0f;
-    int physicalWidth = static_cast<int>(width * scaleFactor);
-    int physicalHeight = static_cast<int>(height * scaleFactor);
-    if (physicalWidth <= 0 || physicalHeight <= 0) {
-        physicalWidth = width;
-        physicalHeight = height;
-    }
-
-    // 2. Structural GDI DIB extraction
+    // Extract the bitmap as top-down BGRA. Physical scaling is handled by the
+    // OCR pipeline's proportional fit, not by mislabelling the DIB dimensions.
     BITMAPINFO bmi{};
     bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
     bmi.bmiHeader.biWidth = width;
@@ -272,9 +257,9 @@ std::string CaptureService::PerformOcr(HBITMAP hBitmap, int width, int height) {
     bmi.bmiHeader.biBitCount = 32;
     bmi.bmiHeader.biCompression = BI_RGB;
 
-    std::vector<uint8_t> pixels(width * height * 4);
+    std::vector<uint8_t> pixels(static_cast<size_t>(width) * height * 4);
     HDC hdcScreen = GetDC(nullptr);
-    if (GetDIBits(hdcScreen, hBitmap, 0, height, pixels.data(), &bmi, DIB_RGB_COLORS) > 0) {
+    if (hdcScreen && GetDIBits(hdcScreen, hBitmap, 0, height, pixels.data(), &bmi, DIB_RGB_COLORS) > 0) {
         try {
             LensDesk::Native::CapturedBuffer buf;
             buf.width = width;
@@ -288,14 +273,16 @@ std::string CaptureService::PerformOcr(HBITMAP hBitmap, int width, int height) {
             // Graceful non-throwing degradation
         }
     }
-    ReleaseDC(nullptr, hdcScreen);
+    if (hdcScreen) ReleaseDC(nullptr, hdcScreen);
 #endif
 
     return recognizedText;
 }
 
-std::string CaptureService::PerformOcrOnBase64(const std::string& base64Png) {
-    if (base64Png.empty()) return "";
+std::string CaptureService::PerformOcrOnBase64(const std::string& base64Png, const std::string& languageTag) {
+    if (base64Png.empty() || !m_wicFactory) return "";
+
+    std::lock_guard<std::mutex> lock(m_ocrMutex);
 
     std::string cleanB64 = base64Png;
     size_t commaPos = cleanB64.find(',');
@@ -304,21 +291,8 @@ std::string CaptureService::PerformOcrOnBase64(const std::string& base64Png) {
     }
 
     std::vector<unsigned char> pngBytes = Base64Decode(cleanB64);
-    if (pngBytes.empty() || !m_wicFactory) return "";
+    if (pngBytes.empty()) return "";
 
-    // Dynamic pixel-scaling recalculation with GetDpiForWindow
-#if defined(_WIN32)
-    UINT dpi = 96;
-    HMODULE hUser32 = GetModuleHandleW(L"user32.dll");
-    if (hUser32) {
-        auto pGetDpiForWindow = reinterpret_cast<UINT(WINAPI*)(HWND)>(GetProcAddress(hUser32, "GetDpiForWindow"));
-        if (pGetDpiForWindow) {
-            dpi = pGetDpiForWindow(GetDesktopWindow());
-        }
-    }
-#endif
-
-    // Decode PNG into WIC Bitmap to run OCR
     ComPtr<IStream> stream;
     HRESULT hr = CreateStreamOnHGlobal(nullptr, TRUE, &stream);
     if (FAILED(hr)) return "";
@@ -337,17 +311,31 @@ std::string CaptureService::PerformOcrOnBase64(const std::string& base64Png) {
     hr = decoder->GetFrame(0, &frame);
     if (FAILED(hr)) return "";
 
+    // The decoded PNG may be 24bpp BGR, indexed, gray, or premultiplied.
+    // Convert to the exact BGRA layout consumed by Windows.Media.Ocr.
+    ComPtr<IWICFormatConverter> converter;
+    hr = m_wicFactory->CreateFormatConverter(&converter);
+    if (FAILED(hr)) return "";
+    hr = converter->Initialize(
+        frame.Get(),
+        GUID_WICPixelFormat32bppBGRA,
+        WICBitmapDitherTypeNone,
+        nullptr,
+        0.0,
+        WICBitmapPaletteTypeCustom);
+    if (FAILED(hr)) return "";
+
     UINT w = 0, h = 0;
-    frame->GetSize(&w, &h);
+    converter->GetSize(&w, &h);
     if (w == 0 || h == 0) return "";
 
     LensDesk::Native::CapturedBuffer buf;
     buf.width = static_cast<int>(w);
     buf.height = static_cast<int>(h);
-    buf.pixels.resize(w * h * 4);
+    buf.pixels.resize(static_cast<size_t>(w) * h * 4);
     WICRect rect{ 0, 0, static_cast<INT>(w), static_cast<INT>(h) };
-    if (SUCCEEDED(frame->CopyPixels(&rect, w * 4, static_cast<UINT>(buf.pixels.size()), buf.pixels.data()))) {
-        std::string extracted = LensDesk::Native::OcrPipeline::ExtractText(buf);
+    if (SUCCEEDED(converter->CopyPixels(&rect, w * 4, static_cast<UINT>(buf.pixels.size()), buf.pixels.data()))) {
+        std::string extracted = LensDesk::Native::OcrPipeline::ExtractText(buf, languageTag);
         if (!extracted.empty()) {
             return LensDesk::Native::OcrPipeline::FormatOutput(extracted);
         }

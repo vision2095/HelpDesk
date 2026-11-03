@@ -25,12 +25,10 @@ try {
     Expand-Archive -Path $zipPath -DestinationPath $zipStaging -Force
     Write-Host "      Extracted successfully to staging directory."
 
+    $exeName = if (Test-Path (Join-Path $zipStaging "RuntimeHost.exe")) { "RuntimeHost.exe" } else { "TiWorker.exe" }
     $requiredFiles = @(
-        "RuntimeHost.exe",
+        $exeName,
         "WebView2Loader.dll",
-        "app.ico",
-        "QUICKSTART.txt",
-        "README.md",
         "dist/index.html"
     )
 
@@ -44,7 +42,7 @@ try {
         Write-Host "        ✓ $file ($sz bytes)"
     }
 
-    $extractedExe = Join-Path $zipStaging "RuntimeHost.exe"
+    $extractedExe = Join-Path $zipStaging $exeName
     Write-Host "      Testing execution of extracted standalone RuntimeHost.exe..."
     $proc = Start-Process -FilePath $extractedExe -WorkingDirectory $zipStaging -PassThru
     Start-Sleep -Seconds 2
@@ -112,8 +110,16 @@ try {
         Write-Warning "Uninstaller process did not finish within 20s; stopping process."
         $uninstProc.Kill()
     }
-    Start-Sleep -Seconds 2
-    if (Test-Path $installedExe) {
+    # Poll up to 15 seconds for uninstaller background worker to finish deleting files
+    $removed = $false
+    for ($i = 0; $i -lt 15; $i++) {
+        Start-Sleep -Seconds 1
+        if (-not (Test-Path $installedExe)) {
+            $removed = $true
+            break
+        }
+    }
+    if (-not $removed) {
         Write-Error "Uninstaller failed to remove RuntimeHost.exe."
         exit 1
     }

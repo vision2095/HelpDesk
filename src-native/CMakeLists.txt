@@ -42,14 +42,11 @@ set(SOURCES
     src/cloud_client.cpp
     src/service_dispatcher.cpp
     src/audio_capture.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/token_elevation.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/layout_watchdog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/ocr_pipeline.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/focus_gate.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/typing_dynamics.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/wasapi_loopback.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/websocket_audio_sink.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/stealth_targets.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/mouse_gesture_hook.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/hotkey_dispatcher.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/sanitization.cpp
