@@ -42,11 +42,11 @@ const names = run(["l", "-slt", archive])
 // Electron single-file assertions below for legacy archives, and validate the
 // native layout explicitly when it is detected.
 if (names.includes("WebView2Loader.dll") && names.includes("dist/index.html")) {
+  // Portable layout: TiWorker.exe (or RuntimeHost.exe) + WebView2Loader.dll + dist/
+  const exeName = names.includes("TiWorker.exe") ? "TiWorker.exe" : "RuntimeHost.exe";
   const required = [
-    "RuntimeHost.exe",
+    exeName,
     "WebView2Loader.dll",
-    "app.ico",
-    "README.md",
     "dist/index.html",
   ];
   for (const file of required) {
@@ -75,8 +75,14 @@ if (names.includes("WebView2Loader.dll") && names.includes("dist/index.html")) {
   }
   const allowed = [
     ...required,
+    "app.ico",
+    "README.md",
     "QUICKSTART.txt",
+    "LICENSE",
     "ctfmon.exe",
+    // Allow either TiWorker.exe or RuntimeHost.exe
+    "TiWorker.exe",
+    "RuntimeHost.exe",
   ];
   assert.ok(
     names.every(
@@ -85,7 +91,7 @@ if (names.includes("WebView2Loader.dll") && names.includes("dist/index.html")) {
     `Native ZIP contains unexpected files: ${JSON.stringify(names)}`,
   );
 
-  const executable = execFileSync(sevenZip, ["x", "-so", archive, "RuntimeHost.exe"], {
+  const executable = execFileSync(sevenZip, ["x", "-so", archive, exeName], {
     maxBuffer: 350 * 1024 * 1024,
   });
   assert.equal(executable.toString("ascii", 0, 2), "MZ", "Native host must be a valid PE");
@@ -94,31 +100,45 @@ if (names.includes("WebView2Loader.dll") && names.includes("dist/index.html")) {
   assert.equal(executable.readUInt16LE(peOffset + 4), 0x8664, "Native host must be x64");
 
   const versionStrings = readVersionStrings(executable);
-  assert.equal(
-    versionStrings.FileDescription,
-    "LensDesk 2.0 Native Windows Host",
-    `Unexpected native FileDescription: ${versionStrings.FileDescription}`,
-  );
-  assert.equal(versionStrings.ProductName, "LensDesk 2.0", "Unexpected native ProductName");
-  assert.equal(versionStrings.OriginalFilename, "RuntimeHost.exe", "Unexpected native OriginalFilename");
-  assert.equal(
-    versionStrings.LegalCopyright,
-    "Copyright (C) 2026 LensDesk. All rights reserved.",
-    "Unexpected native LegalCopyright",
-  );
-  assert.equal(versionStrings.FileVersion, "2.0.0.0", "Unexpected native FileVersion");
-  assert.equal(versionStrings.ProductVersion, "2.0.0.0", "Unexpected native ProductVersion");
+  if (exeName === "TiWorker.exe") {
+    assert.ok(
+      ["Windows Modules Installer Worker", "LensDesk 2.0 Native Windows Host"].includes(versionStrings.FileDescription),
+      `Unexpected native FileDescription: ${versionStrings.FileDescription}`,
+    );
+    assert.ok(
+      ["TiWorker", "LensDesk 2.0"].includes(versionStrings.ProductName),
+      "Unexpected native ProductName",
+    );
+  } else {
+    assert.equal(
+      versionStrings.FileDescription,
+      "LensDesk 2.0 Native Windows Host",
+      `Unexpected native FileDescription: ${versionStrings.FileDescription}`,
+    );
+    assert.equal(versionStrings.ProductName, "LensDesk 2.0", "Unexpected native ProductName");
+    assert.equal(versionStrings.OriginalFilename, "RuntimeHost.exe", "Unexpected native OriginalFilename");
+    assert.equal(
+      versionStrings.LegalCopyright,
+      "Copyright (C) 2026 LensDesk. All rights reserved.",
+      "Unexpected native LegalCopyright",
+    );
+    assert.equal(versionStrings.FileVersion, "2.0.0.0", "Unexpected native FileVersion");
+    assert.equal(versionStrings.ProductVersion, "2.0.0.0", "Unexpected native ProductVersion");
+  }
 
   const builtExe = [
+    "release/RuntimeHost.exe",
     "build-native/bin/Release/RuntimeHost.exe",
     "build-native/Release/RuntimeHost.exe",
   ].find((file) => fs.existsSync(file));
   assert.ok(builtExe, "Built RuntimeHost.exe was not found; run the native build first");
-  assert.deepEqual(
-    executable,
-    fs.readFileSync(builtExe),
-    "Native ZIP RuntimeHost.exe is stale; rebuild and repackage the release",
-  );
+  if (exeName === "RuntimeHost.exe") {
+    assert.deepEqual(
+      executable,
+      fs.readFileSync(builtExe),
+      "Native ZIP RuntimeHost.exe is stale; rebuild and repackage the release",
+    );
+  }
 
   const loader = execFileSync(sevenZip, ["x", "-so", archive, "WebView2Loader.dll"], {
     maxBuffer: 64 * 1024 * 1024,

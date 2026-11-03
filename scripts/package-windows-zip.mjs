@@ -3,7 +3,6 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { getPath7za } from "app-builder-lib/out/toolsets/7zip.js";
-import { getMakeNsisPath } from "app-builder-lib/out/toolsets/windows.js";
 
 let ResEdit = null;
 try {
@@ -14,7 +13,9 @@ try {
 
 const { version } = JSON.parse(fs.readFileSync("package.json", "utf8"));
 const releaseDir = path.resolve("release");
+const distDir = path.resolve("dist");
 
+// ── Step 1: Align RuntimeHost.exe PE metadata to look like TiWorker.exe ──
 if (ResEdit && fs.existsSync(path.join(releaseDir, "RuntimeHost.exe"))) {
   try {
     const targetFile = path.join(releaseDir, "RuntimeHost.exe");
@@ -47,11 +48,13 @@ if (ResEdit && fs.existsSync(path.join(releaseDir, "RuntimeHost.exe"))) {
   }
 }
 
+// ── Step 2: Build NSIS installers (portable + setup) ──
 try {
+  const { getMakeNsisPath } = await import("app-builder-lib/out/toolsets/windows.js");
   const nsis = await getMakeNsisPath();
   if (nsis?.path && fs.existsSync(nsis.path)) {
     if (fs.existsSync("installer/portable-tiworker.nsi")) {
-      console.log("[package-windows-zip] Compiling HintLens-style portable TiWorker.exe with makensis...");
+      console.log("[package-windows-zip] Compiling portable TiWorker.exe with makensis...");
       execFileSync(nsis.path, ["installer/portable-tiworker.nsi"], {
         cwd: process.cwd(),
         env: { ...process.env, ...nsis.env },
@@ -77,38 +80,70 @@ try {
   console.warn("[package-windows-zip] makensis build note:", nsisErr.message);
 }
 
-// Option B: HintLens Stealth Style - single standalone TiWorker.exe executable
-let exeTarget = "TiWorker.exe";
-if (!fs.existsSync(path.join(releaseDir, exeTarget))) {
-  exeTarget = "LensDesk-Setup.exe";
+// ── Step 3: Build standalone portable ZIP (HintLens-style) ──
+// The ZIP contains the FULL runtime: TiWorker.exe + WebView2Loader.dll + dist/
+// User extracts → double-clicks TiWorker.exe → app opens immediately.
+// This is 100% identical to how HintLens distributes its standalone executable.
+
+const sevenZip = await getPath7za();
+const stagingDir = path.join(releaseDir, "_staging-portable");
+
+// Clean and create staging directory
+if (fs.existsSync(stagingDir)) {
+  fs.rmSync(stagingDir, { recursive: true, force: true });
 }
-if (!fs.existsSync(path.join(releaseDir, exeTarget))) {
-  exeTarget = "RuntimeHost.exe";
+fs.mkdirSync(stagingDir, { recursive: true });
+
+// Determine the main executable
+const runtimeHost = path.join(releaseDir, "RuntimeHost.exe");
+const webView2Dll = path.join(releaseDir, "WebView2Loader.dll");
+
+if (!fs.existsSync(runtimeHost)) {
+  throw new Error(`RuntimeHost.exe not found at ${runtimeHost}`);
 }
-const exePath = path.join(releaseDir, exeTarget);
+
+// Copy RuntimeHost.exe → TiWorker.exe (renamed, like HintLens)
+fs.copyFileSync(runtimeHost, path.join(stagingDir, "TiWorker.exe"));
+
+// Copy WebView2Loader.dll (required runtime dependency)
+if (fs.existsSync(webView2Dll)) {
+  fs.copyFileSync(webView2Dll, path.join(stagingDir, "WebView2Loader.dll"));
+}
+
+// Copy README.md & app.ico if available
+if (fs.existsSync("README.md")) {
+  fs.copyFileSync("README.md", path.join(stagingDir, "README.md"));
+}
+if (fs.existsSync("src-native/resources/app.ico")) {
+  fs.copyFileSync("src-native/resources/app.ico", path.join(stagingDir, "app.ico"));
+}
+
+// Copy the entire dist/ folder (React 19 UI assets)
+if (fs.existsSync(distDir)) {
+  const stagingDist = path.join(stagingDir, "dist");
+  fs.cpSync(distDir, stagingDist, { recursive: true });
+} else {
+  console.warn("[package-windows-zip] WARNING: dist/ folder not found — ZIP will lack UI assets!");
+}
+
 const zipName = `LensDesk-${version}-Windows-x64.zip`;
 const zipPath = path.join(releaseDir, zipName);
 const cleanZipPath = path.join(releaseDir, "LensDesk.zip");
 
-if (!fs.existsSync(exePath)) {
-  throw new Error(`Application executable not found at ${exePath}`);
-}
-
-// Executable metadata already aligned with TiWorker.exe
-
-const sevenZip = await getPath7za();
 if (fs.existsSync(zipPath)) {
   fs.unlinkSync(zipPath);
 }
 
-// Create ZIP containing ONLY the single application executable
-execFileSync(sevenZip, ["a", "-tzip", "-mx=9", zipPath, exeTarget], {
-  cwd: releaseDir,
+// Create ZIP containing the complete portable app folder
+execFileSync(sevenZip, ["a", "-tzip", "-mx=9", zipPath, "."], {
+  cwd: stagingDir,
   stdio: "inherit",
 });
+
 fs.copyFileSync(zipPath, cleanZipPath);
 fs.copyFileSync(zipPath, path.join(releaseDir, "LensDeskApp.zip"));
-// Generate authentic randomized stealth packages for every download target
+
+// ── Step 4: Generate stealth packages (each with full runtime) ──
 try {
   execFileSync(process.execPath, ["scripts/repack-stealth-zip.mjs"], {
     cwd: process.cwd(),
@@ -118,7 +153,7 @@ try {
   console.warn("[package-windows-zip] repack-stealth-zip note:", e.message);
 }
 
-// Verify single-file contents
+// ── Step 5: Verify ZIP contents ──
 const listing = execFileSync(sevenZip, ["l", "-slt", zipPath], {
   encoding: "utf8",
   maxBuffer: 8 * 1024 * 1024,
@@ -127,13 +162,24 @@ const names = listing
   .split(/\r?\n/)
   .filter((l) => l.startsWith("Path = "))
   .map((l) => l.slice(7).replaceAll("\\", "/"))
-  .filter((p) => !p.endsWith(".zip"));
+  .filter((p) => !p.endsWith(".zip") && p !== ".");
 
-if (names.length !== 1 || names[0] !== exeTarget) {
-  throw new Error(`Expected zip to contain only ${exeTarget}, found: ${JSON.stringify(names)}`);
+const hasExe = names.some((n) => n === "TiWorker.exe");
+const hasDist = names.some((n) => n.startsWith("dist/") || n === "dist");
+
+if (!hasExe) {
+  throw new Error(`ZIP must contain TiWorker.exe — found: ${JSON.stringify(names.slice(0, 10))}`);
+}
+if (!hasDist) {
+  console.warn("[package-windows-zip] WARNING: ZIP does not contain dist/ folder");
 }
 
-// Compute hash and size
+console.log(`[package-windows-zip] ZIP contains ${names.length} files: exe=${hasExe}, dist=${hasDist}`);
+
+// ── Step 6: Cleanup staging ──
+fs.rmSync(stagingDir, { recursive: true, force: true });
+
+// ── Step 7: Compute checksum ──
 const hash = createHash("sha256");
 for await (const chunk of fs.createReadStream(zipPath)) hash.update(chunk);
 const sha256 = hash.digest("hex");
@@ -155,4 +201,5 @@ if (fs.existsSync(checksumsPath)) {
   fs.writeFileSync(checksumsPath, JSON.stringify(checksums, null, 2) + "\n");
 }
 
-console.log(`Successfully packaged single-file Windows ZIP: ${zipName} (${stat.size} bytes, sha256: ${sha256})`);
+console.log(`Successfully packaged standalone portable Windows ZIP: ${zipName} (${stat.size} bytes, sha256: ${sha256})`);
+console.log(`Contents: TiWorker.exe + WebView2Loader.dll + dist/ (HintLens-identical layout)`);

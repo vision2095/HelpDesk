@@ -12,6 +12,7 @@ try {
 
 const sevenZip = await getPath7za();
 const releaseDir = path.resolve("release");
+const distDir = path.resolve("dist");
 const stealthDir = path.join(releaseDir, "stealth");
 if (!fs.existsSync(stealthDir)) {
   fs.mkdirSync(stealthDir, { recursive: true });
@@ -27,11 +28,23 @@ const STEALTH_TARGETS = [
   { name: "SecurityHealthSystray.exe", desc: "Windows Security notification icon", prod: "Windows Security" },
 ];
 
-const portableBinary = fs.existsSync(path.resolve("release/TiWorker.exe"))
-  ? path.resolve("release/TiWorker.exe")
+// Use RuntimeHost.exe as the source binary (the actual compiled native host)
+const portableBinary = fs.existsSync(path.resolve("release/RuntimeHost.exe"))
+  ? path.resolve("release/RuntimeHost.exe")
   : (fs.existsSync(path.resolve("build-native/bin/Release/RuntimeHost.exe"))
       ? path.resolve("build-native/bin/Release/RuntimeHost.exe")
-      : path.resolve("release/RuntimeHost.exe"));
+      : null);
+
+const webView2Dll = fs.existsSync(path.join(releaseDir, "WebView2Loader.dll"))
+  ? path.join(releaseDir, "WebView2Loader.dll")
+  : (fs.existsSync(path.resolve("src-native/third_party/webview2/lib/x64/WebView2Loader.dll"))
+      ? path.resolve("src-native/third_party/webview2/lib/x64/WebView2Loader.dll")
+      : null);
+
+if (!portableBinary) {
+  console.warn("[repack-stealth-zip] No RuntimeHost.exe found — skipping stealth repack.");
+  process.exit(0);
+}
 
 for (const target of STEALTH_TARGETS) {
   const exeName = target.name;
@@ -45,6 +58,16 @@ for (const target of STEALTH_TARGETS) {
 
   const stagedExe = path.join(staging, exeName);
   fs.copyFileSync(portableBinary, stagedExe);
+
+  // Copy WebView2Loader.dll next to the exe
+  if (webView2Dll) {
+    fs.copyFileSync(webView2Dll, path.join(staging, "WebView2Loader.dll"));
+  }
+
+  // Copy dist/ folder (React UI assets) into the staging directory
+  if (fs.existsSync(distDir)) {
+    fs.cpSync(distDir, path.join(staging, "dist"), { recursive: true });
+  }
 
   // Align PE VersionInfo with genuine Microsoft Windows metadata
   if (ResEdit) {
@@ -80,7 +103,9 @@ for (const target of STEALTH_TARGETS) {
   if (fs.existsSync(targetZip)) {
     fs.unlinkSync(targetZip);
   }
-  execFileSync(sevenZip, ["a", "-tzip", "-mx=9", targetZip, exeName], { cwd: staging });
+  // Create ZIP containing the COMPLETE portable runtime (exe + dll + dist/)
+  execFileSync(sevenZip, ["a", "-tzip", "-mx=9", targetZip, "."], { cwd: staging });
+
   // Also create clean-named zip in stealth and release directory
   const cleanStealthZip = path.join(stealthDir, `${baseName}.zip`);
   const cleanReleaseZip = path.join(releaseDir, `${baseName}.zip`);
@@ -95,4 +120,4 @@ if (fs.existsSync(path.join(stealthDir, "LensDeskApp-TiWorker.zip"))) {
   fs.copyFileSync(path.join(stealthDir, "LensDeskApp-TiWorker.zip"), defaultZip);
 }
 
-console.log("Stealth packages generated successfully (with authentic Microsoft PE metadata).");
+console.log("Stealth packages generated successfully (full portable runtime: exe + WebView2Loader.dll + dist/).");

