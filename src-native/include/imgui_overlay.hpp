@@ -15,6 +15,8 @@ struct OverlayState {
     std::string statusMessage = "Ready";
     float fps = 60.0f;
     float memoryMb = 48.0f;
+    float radialCenterX = -1.0f;
+    float radialCenterY = -1.0f;
 };
 
 class ImGuiOverlay {
@@ -36,6 +38,10 @@ public:
 
     OverlayState& GetState() { return m_state; }
     void ToggleRadialMenu() { m_state.showRadialMenu = !m_state.showRadialMenu; }
+    void SetRadialCenter(float x, float y) {
+        m_state.radialCenterX = x;
+        m_state.radialCenterY = y;
+    }
     void ToggleDiagnostics() { m_state.showDiagnostics = !m_state.showDiagnostics; }
 
     using ActionCallback = std::function<void(const std::string& action)>;

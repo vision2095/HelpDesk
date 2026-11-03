@@ -31,6 +31,7 @@ private:
     ComPtr<ID3D11RenderTargetView> m_renderTargetView;
     ComPtr<ID3D11BlendState> m_blendState;
 
+    HWND m_hwnd = nullptr;
     int m_width = 0;
     int m_height = 0;
 };

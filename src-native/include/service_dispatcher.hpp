@@ -1,6 +1,7 @@
 #pragma once
 #include "common.hpp"
 #include "cloud_client.hpp"
+#include "audio_capture.hpp"
 #include <condition_variable>
 
 namespace LensDesk {
@@ -54,6 +55,7 @@ private:
     StorageManager* m_storageMgr = nullptr;
     ImGuiOverlay* m_imguiOverlay = nullptr;
     FocusManager* m_focusMgr = nullptr;
+    WasapiLoopbackCapture m_audioCapture;
     CloudClient m_cloud;
     std::mutex m_cloudMutex;
     HWND m_hwnd = nullptr;

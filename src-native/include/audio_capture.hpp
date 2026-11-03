@@ -31,6 +31,8 @@ private:
     ComPtr<IMMDevice> m_device;
     ComPtr<IAudioClient> m_audioClient;
     ComPtr<IAudioCaptureClient> m_captureClient;
+    ComPtr<IAudioClient> m_silentAudioClient;
+    ComPtr<IAudioRenderClient> m_silentRenderClient;
     WAVEFORMATEX* m_waveFormat = nullptr;
 
     std::thread m_captureThread;

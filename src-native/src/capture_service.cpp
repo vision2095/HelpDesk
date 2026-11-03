@@ -1,4 +1,5 @@
 #include "../include/capture_service.hpp"
+#include "../../src/native/ocr_pipeline.h"
 
 namespace LensDesk {
 
@@ -274,19 +275,18 @@ std::string CaptureService::PerformOcr(HBITMAP hBitmap, int width, int height) {
     std::vector<uint8_t> pixels(width * height * 4);
     HDC hdcScreen = GetDC(nullptr);
     if (GetDIBits(hdcScreen, hBitmap, 0, height, pixels.data(), &bmi, DIB_RGB_COLORS) > 0) {
-        // 3. WinRT OCR Execution via Windows.Media.Ocr and Windows.Graphics.Imaging
         try {
-            RoInitialize(RO_INIT_MULTITHREADED);
-
-            // Construct SoftwareBitmap and query Windows.Media.Ocr.OcrEngine
-            recognizedText = "The screen content below was extracted from the user's screenshot(s) by OCR (the question is in here). Answer it:\n\n";
+            LensDesk::Native::CapturedBuffer buf;
+            buf.width = width;
+            buf.height = height;
+            buf.pixels = std::move(pixels);
+            std::string extracted = LensDesk::Native::OcrPipeline::ExtractText(buf);
+            if (!extracted.empty()) {
+                recognizedText = LensDesk::Native::OcrPipeline::FormatOutput(extracted);
+            }
         } catch (...) {
             // Graceful non-throwing degradation
         }
-
-        // Strict resource cleanup: explicit SoftwareBitmap array destructuring to eliminate heap memory leaks in loops
-        pixels.clear();
-        pixels.shrink_to_fit();
     }
     ReleaseDC(nullptr, hdcScreen);
 #endif
@@ -341,11 +341,19 @@ std::string CaptureService::PerformOcrOnBase64(const std::string& base64Png) {
     frame->GetSize(&w, &h);
     if (w == 0 || h == 0) return "";
 
-    // Explicit SoftwareBitmap destructuring and resource cleanup
-    pngBytes.clear();
-    pngBytes.shrink_to_fit();
+    LensDesk::Native::CapturedBuffer buf;
+    buf.width = static_cast<int>(w);
+    buf.height = static_cast<int>(h);
+    buf.pixels.resize(w * h * 4);
+    WICRect rect{ 0, 0, static_cast<INT>(w), static_cast<INT>(h) };
+    if (SUCCEEDED(frame->CopyPixels(&rect, w * 4, static_cast<UINT>(buf.pixels.size()), buf.pixels.data()))) {
+        std::string extracted = LensDesk::Native::OcrPipeline::ExtractText(buf);
+        if (!extracted.empty()) {
+            return LensDesk::Native::OcrPipeline::FormatOutput(extracted);
+        }
+    }
 
-    return "The screen content below was extracted from the user's screenshot(s) by OCR (the question is in here). Answer it:\n\n";
+    return "";
 }
 
 } // namespace LensDesk

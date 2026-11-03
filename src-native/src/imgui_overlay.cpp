@@ -160,9 +160,13 @@ void ImGuiOverlay::RenderStatusPill() {
 
 void ImGuiOverlay::RenderRadialMenu() {
     ImGuiIO& io = ImGui::GetIO();
-    ImVec2 center = ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f);
     float radiusInner = 60.0f;
     float radiusOuter = 160.0f;
+    ImVec2 center = ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f);
+    if (m_state.radialCenterX >= 0.0f && m_state.radialCenterY >= 0.0f) {
+        center.x = std::max(radiusOuter + 10.0f, std::min(io.DisplaySize.x - radiusOuter - 10.0f, m_state.radialCenterX));
+        center.y = std::max(radiusOuter + 10.0f, std::min(io.DisplaySize.y - radiusOuter - 10.0f, m_state.radialCenterY));
+    }
 
     ImDrawList* drawList = ImGui::GetForegroundDrawList();
 

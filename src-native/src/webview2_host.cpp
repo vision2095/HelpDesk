@@ -169,6 +169,22 @@ bool WebView2Host::Initialize(
                             if (FAILED(hr) || !compController) return hr;
                             m_compositionController = compController;
 
+                            EventRegistrationToken cursorToken{};
+                            compController->add_CursorChanged(
+                                Callback<ICoreWebView2CursorChangedEventHandler>(
+                                    [](ICoreWebView2CompositionController* sender, IUnknown* /*args*/) -> HRESULT {
+                                        if (sender) {
+                                            HCURSOR hCur = nullptr;
+                                            if (SUCCEEDED(sender->get_Cursor(&hCur)) && hCur) {
+                                                SetCursor(hCur);
+                                            }
+                                        }
+                                        return S_OK;
+                                    }
+                                ).Get(),
+                                &cursorToken
+                            );
+
                             hr = compController->QueryInterface(IID_PPV_ARGS(&m_controller));
                             if (FAILED(hr)) return hr;
 

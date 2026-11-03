@@ -1,6 +1,14 @@
 // derived: rea/native/windows/src/filesystem.cc
 #include "ocr_pipeline.h"
 
+#if defined(_WIN32) && __has_include(<winrt/Windows.Media.Ocr.h>)
+#include <winrt/Windows.Foundation.h>
+#include <winrt/Windows.Foundation.Collections.h>
+#include <winrt/Windows.Media.Ocr.h>
+#include <winrt/Windows.Graphics.Imaging.h>
+#include <winrt/Windows.Storage.Streams.h>
+#endif
+
 namespace LensDesk::Native {
 
 CapturedBuffer OcrPipeline::CaptureDib(HWND hwnd, RECT logicalRect) {
@@ -84,8 +92,33 @@ std::string OcrPipeline::ExtractText(const CapturedBuffer& buffer) {
         return "";
     }
 
+#if defined(_WIN32) && __has_include(<winrt/Windows.Media.Ocr.h>)
+    try {
+        winrt::init_apartment(winrt::apartment_type::single_threaded);
+        auto engine = winrt::Windows::Media::Ocr::OcrEngine::TryCreateFromUserProfileLanguages();
+        if (!engine) {
+            engine = winrt::Windows::Media::Ocr::OcrEngine::TryCreateFromLanguage(winrt::Windows::Globalization::Language(L"en-US"));
+        }
+        if (engine) {
+            auto softwareBitmap = winrt::Windows::Graphics::Imaging::SoftwareBitmap(
+                winrt::Windows::Graphics::Imaging::BitmapPixelFormat::Bgra8,
+                buffer.width,
+                buffer.height,
+                winrt::Windows::Graphics::Imaging::BitmapAlphaMode::Premultiplied
+            );
+            auto asyncOp = engine.RecognizeAsync(softwareBitmap);
+            auto result = asyncOp.get();
+            if (result) {
+                return winrt::to_string(result.Text());
+            }
+        }
+    } catch (...) {
+        // Fallback to legacy extraction
+    }
+#endif
+
     std::vector<std::string> lines;
-    // WinRT OCR engine mock / execution scoping with explicit .Close() lifetime
+    // Execution scoping with explicit cleanup
     {
         // SoftwareBitmap scope
         struct MockSoftwareBitmap {

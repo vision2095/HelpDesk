@@ -29,23 +29,21 @@ bool DCompEngine::Initialize(HWND hwnd, ID3D11Device* d3dDevice, IDXGISwapChain1
     if (FAILED(hr)) return false;
     m_dcompTarget->SetRoot(m_rootVisual.Get());
 
-    // 5. Create D3D / ImGui Visual (hosts swap chain)
-    hr = m_dcompDevice->CreateVisual(&m_d3dVisual);
-    if (FAILED(hr)) return false;
-    m_d3dVisual->SetContent(swapChain);
-    m_rootVisual->AddVisual(m_d3dVisual.Get(), FALSE, nullptr);
-
-    // 6. Create HUD WebView2 Visual (hosts React 19 UI)
-    hr = m_dcompDevice->CreateVisual(&m_hudVisual);
-    if (FAILED(hr)) return false;
-    m_rootVisual->AddVisual(m_hudVisual.Get(), TRUE, m_d3dVisual.Get());
-
-    // 7. Create Browser WebView2 Visual (hosts embedded web browser tabs)
-    // Kept out of the composition tree initially so it never sits at (0,0) or covers the HUD.
-    // SetBrowserVisualVisible(true) adds it when the browser is opened.
+    // 5. Create Browser WebView2 Visual (hosts embedded web browser tabs - lowest layer)
     hr = m_dcompDevice->CreateVisual(&m_browserVisual);
     if (FAILED(hr)) return false;
     m_browserVisible = false;
+
+    // 6. Create HUD WebView2 Visual (hosts React 19 UI - middle layer)
+    hr = m_dcompDevice->CreateVisual(&m_hudVisual);
+    if (FAILED(hr)) return false;
+    m_rootVisual->AddVisual(m_hudVisual.Get(), FALSE, nullptr);
+
+    // 7. Create D3D / ImGui Visual (hosts swap chain: status pill, radial menu - topmost layer)
+    hr = m_dcompDevice->CreateVisual(&m_d3dVisual);
+    if (FAILED(hr)) return false;
+    m_d3dVisual->SetContent(swapChain);
+    m_rootVisual->AddVisual(m_d3dVisual.Get(), TRUE, m_hudVisual.Get());
 
     Commit();
     return true;
@@ -89,11 +87,28 @@ void DCompEngine::SetBrowserVisualVisible(bool visible) {
     if (m_browserVisible == visible) return;
     m_browserVisible = visible;
     if (visible) {
-        m_rootVisual->AddVisual(m_browserVisual.Get(), TRUE, m_hudVisual.Get());
+        // Place browser visual below HUD visual
+        m_rootVisual->AddVisual(m_browserVisual.Get(), FALSE, m_hudVisual.Get());
     } else {
         m_rootVisual->RemoveVisual(m_browserVisual.Get());
     }
     Commit();
+}
+
+void DCompEngine::SetOpacity(float opacity) {
+#if defined(_WIN32)
+    if (!m_dcompDevice || !m_rootVisual) return;
+    opacity = std::max(0.1f, std::min(1.0f, opacity));
+    ComPtr<IDCompositionEffectGroup> effectGroup;
+    HRESULT hr = m_dcompDevice->CreateEffectGroup(&effectGroup);
+    if (SUCCEEDED(hr) && effectGroup) {
+        effectGroup->SetOpacity(opacity);
+        m_rootVisual->SetEffect(effectGroup.Get());
+        Commit();
+    }
+#else
+    (void)opacity;
+#endif
 }
 
 } // namespace LensDesk

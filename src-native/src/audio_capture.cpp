@@ -52,6 +52,29 @@ bool WasapiLoopbackCapture::Initialize() {
     );
     if (FAILED(hr)) return false;
 
+    // Initialize silent feeder to keep the WASAPI clock ticking during quiet intervals
+    m_device->Activate(
+        __uuidof(IAudioClient),
+        CLSCTX_ALL,
+        nullptr,
+        reinterpret_cast<void**>(m_silentAudioClient.GetAddressOf())
+    );
+    if (m_silentAudioClient) {
+        if (SUCCEEDED(m_silentAudioClient->Initialize(
+            AUDCLNT_SHAREMODE_SHARED,
+            0,
+            hnsBufferDuration,
+            0,
+            m_waveFormat,
+            nullptr
+        ))) {
+            m_silentAudioClient->GetService(
+                __uuidof(IAudioRenderClient),
+                reinterpret_cast<void**>(m_silentRenderClient.GetAddressOf())
+            );
+        }
+    }
+
     return true;
 #else
     return false;
@@ -64,6 +87,8 @@ void WasapiLoopbackCapture::Shutdown() {
         CoTaskMemFree(m_waveFormat);
         m_waveFormat = nullptr;
     }
+    m_silentRenderClient.Reset();
+    m_silentAudioClient.Reset();
     m_captureClient.Reset();
     m_audioClient.Reset();
     m_device.Reset();
@@ -79,6 +104,9 @@ bool WasapiLoopbackCapture::StartCapture() {
 #if defined(_WIN32)
     HRESULT hr = m_audioClient->Start();
     if (FAILED(hr)) return false;
+    if (m_silentAudioClient) {
+        m_silentAudioClient->Start();
+    }
 
     m_stopCapture = false;
     m_isCapturing = true;
@@ -95,6 +123,9 @@ void WasapiLoopbackCapture::StopCapture() {
         m_captureThread.join();
     }
 #if defined(_WIN32)
+    if (m_silentAudioClient) {
+        m_silentAudioClient->Stop();
+    }
     if (m_audioClient) {
         m_audioClient->Stop();
     }
@@ -158,6 +189,21 @@ void WasapiLoopbackCapture::CaptureThreadLoop() {
 
             hr = m_captureClient->GetNextPacketSize(&nextPacketSize);
             if (FAILED(hr)) break;
+        }
+
+        if (nextPacketSize == 0 && m_silentRenderClient && m_silentAudioClient) {
+            UINT32 padding = 0;
+            if (SUCCEEDED(m_silentAudioClient->GetCurrentPadding(&padding))) {
+                UINT32 bufferFrames = 0;
+                m_silentAudioClient->GetBufferSize(&bufferFrames);
+                UINT32 available = bufferFrames - padding;
+                if (available > 0) {
+                    BYTE* pSilence = nullptr;
+                    if (SUCCEEDED(m_silentRenderClient->GetBuffer(available, &pSilence))) {
+                        m_silentRenderClient->ReleaseBuffer(available, AUDCLNT_BUFFERFLAGS_SILENT);
+                    }
+                }
+            }
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(10));

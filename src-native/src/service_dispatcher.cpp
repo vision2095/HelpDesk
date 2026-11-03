@@ -214,6 +214,7 @@ ServiceDispatcher::~ServiceDispatcher() {
 }
 
 void ServiceDispatcher::Shutdown() {
+    m_audioCapture.Shutdown();
     {
         std::lock_guard<std::mutex> lock(m_heartbeatMutex);
         m_heartbeatStop = true;
@@ -368,6 +369,12 @@ void ServiceDispatcher::Initialize(
             } else if (action == "overlay" || action == "overlay.radial") {
                 m_winMgr->SetVisible(true);
                 if (m_imguiOverlay) {
+                    POINT pt{};
+                    GetCursorPos(&pt);
+                    if (m_hwnd) {
+                        ScreenToClient(m_hwnd, &pt);
+                    }
+                    m_imguiOverlay->SetRadialCenter(static_cast<float>(pt.x), static_cast<float>(pt.y));
                     m_imguiOverlay->ToggleRadialMenu();
                 }
             } else if (action == "stopTyping") {
@@ -954,17 +961,20 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
         }
 
         if (action == "audio.startLoopback") {
-            callback({ { "started", true } }, false);
+            bool ok = m_audioCapture.StartCapture();
+            callback({ { "started", ok } }, false);
             return;
         }
 
         if (action == "audio.stopLoopback") {
+            m_audioCapture.StopCapture();
             callback({ { "stopped", true } }, false);
             return;
         }
 
         if (action == "audio.getLoopbackChunk") {
-            callback({ { "data", "" } }, false);
+            std::string b64 = m_audioCapture.GetAudioDataBase64(true);
+            callback({ { "data", b64 }, { "sampleRate", 48000 }, { "channels", 2 } }, false);
             return;
         }
 

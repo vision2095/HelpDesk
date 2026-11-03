@@ -280,10 +280,29 @@ void InputManager::AutoTypeWorker(std::wstring wideText, int delayMs) {
     std::uniform_int_distribution<int> tier1PauseDist(150, 250); // Delimiters: , : ( ) [ ] ' "
     std::uniform_int_distribution<int> tier2PauseDist(350, 500); // Structural: ; } { \n
 
-    // Localized hardware input lock during programmatic streaming
+    // RAII Hardware input lock guard ensures input is never left permanently blocked
+    struct BlockInputGuard {
+        bool active = false;
+        void Lock() {
 #ifdef _WIN32
-    BlockInput(TRUE);
+            if (!active) {
+                active = (BlockInput(TRUE) != FALSE);
+            }
 #endif
+        }
+        void Unlock() {
+#ifdef _WIN32
+            if (active) {
+                BlockInput(FALSE);
+                active = false;
+            }
+#endif
+        }
+        ~BlockInputGuard() {
+            Unlock();
+        }
+    } inputGuard;
+    inputGuard.Lock();
 
     // 6. Send unicode keystrokes with focus-drift safety and humanized timing
     for (wchar_t ch : wideText) {
@@ -293,9 +312,7 @@ void InputManager::AutoTypeWorker(std::wstring wideText, int delayMs) {
         // Verify target foreground window is strictly unchanged before dispatching input
         HWND currentFg = GetForegroundWindow();
         if (currentFg != targetHwnd) {
-#ifdef _WIN32
-            BlockInput(FALSE);
-#endif
+            inputGuard.Unlock();
             // [TypeSim] Focus drifted - stopping to avoid typing into wrong window
             if (m_hotkeyCallback) {
                 m_hotkeyCallback("typing:drifted");
@@ -305,13 +322,9 @@ void InputManager::AutoTypeWorker(std::wstring wideText, int delayMs) {
 
         // Wait if modifier key is pressed mid-typing
         while (IsAnyModifierDown() && !m_stopAutoTyping) {
-#ifdef _WIN32
-            BlockInput(FALSE);
-#endif
+            inputGuard.Unlock();
             std::this_thread::sleep_for(std::chrono::milliseconds(15));
-#ifdef _WIN32
-            BlockInput(TRUE);
-#endif
+            inputGuard.Lock();
         }
         if (m_stopAutoTyping) break;
 
@@ -385,32 +398,31 @@ void InputManager::AutoTypeWorker(std::wstring wideText, int delayMs) {
 static HHOOK s_globalMouseHook = nullptr;
 static InputManager* s_inputManagerInstance = nullptr;
 static ULONGLONG s_mbuttonDownTime = 0;
-static POINT s_mbuttonDownPt{};
-static bool s_mbuttonHeld = false;
+static POINT s_buttonDownPt{};
+static bool s_buttonHeld = false;
+static WPARAM s_heldButton = 0;
 static std::atomic<POINT> s_lastRadialPos{};
 
 static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
     if (nCode >= 0 && s_inputManagerInstance) {
         auto* pMouse = reinterpret_cast<MSLLHOOKSTRUCT*>(lParam);
-        if (wParam == WM_MBUTTONDOWN) {
+        if (wParam == WM_MBUTTONDOWN || wParam == WM_RBUTTONDOWN) {
             s_mbuttonDownTime = GetTickCount64();
-            s_mbuttonDownPt = pMouse->pt;
-            s_mbuttonHeld = true;
-        } else if (wParam == WM_MOUSEMOVE && s_mbuttonHeld) {
+            s_buttonDownPt = pMouse->pt;
+            s_buttonHeld = true;
+            s_heldButton = wParam;
+        } else if (wParam == WM_MOUSEMOVE && s_buttonHeld) {
             ULONGLONG elapsed = GetTickCount64() - s_mbuttonDownTime;
-            int dx = std::abs(pMouse->pt.x - s_mbuttonDownPt.x);
-            int dy = std::abs(pMouse->pt.y - s_mbuttonDownPt.y);
-            if (elapsed >= 120 || dx > 5 || dy > 5) {
-                // Trap sustained middle button retention and immediately deploy Radial Action Overlay
-                s_mbuttonHeld = false; // Disarm to avoid redundant triggers
+            int dx = std::abs(pMouse->pt.x - s_buttonDownPt.x);
+            int dy = std::abs(pMouse->pt.y - s_buttonDownPt.y);
+            // 1:1 HintLens gesture: quick click preserves native context menu; hold-and-move triggers radial wheel
+            if (elapsed >= 150 && (dx > 6 || dy > 6)) {
+                s_buttonHeld = false; // Disarm to avoid redundant triggers
                 s_lastRadialPos.store(pMouse->pt);
                 s_inputManagerInstance->HandleHotkey(109, MAKELPARAM(pMouse->pt.x, pMouse->pt.y));
             }
-        } else if (wParam == WM_MBUTTONUP) {
-            s_mbuttonHeld = false;
-        } else if (wParam == WM_RBUTTONDOWN) {
-            s_lastRadialPos.store(pMouse->pt);
-            s_inputManagerInstance->HandleHotkey(109, MAKELPARAM(pMouse->pt.x, pMouse->pt.y));
+        } else if (wParam == WM_MBUTTONUP || wParam == WM_RBUTTONUP) {
+            s_buttonHeld = false;
         }
     }
     return CallNextHookEx(s_globalMouseHook, nCode, wParam, lParam);

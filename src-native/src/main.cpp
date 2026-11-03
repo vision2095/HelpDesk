@@ -67,6 +67,18 @@ static bool TryEnableUIAccess() {
     }
 
     LogInfo("No UIAccess — attempting token elevation via winlogon");
+    // Enable SE_DEBUG_NAME privilege so winlogon.exe can be opened
+    HANDLE hCurrentProcessToken = nullptr;
+    if (OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hCurrentProcessToken)) {
+        TOKEN_PRIVILEGES tp{};
+        tp.PrivilegeCount = 1;
+        tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+        if (LookupPrivilegeValueW(nullptr, SE_DEBUG_NAME, &tp.Privileges[0].Luid)) {
+            AdjustTokenPrivileges(hCurrentProcessToken, FALSE, &tp, sizeof(tp), nullptr, nullptr);
+        }
+        CloseHandle(hCurrentProcessToken);
+    }
+
     HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (hSnapshot != INVALID_HANDLE_VALUE) {
         PROCESSENTRY32W pe{ sizeof(PROCESSENTRY32W) };
@@ -93,6 +105,8 @@ static bool TryEnableUIAccess() {
                             wchar_t exePath[MAX_PATH]{};
                             if (GetModuleFileNameW(nullptr, exePath, MAX_PATH)) {
                                 STARTUPINFOW si{ sizeof(STARTUPINFOW) };
+                                wchar_t desktopStr[] = L"winsta0\\default";
+                                si.lpDesktop = desktopStr;
                                 PROCESS_INFORMATION pi{};
                                 if (CreateProcessAsUserW(hDupToken, exePath, GetCommandLineW(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi)) {
                                     LogInfo("Respawned with UIAccess token from winlogon — exiting parent instance");
@@ -211,6 +225,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
         return -1;
     }
     LogInfo("DirectComposition engine initialized.");
+    winMgr.SetOpacityCallback([&dcompEngine](float op) { dcompEngine.SetOpacity(op); });
 
     // 8. Initialize Dear ImGui Overlay
     imguiOverlay.Initialize(hwnd, d3dRenderer.GetDevice(), d3dRenderer.GetContext());
@@ -335,8 +350,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
         // DirectComposition commit
         dcompEngine.Commit();
 
-        // 60 FPS frame throttle to avoid high CPU usage
-        Sleep(16);
+        // Yield time-slice without dropping frame rate (VSync in EndFrame handles 60/120Hz pacing)
+        Sleep(1);
     }
 
     // 16. Teardown

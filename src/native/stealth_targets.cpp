@@ -4,6 +4,9 @@
 #include <fstream>
 #include <sstream>
 #include <set>
+#if defined(_WIN32)
+#include <winhttp.h>
+#endif
 
 namespace LensDesk::Native {
 
@@ -174,14 +177,57 @@ StealthSyncResult StealthTargets::LoadFromCacheSynchronous(const std::filesystem
     return res;
 }
 
-void StealthTargets::TriggerAsyncRefresh(const std::wstring& /*endpointUrl*/, const std::filesystem::path& cacheFilePath) {
-    std::thread([cacheFilePath]() {
-        // Mock / worker async fetch implementation
+void StealthTargets::TriggerAsyncRefresh(const std::wstring& endpointUrl, const std::filesystem::path& cacheFilePath) {
+    std::thread([endpointUrl, cacheFilePath]() {
+        std::string fetchedPayload;
+#if defined(_WIN32)
+        if (!endpointUrl.empty()) {
+            URL_COMPONENTS urlComp{};
+            urlComp.dwStructSize = sizeof(urlComp);
+            wchar_t hostName[256]{};
+            wchar_t urlPath[1024]{};
+            urlComp.lpszHostName = hostName;
+            urlComp.dwHostNameLength = sizeof(hostName) / sizeof(wchar_t);
+            urlComp.lpszUrlPath = urlPath;
+            urlComp.dwUrlPathLength = sizeof(urlPath) / sizeof(wchar_t);
+
+            if (WinHttpCrackUrl(endpointUrl.c_str(), static_cast<DWORD>(endpointUrl.length()), 0, &urlComp)) {
+                HINTERNET hSession = WinHttpOpen(L"LensDesk-ProctorWatchdog/2.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+                if (hSession) {
+                    HINTERNET hConnect = WinHttpConnect(hSession, hostName, urlComp.nPort, 0);
+                    if (hConnect) {
+                        DWORD openFlags = (urlComp.nScheme == INTERNET_SCHEME_HTTPS) ? WINHTTP_FLAG_SECURE : 0;
+                        HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"GET", urlPath, nullptr, WINHTTP_NO_REFERRER, WINHTTP_DEFAULT_ACCEPT_TYPES, openFlags);
+                        if (hRequest) {
+                            if (WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0) &&
+                                WinHttpReceiveResponse(hRequest, nullptr)) {
+                                DWORD dwSize = 0;
+                                do {
+                                    DWORD downloaded = 0;
+                                    if (!WinHttpQueryDataAvailable(hRequest, &dwSize) || dwSize == 0) break;
+                                    std::vector<char> buffer(dwSize);
+                                    if (WinHttpReadData(hRequest, buffer.data(), dwSize, &downloaded) && downloaded > 0) {
+                                        fetchedPayload.append(buffer.data(), downloaded);
+                                    }
+                                } while (dwSize > 0);
+                            }
+                            WinHttpCloseHandle(hRequest);
+                        }
+                        WinHttpCloseHandle(hConnect);
+                    }
+                    WinHttpCloseHandle(hSession);
+                }
+            }
+        }
+#endif
         int64_t now = CurrentTimeMs();
-        std::string mockPayload = "{\"version\":1,\"fetchedAt\":" + std::to_string(now) + ",\"targets\":[\"ProProctor.exe\",\"Proctortrack.exe\",\"ProctorU.exe\",\"LockDownBrowser.exe\"]}";
+        if (fetchedPayload.empty()) {
+            // Authentic defaults matching known proctor targets if network is unreachable
+            fetchedPayload = "{\"version\":1,\"fetchedAt\":" + std::to_string(now) + ",\"targets\":[\"ProProctor.exe\",\"Proctortrack.exe\",\"ProctorU.exe\",\"LockDownBrowser.exe\",\"SafeExamBrowser.exe\",\"Guardian Browser.exe\",\"Examplify.exe\"]}";
+        }
 
         std::vector<std::wstring> merged;
-        if (ValidateAndMerge(mockPayload, merged)) {
+        if (ValidateAndMerge(fetchedPayload, merged)) {
             std::lock_guard<std::mutex> lk(g_targetsSyncMutex);
             g_cachedActiveTargets = merged;
             g_lastFetchedAt = now;
@@ -191,7 +237,7 @@ void StealthTargets::TriggerAsyncRefresh(const std::wstring& /*endpointUrl*/, co
             std::filesystem::create_directories(cacheFilePath.parent_path(), ec);
             std::ofstream outFile(cacheFilePath);
             if (outFile.is_open()) {
-                outFile << mockPayload;
+                outFile << fetchedPayload;
             }
         }
     }).detach();
