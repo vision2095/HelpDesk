@@ -238,4 +238,59 @@ test('LensDesk 2.0 Native Windows Host Architecture', async (t) => {
     assert.match(webCpp, /MicrosoftEdgeWebview2Setup\.exe/, 'Missing installer execution');
     assert.match(webCpp, /IBindStatusCallback/, 'Missing asynchronous IBindStatusCallback framework');
   });
+
+  await t.test('21. Native updater verifies HTTPS artifacts and SHA-256 before launch', () => {
+    const clientCpp = fs.readFileSync(path.join(ROOT, 'src-native/src/cloud_client.cpp'), 'utf8');
+    assert.match(clientCpp, /\/api\/v1\/updates\/check/, 'Updater must query the release endpoint');
+    assert.match(clientCpp, /CompareVersions\(/, 'Updater must compare semantic versions');
+    assert.match(clientCpp, /BCryptOpenAlgorithmProvider/, 'Updater must hash downloads with bcrypt');
+    assert.match(clientCpp, /BCRYPT_SHA256_ALGORITHM/, 'Updater must use SHA-256');
+    assert.match(clientCpp, /INTERNET_SCHEME_HTTPS/, 'Updater must reject non-HTTPS artifact URLs');
+    assert.match(clientCpp, /WINHTTP_OPTION_REDIRECT_POLICY_DISALLOW_HTTPS_TO_HTTP/, 'Updater must not follow HTTPS-to-HTTP redirects');
+    assert.match(clientCpp, /requiresManualInstall/, 'Portable ZIP updates must be staged for manual replacement');
+    assert.match(clientCpp, /failed SHA-256 verification/, 'Updater must reject checksum mismatches');
+
+    const dispatcher = fs.readFileSync(path.join(ROOT, 'src-native/src/service_dispatcher.cpp'), 'utf8');
+    assert.match(dispatcher, /m_cloud\.CheckForUpdate\(\)/, 'Updater check must call the cloud client');
+    assert.match(dispatcher, /m_cloud\.DownloadAndInstallUpdate\(\)/, 'Updater install must call the cloud client');
+
+    for (const cmake of ['src-native/CMakeLists.txt', 'apps/windows/src-native/CMakeLists.txt']) {
+      assert.match(fs.readFileSync(path.join(ROOT, cmake), 'utf8'), /\bbcrypt\b/, `${cmake} must link bcrypt`);
+    }
+  });
+
+  await t.test('22. Live transcription authenticates, bounds audio, and calls a provider', () => {
+    const ws = fs.readFileSync(path.join(ROOT, 'server/cloud/websocket-transcribe.mjs'), 'utf8');
+    assert.match(ws, /options\.authenticate/, 'WebSocket transcription must authenticate callers');
+    assert.match(ws, /options\.transcribe/, 'WebSocket transcription must call the hosted transcription service');
+    assert.match(ws, /MAX_FRAME_BYTES/, 'WebSocket transcription must bound frame size');
+    assert.match(ws, /maxSessionSeconds/, 'WebSocket transcription must bound session duration');
+    assert.match(ws, /pcmToWav/, 'WebSocket PCM must be wrapped in a valid WAV container');
+    assert.match(ws, /Sign in to use live transcription/, 'Unauthenticated sockets must be rejected before upgrade');
+
+    const app = fs.readFileSync(path.join(ROOT, 'server/cloud/app.mjs'), 'utf8');
+    assert.match(app, /authenticateTranscribeToken/, 'Cloud server must resolve WebSocket tokens');
+    assert.match(app, /transcribeWebSocket/, 'Cloud server must apply quota and entitlement checks');
+    assert.doesNotMatch(app, /ProProctor\.exe|LockDownBrowser\.exe/, 'Cloud server must not ship proctoring target lists');
+  });
+
+  await t.test('23. Windows workspace copy matches the hardened root host', () => {
+    const shared = [
+      'src/main.cpp',
+      'src/window_manager.cpp',
+      'src/service_dispatcher.cpp',
+      'src/cloud_client.cpp',
+      'include/cloud_client.hpp',
+      'include/window_manager.hpp',
+      'include/common.hpp',
+      'resources/app.manifest',
+    ];
+    for (const file of shared) {
+      const root = fs.readFileSync(path.join(ROOT, 'src-native', file), 'utf8');
+      const workspace = fs.readFileSync(path.join(ROOT, 'apps/windows/src-native', file), 'utf8');
+      assert.equal(workspace, root, `apps/windows/src-native/${file} must match src-native/${file}`);
+    }
+    const appsCmake = fs.readFileSync(path.join(ROOT, 'apps/windows/src-native/CMakeLists.txt'), 'utf8');
+    assert.doesNotMatch(appsCmake, /token_elevation|layout_watchdog|stealth_targets/, 'Workspace build must not compile retired evasion modules');
+  });
 });
