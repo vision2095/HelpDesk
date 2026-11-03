@@ -234,35 +234,6 @@ static bool IsAnyModifierDown() {
     return false;
 }
 
-static void SendVirtualKeyNative(WORD vk, int holdMs = 20) {
-#ifdef _WIN32
-    INPUT inputDown{};
-    inputDown.type = INPUT_KEYBOARD;
-    inputDown.ki.wVk = vk;
-    inputDown.ki.wScan = static_cast<WORD>(MapVirtualKeyW(vk, 0));
-    inputDown.ki.dwFlags = 0;
-    SendInput(1, &inputDown, sizeof(INPUT));
-
-    if (holdMs > 0) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(holdMs));
-    }
-
-    INPUT inputUp{};
-    inputUp.type = INPUT_KEYBOARD;
-    inputUp.ki.wVk = vk;
-    inputUp.ki.wScan = static_cast<WORD>(MapVirtualKeyW(vk, 0));
-    inputUp.ki.dwFlags = KEYEVENTF_KEYUP;
-    SendInput(1, &inputUp, sizeof(INPUT));
-#endif
-}
-
-static void SendCaretNudgeNative() {
-#ifdef _WIN32
-    SendVirtualKeyNative(VK_LEFT, 10);
-    SendVirtualKeyNative(VK_RIGHT, 10);
-#endif
-}
-
 void InputManager::AutoTypeWorker(std::wstring wideText, int delayMs) {
     // 1. Initial short delay to allow target window activation
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -295,40 +266,17 @@ void InputManager::AutoTypeWorker(std::wstring wideText, int delayMs) {
     std::uniform_int_distribution<int> tier1PauseDist(150, 250); // Delimiters: , : ( ) [ ] ' "
     std::uniform_int_distribution<int> tier2PauseDist(350, 500); // Structural: ; } { \n
 
-    // RAII Hardware input lock guard ensures input is never left permanently blocked
-    struct BlockInputGuard {
-        bool active = false;
-        void Lock() {
-#ifdef _WIN32
-            if (!active) {
-                active = (BlockInput(TRUE) != FALSE);
-            }
-#endif
-        }
-        void Unlock() {
-#ifdef _WIN32
-            if (active) {
-                BlockInput(FALSE);
-                active = false;
-            }
-#endif
-        }
-        ~BlockInputGuard() {
-            Unlock();
-        }
-    } inputGuard;
-    inputGuard.Lock();
+    // Keep hardware input available so the user can pause or stop typing.
 
     // 6. Send unicode keystrokes with focus-drift safety and humanized timing
     for (wchar_t ch : wideText) {
         if (m_stopAutoTyping) break;
 
-        // INLINE PAUSE/RESUME STATE MACHINE:
-        // When user triggers typing hotkey while running, pause keystroke stream
-        while (m_isTypingPaused && !m_stopAutoTyping) {
-            inputGuard.Unlock();
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-            inputGuard.Lock();
+        // Recheck pause while modifiers are held: pause can arrive during this wait.
+        while (!m_stopAutoTyping) {
+            const bool modifierDown = IsAnyModifierDown();
+            if (!modifierDown && !m_isTypingPaused) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(15));
         }
         if (m_stopAutoTyping) break;
 
@@ -336,7 +284,6 @@ void InputManager::AutoTypeWorker(std::wstring wideText, int delayMs) {
         // Verify target foreground window is strictly unchanged before dispatching input
         HWND currentFg = GetForegroundWindow();
         if (currentFg != targetHwnd) {
-            inputGuard.Unlock();
             // [TypeSim] Focus drifted - stopping to avoid typing into wrong window
             if (m_hotkeyCallback) {
                 m_hotkeyCallback("typing:drifted");
@@ -344,61 +291,35 @@ void InputManager::AutoTypeWorker(std::wstring wideText, int delayMs) {
             break;
         }
 
-        // Wait if modifier key is pressed mid-typing
-        while (IsAnyModifierDown() && !m_stopAutoTyping) {
-            inputGuard.Unlock();
-            std::this_thread::sleep_for(std::chrono::milliseconds(15));
-            inputGuard.Lock();
-        }
-        if (m_stopAutoTyping) break;
+        if (ch == L'\r') continue; // Skip CR in CRLF.
 
-        // Occasional human typo simulation (1% on alphabetic characters with automatic correction)
-        if (iswalpha(ch) && (gen() % 100 == 0)) {
-            wchar_t typoChar = (ch == L'a') ? L's' : (ch == L'e') ? L'r' : (ch - 1);
-            INPUT typoDown{};
-            typoDown.type = INPUT_KEYBOARD;
-            typoDown.ki.wScan = typoChar;
-            typoDown.ki.dwFlags = KEYEVENTF_UNICODE;
-            SendInput(1, &typoDown, sizeof(INPUT));
-            std::this_thread::sleep_for(std::chrono::milliseconds(25));
-            INPUT typoUp = typoDown;
-            typoUp.ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
-            SendInput(1, &typoUp, sizeof(INPUT));
+        // Send each key-down/up pair and any caret nudge in one batch so hardware
+        // events cannot interleave with a partially sent keystroke.
+        INPUT inputs[6]{};
+        UINT inputCount = 0;
+        auto appendKey = [&](WORD code, DWORD flags, bool unicode) {
+            INPUT down{};
+            down.type = INPUT_KEYBOARD;
+            if (unicode) down.ki.wScan = code;
+            else down.ki.wVk = code;
+            down.ki.dwFlags = flags;
+            inputs[inputCount++] = down;
+            INPUT up = down;
+            up.ki.dwFlags |= KEYEVENTF_KEYUP;
+            inputs[inputCount++] = up;
+        };
+        if (ch == L'\n') appendKey(VK_RETURN, 0, false);
+        else if (ch == L'\t') appendKey(VK_TAB, 0, false);
+        else appendKey(static_cast<WORD>(ch), KEYEVENTF_UNICODE, true);
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(120 + (gen() % 80)));
-            SendVirtualKeyNative(VK_BACK, 20);
-            std::this_thread::sleep_for(std::chrono::milliseconds(60));
-        }
-
-        if (ch == L'\r') {
-            continue; // Skip CR in CRLF
-        } else if (ch == L'\n') {
-            SendVirtualKeyNative(VK_RETURN, 20);
-        } else if (ch == L'\t') {
-            SendVirtualKeyNative(VK_TAB, 20);
-        } else {
-            // Key Down with KEYEVENTF_UNICODE
-            INPUT inputDown{};
-            inputDown.type = INPUT_KEYBOARD;
-            inputDown.ki.wScan = ch;
-            inputDown.ki.dwFlags = KEYEVENTF_UNICODE;
-            SendInput(1, &inputDown, sizeof(INPUT));
-
-            // Human key-hold contact duration (18ms)
-            std::this_thread::sleep_for(std::chrono::milliseconds(18));
-
-            // Key Up with KEYEVENTF_UNICODE | KEYEVENTF_KEYUP
-            INPUT inputUp{};
-            inputUp.type = INPUT_KEYBOARD;
-            inputUp.ki.wScan = ch;
-            inputUp.ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
-            SendInput(1, &inputUp, sizeof(INPUT));
-        }
-
-        // Caret nudge for delimiter characters (prevents autocomplete bracket double expansion)
         if (ch == L'{' || ch == L'}' || ch == L'(' || ch == L')' ||
             ch == L'[' || ch == L']' || ch == L'"' || ch == L'\'') {
-            SendCaretNudgeNative();
+            appendKey(VK_LEFT, 0, false);
+            appendKey(VK_RIGHT, 0, false);
+        }
+        if (SendInput(inputCount, inputs, sizeof(INPUT)) != inputCount) {
+            if (m_hotkeyCallback) m_hotkeyCallback("typing:error");
+            break;
         }
 
         // CONTEXT-AWARE LOG-NORMAL TYPING DYNAMICS:
@@ -431,9 +352,6 @@ void InputManager::AutoTypeWorker(std::wstring wideText, int delayMs) {
         }
     }
 
-#ifdef _WIN32
-    BlockInput(FALSE);
-#endif
     m_isAutoTyping = false;
 }
 

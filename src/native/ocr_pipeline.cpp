@@ -129,47 +129,11 @@ std::string OcrPipeline::ExtractText(const CapturedBuffer& buffer) {
             }
         }
     } catch (...) {
-        // Fallback to legacy extraction
+        // Recognition failed; never substitute invented text for the image.
     }
 #endif
 
-    std::vector<std::string> lines;
-    // Execution scoping with explicit cleanup
-    {
-        // SoftwareBitmap scope
-        struct MockSoftwareBitmap {
-            void Close() noexcept {}
-        } softwareBitmap;
-
-        // DataWriter scope
-        struct MockDataWriter {
-            void Close() noexcept {}
-        } dataWriter;
-
-        // OcrEngine scope
-        struct MockOcrEngine {
-            void Close() noexcept {}
-        } ocrEngine;
-
-        // Emulate recognition into lines
-        lines.push_back("Extracted text payload line 1");
-
-        softwareBitmap.Close();
-        dataWriter.Close();
-        ocrEngine.Close();
-    }
-
-    std::string text;
-    for (size_t i = 0; i < lines.size(); ++i) {
-        if (i > 0) text += "\n";
-        text += lines[i];
-    }
-
-    // Strict resource cleanup: clear and shrink to eliminate heap memory leaks
-    lines.clear();
-    lines.shrink_to_fit();
-
-    return text;
+    return "";
 }
 
 } // namespace LensDesk::Native

@@ -13,9 +13,6 @@ Write-Host "  LensDesk 2.0 Real Windows Runtime Integration & Verification"
 Write-Host "================================================================="
 
 # 1. Resolve executable path
-try {
-    Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name "EnableSecureUIAPaths" -Value 0 -ErrorAction SilentlyContinue
-} catch {}
 $Exe = Resolve-Path $BinaryPath -ErrorAction SilentlyContinue
 if (-not $Exe -or -not (Test-Path $Exe)) {
     $Exe = Resolve-Path "release/RuntimeHost.exe" -ErrorAction SilentlyContinue
@@ -35,9 +32,6 @@ using System;
 using System.Runtime.InteropServices;
 
 public class Win32 {
-    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-    public static extern IntPtr FindWindowW(string lpClassName, string lpWindowName);
-
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool IsWindow(IntPtr hWnd);
@@ -139,19 +133,20 @@ public class WindowFinder {
 # 3. Launch RuntimeHost.exe
 Write-Host "[2/7] Launching RuntimeHost.exe..."
 $workDir = Split-Path $Exe.Path -Parent
-$proc = Start-Process -FilePath $Exe.Path -WorkingDirectory $workDir -PassThru
-if (-not $proc -or $proc.HasExited) {
-    Write-Error "Failed to launch RuntimeHost.exe (exited immediately with code $($proc.ExitCode))."
-    exit 1
-}
-
-$targetPid = $proc.Id
-Write-Host "      Spawned Process ID: $targetPid"
-
-# Give the Win32 window, Direct3D 11 swapchain, and WebView2 controller time to initialize
-Start-Sleep -Seconds 3
-
+$proc = $null
+$hwnd = [IntPtr]::Zero
 try {
+    $proc = Start-Process -FilePath $Exe.Path -WorkingDirectory $workDir -PassThru
+    if (-not $proc -or $proc.HasExited) {
+        Write-Error "Failed to launch RuntimeHost.exe (exited immediately with code $($proc.ExitCode))."
+        exit 1
+    }
+    $targetPid = $proc.Id
+    Write-Host "      Spawned Process ID: $targetPid"
+
+    # Give the window, swapchain, and WebView2 controller time to initialize.
+    Start-Sleep -Seconds 3
+
     # 4. Check Process Status & Memory
     if ($proc.HasExited) {
         Write-Error "Process $targetPid exited prematurely with code $($proc.ExitCode)."
@@ -186,12 +181,6 @@ try {
     $overlayWin = $windows | Where-Object { $_.ClassName -eq "LensDesk_Overlay_Host_Class" } | Select-Object -First 1
     if ($overlayWin) {
         $hwnd = $overlayWin.Hwnd
-    } else {
-        # Retry with FindWindowW
-        $hwnd = [Win32]::FindWindowW("LensDesk_Overlay_Host_Class", "LensDesk")
-        if ($hwnd -eq [IntPtr]::Zero) {
-            $hwnd = [Win32]::FindWindowW("LensDesk_Overlay_Host_Class", $null)
-        }
     }
 
     if ($hwnd -eq [IntPtr]::Zero -and $windows.Count -gt 0) {
@@ -288,32 +277,40 @@ try {
 
 } finally {
     # 9. Clean Graceful Shutdown
-    Write-Host "[7/7] Testing Graceful Shutdown..."
-    $logFile = Join-Path $workDir "runtime_host.log"
-    if (Test-Path $logFile) {
-        Write-Host "--- [runtime_host.log final dump] ---"
-        Get-Content $logFile | ForEach-Object { Write-Host "  $_" }
-        Write-Host "-------------------------------------"
-    }
-    if ($hwnd -ne [IntPtr]::Zero -and [Win32]::IsWindow($hwnd)) {
-        [Win32]::PostMessageW($hwnd, [Win32]::WM_CLOSE, [UIntPtr]::Zero, [IntPtr]::Zero) | Out-Null
-    }
-
-    $stopped = $proc.WaitForExit(5000)
-    if (-not $stopped) {
-        Write-Warning "Process did not exit within 5 seconds of WM_CLOSE. Forcing termination..."
-        Stop-Process -Id $targetPid -Force -ErrorAction SilentlyContinue
-    } else {
-        Write-Host "      Process exited gracefully with code: $($proc.ExitCode)"
-    }
-
-    # Verify no orphan processes
-    $orphans = Get-Process -Name "RuntimeHost" -ErrorAction SilentlyContinue
-    if ($orphans) {
-        Write-Warning "Orphan RuntimeHost process detected. Cleaning up..."
-        $orphans | Stop-Process -Force
-    } else {
-        Write-Host "      Zero orphan processes remaining."
+    if ($proc) {
+        try {
+            Write-Host "[7/7] Testing Graceful Shutdown..."
+            try {
+                $logFile = Join-Path $workDir "runtime_host.log"
+                if (Test-Path $logFile) {
+                    Write-Host "--- [runtime_host.log final dump] ---"
+                    Get-Content $logFile | ForEach-Object { Write-Host "  $_" }
+                    Write-Host "-------------------------------------"
+                }
+            } catch {
+                Write-Warning "Could not read runtime host log: $_"
+            }
+            if ($hwnd -ne [IntPtr]::Zero -and [Win32]::IsWindow($hwnd)) {
+                [uint32]$windowOwnerPid = 0
+                [WindowFinder]::GetWindowThreadProcessId($hwnd, [ref]$windowOwnerPid) | Out-Null
+                if ($windowOwnerPid -eq $targetPid -and -not $proc.HasExited) {
+                    [Win32]::PostMessageW($hwnd, [Win32]::WM_CLOSE, [UIntPtr]::Zero, [IntPtr]::Zero) | Out-Null
+                }
+            }
+        } finally {
+            $stopped = $proc.WaitForExit(5000)
+            if (-not $stopped) {
+                try {
+                    $proc.Kill()
+                    $proc.WaitForExit()
+                } catch [System.InvalidOperationException] {
+                    if (-not $proc.HasExited) { throw }
+                }
+                Write-Warning "Process did not exit within 5 seconds of WM_CLOSE. Forced termination."
+            } else {
+                Write-Host "      Process exited gracefully with code: $($proc.ExitCode)"
+            }
+        }
     }
 }
 

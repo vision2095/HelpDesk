@@ -176,7 +176,15 @@ test('LensDesk 2.0 Native Windows Host Architecture', async (t) => {
     assert.match(inputCpp, /currentFg != targetHwnd|GetForegroundWindow\(\) != targetHwnd/, 'Missing focus-drift guard in input_manager.cpp');
     assert.match(inputCpp, /lognormal_distribution/, 'Missing log-normal distribution in input_manager.cpp');
     assert.match(inputCpp, /boundaryPauseDist/, 'Missing syntax boundary hesitation logic');
-    assert.match(inputCpp, /BlockInput\(TRUE\)/, 'Missing localized BlockInput hardware locks');
+    const workspaceInputCpp = fs.readFileSync(path.join(ROOT, 'apps/windows/src-native/src/input_manager.cpp'), 'utf8');
+    assert.equal(workspaceInputCpp, inputCpp, 'Windows input implementations must stay synchronized');
+    assert.doesNotMatch(inputCpp, /\bBlockInput\s*\(/, 'Auto-type must leave physical keyboard and mouse input available');
+    const worker = inputCpp.slice(inputCpp.indexOf('void InputManager::AutoTypeWorker'));
+    const modifierWait = worker.indexOf('const bool modifierDown = IsAnyModifierDown()');
+    const focusCheck = worker.indexOf('HWND currentFg = GetForegroundWindow()');
+    assert.ok(modifierWait >= 0 && focusCheck > modifierWait, 'Check foreground after waiting for modifier keys');
+    assert.doesNotMatch(worker, /typoChar|SendVirtualKeyNative\(VK_BACK/, 'Do not send delayed typo corrections to a changed target');
+    assert.match(worker, /SendInput\(inputCount, inputs, sizeof\(INPUT\)\) != inputCount/, 'Submit paired keystrokes together and detect incomplete delivery');
     assert.match(inputCpp, /tier1PauseDist/, 'Missing multi-tier delimiter hesitation distribution');
     assert.match(inputCpp, /tier2PauseDist/, 'Missing multi-tier structural hesitation distribution');
   });

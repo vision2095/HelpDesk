@@ -1,5 +1,6 @@
 #pragma once
 #include "common.hpp"
+#include "audio_samples.hpp"
 #include <mmdeviceapi.h>
 #include <audioclient.h>
 #include <thread>
@@ -21,10 +22,12 @@ public:
     void StopCapture();
     bool IsCapturing() const { return m_isCapturing.load(); }
 
-    std::vector<uint8_t> GetAudioData(bool clear = true);
-    std::string GetAudioDataBase64(bool clear = true);
-    std::vector<uint8_t> GetAudioDataPcm16(bool clear = true);
-    std::string GetAudioDataPcm16Base64(bool clear = true);
+    struct AudioChunk {
+        std::string data;
+        unsigned sampleRate = 0;
+        unsigned channels = 0;
+    };
+    AudioChunk GetAudioChunk(bool pcm16, bool clear = true);
 
 private:
     void CaptureThreadLoop();
@@ -42,7 +45,10 @@ private:
     std::atomic<bool> m_stopCapture{ false };
 
     std::mutex m_bufferMutex;
-    std::vector<uint8_t> m_audioBuffer;
+    std::vector<float> m_audioBuffer;
+    AudioSamples::Format m_format{};
+    unsigned m_sampleRate = 0;
+    unsigned m_channels = 0;
 };
 
 } // namespace LensDesk

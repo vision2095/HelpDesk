@@ -1,5 +1,6 @@
 #include "../include/audio_capture.hpp"
 #include <iostream>
+#include <ksmedia.h>
 
 namespace LensDesk {
 
@@ -11,6 +12,15 @@ WasapiLoopbackCapture::~WasapiLoopbackCapture() {
 
 bool WasapiLoopbackCapture::Initialize() {
 #if defined(_WIN32)
+    // Release the previous endpoint before recovery or a retry. Buffered samples
+    // are cleared when the new format is committed below.
+    m_silentRenderClient.Reset();
+    m_silentAudioClient.Reset();
+    m_captureClient.Reset();
+    m_audioClient.Reset();
+    m_device.Reset();
+    m_enumerator.Reset();
+    if (m_waveFormat) { CoTaskMemFree(m_waveFormat); m_waveFormat = nullptr; }
     HRESULT hr = CoCreateInstance(
         __uuidof(MMDeviceEnumerator),
         nullptr,
@@ -33,6 +43,24 @@ bool WasapiLoopbackCapture::Initialize() {
 
     hr = m_audioClient->GetMixFormat(&m_waveFormat);
     if (FAILED(hr) || !m_waveFormat) return false;
+
+    AudioSamples::Format format{};
+    format.channels = m_waveFormat->nChannels;
+    format.containerBits = m_waveFormat->wBitsPerSample;
+    format.validBits = format.containerBits;
+    bool isFloat = m_waveFormat->wFormatTag == WAVE_FORMAT_IEEE_FLOAT;
+    bool isPcm = m_waveFormat->wFormatTag == WAVE_FORMAT_PCM;
+    if (m_waveFormat->wFormatTag == WAVE_FORMAT_EXTENSIBLE) {
+        if (m_waveFormat->cbSize < sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX)) return false;
+        const auto* extended = reinterpret_cast<const WAVEFORMATEXTENSIBLE*>(m_waveFormat);
+        isFloat = IsEqualGUID(extended->SubFormat, KSDATAFORMAT_SUBTYPE_IEEE_FLOAT);
+        isPcm = IsEqualGUID(extended->SubFormat, KSDATAFORMAT_SUBTYPE_PCM);
+        format.validBits = extended->Samples.wValidBitsPerSample;
+    }
+    if ((!isFloat && !isPcm) || !m_waveFormat->nSamplesPerSec) return false;
+    format.encoding = isFloat ? AudioSamples::Encoding::Float32 : AudioSamples::Encoding::IntegerPcm;
+    if (!AudioSamples::Supported(format) ||
+        m_waveFormat->nBlockAlign != format.channels * (format.containerBits / 8)) return false;
 
     // 10,000,000 reference time units = 1 second buffer
     const REFERENCE_TIME hnsBufferDuration = 10000000;
@@ -75,6 +103,13 @@ bool WasapiLoopbackCapture::Initialize() {
         }
     }
 
+    {
+        std::lock_guard<std::mutex> lock(m_bufferMutex);
+        m_audioBuffer.clear();
+        m_format = format;
+        m_sampleRate = m_waveFormat->nSamplesPerSec;
+        m_channels = format.channels;
+    }
     return true;
 #else
     return false;
@@ -169,19 +204,18 @@ void WasapiLoopbackCapture::CaptureThreadLoop() {
 
             hr = m_captureClient->GetBuffer(&pData, &numFramesAvailable, &flags, nullptr, nullptr);
             if (SUCCEEDED(hr)) {
-                size_t byteCount = numFramesAvailable * m_waveFormat->nBlockAlign;
+                const size_t byteCount = static_cast<size_t>(numFramesAvailable) * m_waveFormat->nBlockAlign;
                 {
                     std::lock_guard<std::mutex> lock(m_bufferMutex);
                     if (flags & AUDCLNT_BUFFERFLAGS_SILENT) {
-                        m_audioBuffer.insert(m_audioBuffer.end(), byteCount, 0);
+                        m_audioBuffer.insert(m_audioBuffer.end(), static_cast<size_t>(numFramesAvailable) * m_channels, 0.0f);
                     } else if (pData) {
-                        m_audioBuffer.insert(m_audioBuffer.end(), pData, pData + byteCount);
+                        AudioSamples::ToFloat(pData, byteCount, m_format, m_audioBuffer);
                     }
-
-                    // Keep bounded ring buffer (max 10 seconds of raw audio)
-                    size_t maxBytes = m_waveFormat->nAvgBytesPerSec * 10;
-                    if (m_audioBuffer.size() > maxBytes) {
-                        m_audioBuffer.erase(m_audioBuffer.begin(), m_audioBuffer.begin() + (m_audioBuffer.size() - maxBytes));
+                    // Retain complete frames for at most 10 seconds.
+                    const size_t maxSamples = static_cast<size_t>(m_sampleRate) * m_channels * 10;
+                    if (m_audioBuffer.size() > maxSamples) {
+                        m_audioBuffer.erase(m_audioBuffer.begin(), m_audioBuffer.begin() + (m_audioBuffer.size() - maxSamples));
                     }
                 }
                 m_captureClient->ReleaseBuffer(numFramesAvailable);
@@ -211,59 +245,23 @@ void WasapiLoopbackCapture::CaptureThreadLoop() {
 #endif
 }
 
-std::vector<uint8_t> WasapiLoopbackCapture::GetAudioData(bool clear) {
-    std::lock_guard<std::mutex> lock(m_bufferMutex);
-    std::vector<uint8_t> data = m_audioBuffer;
-    if (clear) {
-        m_audioBuffer.clear();
+WasapiLoopbackCapture::AudioChunk WasapiLoopbackCapture::GetAudioChunk(bool pcm16, bool clear) {
+    std::vector<float> samples;
+    AudioChunk chunk;
+    {
+        std::lock_guard<std::mutex> lock(m_bufferMutex);
+        samples = m_audioBuffer;
+        chunk.sampleRate = m_sampleRate;
+        chunk.channels = m_channels;
+        if (clear) m_audioBuffer.clear();
     }
-    return data;
-}
-
-std::string WasapiLoopbackCapture::GetAudioDataBase64(bool clear) {
-    std::vector<uint8_t> raw = GetAudioData(clear);
-    if (raw.empty()) return "";
-    return Base64Encode(raw.data(), raw.size());
-}
-
-std::vector<uint8_t> WasapiLoopbackCapture::GetAudioDataPcm16(bool clear) {
-    std::vector<uint8_t> raw = GetAudioData(clear);
-    if (raw.empty()) return {};
-
-    bool isFloat = false;
-    if (m_waveFormat) {
-        if (m_waveFormat->wFormatTag == WAVE_FORMAT_IEEE_FLOAT) {
-            isFloat = true;
-        } else if (m_waveFormat->wFormatTag == WAVE_FORMAT_EXTENSIBLE) {
-            auto* pEx = reinterpret_cast<WAVEFORMATEXTENSIBLE*>(m_waveFormat);
-            if (pEx->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT) {
-                isFloat = true;
-            }
-        } else if (m_waveFormat->wBitsPerSample == 32) {
-            isFloat = true;
-        }
+    if (pcm16) {
+        const auto bytes = AudioSamples::ToPcm16(samples);
+        if (!bytes.empty()) chunk.data = Base64Encode(bytes.data(), bytes.size());
+    } else if (!samples.empty()) {
+        chunk.data = Base64Encode(reinterpret_cast<const uint8_t*>(samples.data()), samples.size() * sizeof(float));
     }
-
-    if (!isFloat) {
-        return raw;
-    }
-
-    size_t sampleCount = raw.size() / sizeof(float);
-    const float* fSamples = reinterpret_cast<const float*>(raw.data());
-    std::vector<uint8_t> pcm16(sampleCount * sizeof(int16_t));
-    int16_t* out16 = reinterpret_cast<int16_t*>(pcm16.data());
-
-    for (size_t i = 0; i < sampleCount; ++i) {
-        float sample = std::clamp(fSamples[i], -1.0f, 1.0f);
-        out16[i] = static_cast<int16_t>(std::clamp(sample * 32767.0f, -32768.0f, 32767.0f));
-    }
-    return pcm16;
-}
-
-std::string WasapiLoopbackCapture::GetAudioDataPcm16Base64(bool clear) {
-    std::vector<uint8_t> pcm = GetAudioDataPcm16(clear);
-    if (pcm.empty()) return "";
-    return Base64Encode(pcm.data(), pcm.size());
+    return chunk;
 }
 
 } // namespace LensDesk

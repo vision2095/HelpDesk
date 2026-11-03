@@ -328,18 +328,25 @@ try {
     window.lens.invoke("desktop.capture", { id: "screen:fixture-one" }),
   );
   const rejectedCapture = assert.rejects(stalledCapture, /timed out/);
-  await page.waitForTimeout(300);
-  assert.equal(
-    await application.evaluate(({ BrowserWindow }) =>
+  let hidden = false;
+  for (let i = 0; i < 30; i++) {
+    hidden = !(await application.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()[0].isVisible(),
-    ),
-    false,
-  );
+    ));
+    if (hidden) break;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  assert.equal(hidden, true, "Capture must hide the window");
   await application.evaluate(({ app }) => app.emit("activate"));
-  const recovered = await application.evaluate(({ BrowserWindow }) => {
-    const win = BrowserWindow.getAllWindows()[0];
-    return { visible: win.isVisible(), opacity: win.getOpacity() };
-  });
+  let recovered;
+  for (let i = 0; i < 30; i++) {
+    recovered = await application.evaluate(({ BrowserWindow }) => {
+      const win = BrowserWindow.getAllWindows()[0];
+      return { visible: win.isVisible(), opacity: win.getOpacity() };
+    });
+    if (recovered.visible) break;
+    await new Promise((r) => setTimeout(r, 100));
+  }
   assert.equal(
     recovered.visible,
     true,

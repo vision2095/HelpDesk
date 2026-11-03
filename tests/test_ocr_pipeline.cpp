@@ -61,9 +61,15 @@ int run_test_ocr_pipeline() {
     CHECK(testVec.capacity() <= 128);
     CHECK(testVec.size() == 64);
 
-    // 23-25. Extraction and formatted output checks
-    std::string text = OcrPipeline::ExtractText(buf);
-    CHECK(!text.empty());
+    // A blank image must never produce invented OCR text, even when OCR is unavailable.
+    CapturedBuffer blank;
+    blank.width = 32;
+    blank.height = 32;
+    blank.pixels.assign(32 * 32 * 4, 255);
+    CHECK(OcrPipeline::ExtractText(blank).empty());
+    CHECK(OcrPipeline::ExtractText(CapturedBuffer{}).empty());
+
+    std::string text = "Recognized text";
     std::string formatted = OcrPipeline::FormatOutput(text);
     CHECK(formatted.starts_with(expectedPrefix));
     CHECK(formatted.size() == std::strlen(expectedPrefix) + text.size());

@@ -955,7 +955,15 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
             if (imageB64.empty()) {
                 imageB64 = payload.value("dataUrl", "");
             }
-            std::string ocrText = m_captureSvc ? m_captureSvc->PerformOcrOnBase64(imageB64) : "";
+            if (!m_captureSvc) {
+                callback("OCR service is unavailable.", true);
+                return;
+            }
+            std::string ocrText = m_captureSvc->PerformOcrOnBase64(imageB64);
+            if (ocrText.empty()) {
+                callback("OCR could not recognize text in the image.", true);
+                return;
+            }
             callback({ { "ok", true }, { "text", ocrText } }, false);
             return;
         }
@@ -972,16 +980,20 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
             return;
         }
 
-        if (action == "audio.getLoopbackChunk") {
-            bool wantPcm16 = (payload.contains("format") && payload["format"] == "pcm16");
-            std::string b64 = wantPcm16 ? m_audioCapture.GetAudioDataPcm16Base64(true) : m_audioCapture.GetAudioDataBase64(true);
-            callback({ { "data", b64 }, { "sampleRate", 48000 }, { "channels", 2 }, { "format", wantPcm16 ? "pcm16" : "float32" } }, false);
-            return;
-        }
-
-        if (action == "audio.getLoopbackChunkPcm16") {
-            std::string b64 = m_audioCapture.GetAudioDataPcm16Base64(true);
-            callback({ { "data", b64 }, { "sampleRate", 48000 }, { "channels", 2 }, { "format", "pcm16" } }, false);
+        if (action == "audio.getLoopbackChunk" || action == "audio.getLoopbackChunkPcm16") {
+            const std::string format = action == "audio.getLoopbackChunkPcm16"
+                ? "pcm16" : payload.value("format", std::string("float32"));
+            if (format != "pcm16" && format != "float32") {
+                callback("Unsupported loopback audio format.", true);
+                return;
+            }
+            const auto chunk = m_audioCapture.GetAudioChunk(format == "pcm16");
+            if (!chunk.sampleRate || !chunk.channels) {
+                callback("Loopback audio is not initialized.", true);
+                return;
+            }
+            callback({ { "data", chunk.data }, { "sampleRate", chunk.sampleRate },
+                       { "channels", chunk.channels }, { "format", format } }, false);
             return;
         }
 

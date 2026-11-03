@@ -17,10 +17,14 @@ if(MSVC)
     add_link_options(/MANIFESTUAC:NO)
 endif()
 
+# The Windows host lives under apps/windows, while shared native code and
+# Vite assets are owned by the repository root.
+get_filename_component(LENSDESK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../.." ABSOLUTE)
+
 # Include directories
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/native
+    ${LENSDESK_ROOT}/src/native
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/imgui
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/webview2/include
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/nlohmann
@@ -42,18 +46,18 @@ set(SOURCES
     src/cloud_client.cpp
     src/service_dispatcher.cpp
     src/audio_capture.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/token_elevation.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/layout_watchdog.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/ocr_pipeline.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/focus_gate.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/typing_dynamics.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/wasapi_loopback.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/websocket_audio_sink.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/stealth_targets.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/mouse_gesture_hook.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/hotkey_dispatcher.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/sanitization.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/native/webview2_bootstrap.cpp
+    ${LENSDESK_ROOT}/src/native/token_elevation.cpp
+    ${LENSDESK_ROOT}/src/native/layout_watchdog.cpp
+    ${LENSDESK_ROOT}/src/native/ocr_pipeline.cpp
+    ${LENSDESK_ROOT}/src/native/focus_gate.cpp
+    ${LENSDESK_ROOT}/src/native/typing_dynamics.cpp
+    ${LENSDESK_ROOT}/src/native/wasapi_loopback.cpp
+    ${LENSDESK_ROOT}/src/native/websocket_audio_sink.cpp
+    ${LENSDESK_ROOT}/src/native/stealth_targets.cpp
+    ${LENSDESK_ROOT}/src/native/mouse_gesture_hook.cpp
+    ${LENSDESK_ROOT}/src/native/hotkey_dispatcher.cpp
+    ${LENSDESK_ROOT}/src/native/sanitization.cpp
+    ${LENSDESK_ROOT}/src/native/webview2_bootstrap.cpp
     third_party/imgui/imgui.cpp
     third_party/imgui/imgui_draw.cpp
     third_party/imgui/imgui_tables.cpp
@@ -103,7 +107,7 @@ add_custom_command(TARGET RuntimeHost POST_BUILD
         "${CMAKE_CURRENT_SOURCE_DIR}/third_party/webview2/lib/x64/WebView2Loader.dll"
         "$<TARGET_FILE_DIR:RuntimeHost>/WebView2Loader.dll"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_CURRENT_SOURCE_DIR}/../dist"
+        "${LENSDESK_ROOT}/dist"
         "$<TARGET_FILE_DIR:RuntimeHost>/dist"
     COMMENT "Copying WebView2 runtime DLL and built web assets to target output directory"
 )
