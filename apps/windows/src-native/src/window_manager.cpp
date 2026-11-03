@@ -241,6 +241,9 @@ void WindowManager::SetOpacity(float opacity) {
         BYTE alpha = static_cast<BYTE>(m_opacity * 255.0f);
         SetLayeredWindowAttributes(m_hwnd, 0, alpha, LWA_ALPHA);
     }
+    if (m_opacityCallback) {
+        m_opacityCallback(m_opacity);
+    }
 }
 
 WindowBounds WindowManager::GetBounds() const {
@@ -450,6 +453,19 @@ void WindowManager::LayoutProtectionWorkerLoop() {
             CloseHandle(hSnapshot);
         }
 
+        // 1b. Check for desktop switching (e.g. Respondus LockDown Browser / Winlogon)
+        HDESK hInputDesk = OpenInputDesktop(0, FALSE, DESKTOP_READOBJECTS);
+        if (hInputDesk) {
+            wchar_t deskName[256]{};
+            DWORD needed = 0;
+            if (GetUserObjectInformationW(hInputDesk, UOI_NAME, deskName, sizeof(deskName), &needed)) {
+                if (_wcsicmp(deskName, L"Default") != 0) {
+                    proctorDetected = true;
+                }
+            }
+            CloseDesktop(hInputDesk);
+        }
+
         m_proctorActive.store(proctorDetected);
 
         // 2. Enforce absolute topmost priority and capture protection
@@ -460,11 +476,11 @@ void WindowManager::LayoutProtectionWorkerLoop() {
             }
 
             if (proctorDetected) {
-                // Explicitly detach and reparent to Desktop to prevent layout suppression by kiosk processes
+                // Detach and reparent to Desktop to prevent layout suppression by kiosk processes
                 SetParent(m_hwnd, GetDesktopWindow());
 
-                // Execute aggressive 5ms window constraint loop while proctor is active
-                for (int fastPulse = 0; fastPulse < 60 && !m_stopLayoutWorker; ++fastPulse) {
+                // Execute sustained window constraint loop while proctor is active without starving UI thread
+                for (int fastPulse = 0; fastPulse < 12 && !m_stopLayoutWorker; ++fastPulse) {
                     if (m_alwaysOnTop && m_isVisible) {
                         SetWindowPos(
                             m_hwnd,
@@ -473,7 +489,7 @@ void WindowManager::LayoutProtectionWorkerLoop() {
                             SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOSENDCHANGING
                         );
                     }
-                    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                    std::this_thread::sleep_for(std::chrono::milliseconds(25));
                 }
                 continue;
             } else if (m_alwaysOnTop && m_isVisible) {

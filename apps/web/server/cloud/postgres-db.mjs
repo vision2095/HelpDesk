@@ -5,7 +5,10 @@ let pool = null;
 
 export function getDatabasePool(connectionString) {
   if (pool) return pool;
-  const url = connectionString || process.env.DATABASE_URL || "postgres://localhost:5432/lensdesk";
+  let url = connectionString || process.env.DATABASE_URL || "postgres://localhost:5432/lensdesk";
+  if (url.includes("sslmode=require") && !url.includes("uselibpqcompat")) {
+    url = url.replace("sslmode=require", "sslmode=verify-full");
+  }
   const isLocal = url.includes("localhost") || url.includes("127.0.0.1");
 
   pool = new Pool({

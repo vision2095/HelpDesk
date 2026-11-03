@@ -18,7 +18,12 @@ export async function respondWithStream(res, execute) {
       controller.abort(new Error("Connection is too slow."));
       controller.signal.throwIfAborted();
     }
-    res.write(`data: ${JSON.stringify(event)}\n\n`);
+    // Enrich event with choices[0].delta.content if text is present (OpenAI SSE compatibility)
+    const payload = { ...event };
+    if (event.text && !payload.choices) {
+      payload.choices = [{ delta: { content: event.text } }];
+    }
+    res.write(`data: ${JSON.stringify(payload)}\n\n`);
     res.flush?.();
   };
   const heartbeat = setInterval(() => {
@@ -28,6 +33,9 @@ export async function respondWithStream(res, execute) {
   try {
     const result = await execute({ signal: controller.signal, onEvent: emit });
     emit({ type: "done", result });
+    if (!res.destroyed) {
+      res.write("data: [DONE]\n\n");
+    }
   } catch (error) {
     res.lensError = true;
     if (!res.destroyed)
@@ -68,7 +76,7 @@ export async function readEventStream(response, onEvent, signal) {
           .filter((l) => l.startsWith("data:"))
           .map((l) => l.slice(5).trimStart())
           .join("\n");
-        if (!data) continue;
+        if (!data || data === "[DONE]") continue;
         const event = JSON.parse(data);
         if (event.type === "error") throw new Error(event.error);
         if (event.type === "done") {

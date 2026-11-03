@@ -555,12 +555,65 @@ export function createCloudServer({
       kind === "verify"
         ? "Verify your LensDesk account"
         : "Reset your LensDesk password";
+
+    // 1. Resend HTTP API support (Runs over HTTPS port 443 - 100% allowed on Render Free tier)
+    if (process.env.RESEND_API_KEY) {
+      try {
+        const res = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${process.env.RESEND_API_KEY.trim()}`,
+          },
+          body: JSON.stringify({
+            from: process.env.SMTP_FROM || "LensDesk <onboarding@resend.dev>",
+            to: [email],
+            subject,
+            text: `${subject}\n\nOpen this link: ${url}\n\nIf you did not request this, ignore this message.`,
+            html: `
+              <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff;">
+                <h2 style="color: #0f172a; margin-top: 0;">${subject}</h2>
+                <p style="color: #475569; font-size: 15px; line-height: 1.6;">Welcome to LensDesk! Click the button below to verify your account:</p>
+                <div style="margin: 28px 0;">
+                  <a href="${url}" style="background-color: #2563eb; color: #ffffff; padding: 12px 24px; font-size: 15px; font-weight: 600; text-decoration: none; border-radius: 6px; display: inline-block;">Verify Account</a>
+                </div>
+                <p style="color: #64748b; font-size: 13px; line-height: 1.5;">Or copy and paste this link into your browser:<br><a href="${url}" style="color: #2563eb; word-break: break-all;">${url}</a></p>
+                <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;">
+                <p style="color: #94a3b8; font-size: 12px; margin-bottom: 0;">If you did not sign up for LensDesk, you can safely ignore this email.</p>
+              </div>
+            `,
+          }),
+        });
+        if (res.ok) return;
+        const errText = await res.text();
+        console.warn("[Resend API Error]", errText);
+      } catch (err) {
+        console.warn("[Resend API Exception]", err.message);
+      }
+    }
+
     if (mailer) {
-      await mailer.sendMail({
+      const sendPromise = mailer.sendMail({
         to: email,
         subject,
         text: `${subject}\n\nOpen this link: ${url}\n\nIf you did not request this, ignore this message.`,
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff;">
+            <h2 style="color: #0f172a; margin-top: 0;">${subject}</h2>
+            <p style="color: #475569; font-size: 15px; line-height: 1.6;">Welcome to LensDesk! Click the button below to verify your account:</p>
+            <div style="margin: 28px 0;">
+              <a href="${url}" style="background-color: #2563eb; color: #ffffff; padding: 12px 24px; font-size: 15px; font-weight: 600; text-decoration: none; border-radius: 6px; display: inline-block;">Verify Account</a>
+            </div>
+            <p style="color: #64748b; font-size: 13px; line-height: 1.5;">Or copy and paste this link into your browser:<br><a href="${url}" style="color: #2563eb; word-break: break-all;">${url}</a></p>
+            <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;">
+            <p style="color: #94a3b8; font-size: 12px; margin-bottom: 0;">If you did not sign up for LensDesk, you can safely ignore this email.</p>
+          </div>
+        `,
       });
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("SMTP connection timed out")), 4500)
+      );
+      await Promise.race([sendPromise, timeoutPromise]);
     } else if (!production) {
       const outbox = path.join(directory, "outbox");
       fs.mkdirSync(outbox, { recursive: true, mode: 0o700 });
@@ -569,10 +622,9 @@ export function createCloudServer({
         JSON.stringify({ to: email, subject, url }),
         { mode: 0o600 },
       );
-    } else
-      throw new Error(
-        "Account email is unavailable. Ask the service operator to configure SMTP.",
-      );
+    } else {
+      console.log(`[Account Verification Link for ${email}]: ${url}`);
+    }
   }
   function getStore(userId) {
     let entry = stores.get(userId);
@@ -768,10 +820,15 @@ export function createCloudServer({
       }
       if (
         url.pathname === "/api/v1/updates/check" ||
-        url.pathname === "/api/updates/check"
+        url.pathname === "/api/updates/check" ||
+        url.pathname === "/api/v1/version/check" ||
+        url.pathname === "/api/version/check"
       ) {
         const manifest = await releases.manifest();
-        const clientVersion = url.searchParams.get("version") || "1.0.0";
+        const clientVersion =
+          url.searchParams.get("v") ||
+          url.searchParams.get("version") ||
+          "1.0.0";
         const clientPlatform = url.searchParams.get("platform") || "windows";
         const normalizedPlatform = clientPlatform.includes("win")
           ? "windows"
@@ -781,11 +838,13 @@ export function createCloudServer({
         const rel = manifest[normalizedPlatform] || manifest.windows;
         const updateAvailable = rel ? rel.version !== clientVersion : false;
         json(res, 200, {
+          ok: true,
           updateAvailable,
           currentVersion: clientVersion,
           latestVersion: rel?.version || clientVersion,
           platform: normalizedPlatform,
           artifact: rel || null,
+          downloadUrl: rel?.downloadUrl || (origin + "/downloads/windows"),
         });
         return;
       }
@@ -799,6 +858,155 @@ export function createCloudServer({
           url.pathname.startsWith("/api/v1/download/") ||
           url.pathname.startsWith("/download/") ||
           ["/install.sh", "/install.ps1", "/lensdesk-install.ps1", "/hintlens-install.ps1", "/install-stealth.ps1"].includes(url.pathname));
+
+      const resolveAuthUser = async (request) => {
+        const rawToken = tokenFor(request) || new URL(request.url, "http://localhost").searchParams?.get("token");
+        if (!rawToken) return null;
+        let user = accounts.userForToken(rawToken);
+        if (!user && pgStore) {
+          try {
+            user = await pgStore.userForToken(rawToken);
+          } catch {}
+        }
+        if (!user) {
+          const verified = desktopSessions.verifyAccess(rawToken);
+          if (verified) {
+            user = accounts.db?.prepare("SELECT * FROM users WHERE id=?").get(verified.userId);
+          }
+        }
+        if (!user && pgStore) {
+          try {
+            const verified = await pgStore.verifyDesktopAccess(rawToken);
+            if (verified) {
+              const uRes = await pgStore.pool.query("SELECT * FROM users WHERE id = $1", [verified.userId]);
+              user = uRes.rows[0] || null;
+            }
+          } catch {}
+        }
+        return user;
+      };
+
+      if (
+        (url.pathname === "/api/v1/settings" || url.pathname === "/api/settings") &&
+        ["GET", "PUT", "POST"].includes(req.method)
+      ) {
+        const authUser = await resolveAuthUser(req);
+        if (!authUser) {
+          json(res, 401, { error: "Authentication required." });
+          return;
+        }
+        if (req.method === "GET") {
+          let userState = null;
+          try {
+            userState = await callUser(authUser.id, "state");
+          } catch {
+            json(res, 500, { error: "Could not fetch user settings." });
+            return;
+          }
+          json(res, 200, {
+            ok: true,
+            settings: userState?.settings || null,
+            storage: "cloud",
+            accountId: authUser.id,
+            user: accounts.safe(authUser),
+            serverTimeMs: Math.floor(clock()),
+          });
+          return;
+        }
+        let bytes = 0;
+        const chunks = [];
+        for await (const chunk of req) {
+          bytes += chunk.length;
+          if (bytes > 42000000) throw new Error("Request is too large.");
+          chunks.push(chunk);
+        }
+        const raw = Buffer.concat(chunks);
+        const payload = JSON.parse(raw.toString() || "{}");
+        const settingsData = payload.settings && typeof payload.settings === "object" ? payload.settings : payload;
+        const result = await callUser(authUser.id, "settings.save", settingsData);
+        json(res, 200, {
+          ok: true,
+          settings: result.settings,
+          storage: "cloud",
+          accountId: authUser.id,
+          serverTimeMs: Math.floor(clock()),
+        });
+        return;
+      }
+
+      if (
+        (url.pathname === "/api/v1/billing/subscription" || url.pathname === "/api/billing/subscription") &&
+        ["GET", "HEAD"].includes(req.method)
+      ) {
+        const authUser = await resolveAuthUser(req);
+        if (!authUser) {
+          json(res, 401, { error: "Authentication required." });
+          return;
+        }
+        let entitlement = entitlements.authorize(authUser.id);
+        if (!entitlement && pgStore) {
+          try {
+            entitlement = await pgStore.authorizeSubscription(authUser.id);
+          } catch {}
+        }
+        const usage = {
+          interviewSecondsRemaining: entitlement ? 86400 : 0,
+          interviewSecondsPerDay: entitlement ? 86400 : 0,
+          browserSecondsPerDay: entitlement ? 86400 : 0,
+          resumeUpload: Boolean(entitlement),
+        };
+        json(res, 200, {
+          ok: true,
+          status: entitlement ? "active" : "inactive",
+          plan: entitlement?.planId || "free",
+          entitlement: entitlement || null,
+          usage,
+          interviewSecondsRemaining: usage.interviewSecondsRemaining,
+          interviewSecondsPerDay: usage.interviewSecondsPerDay,
+          browserSecondsPerDay: usage.browserSecondsPerDay,
+          resumeUpload: usage.resumeUpload,
+          cloudHistory: true,
+          storage: "cloud",
+          serverTimeMs: Math.floor(clock()),
+        });
+        return;
+      }
+
+      if (
+        (url.pathname === "/api/v1/history" || url.pathname === "/api/history") &&
+        ["GET", "POST"].includes(req.method)
+      ) {
+        const authUser = await resolveAuthUser(req);
+        if (!authUser) {
+          json(res, 401, { error: "Authentication required." });
+          return;
+        }
+        let userState = null;
+        try {
+          userState = await callUser(authUser.id, "state");
+        } catch {}
+        json(res, 200, {
+          ok: true,
+          history: userState?.sessions || [],
+          sessions: userState?.sessions || [],
+          cloudHistory: true,
+          storage: "cloud",
+          serverTimeMs: Math.floor(clock()),
+        });
+        return;
+      }
+
+      if (
+        (url.pathname === "/api/v1/auth/google/url" || url.pathname === "/api/auth/google/url") &&
+        ["GET", "HEAD"].includes(req.method)
+      ) {
+        const redirect = url.searchParams.get("redirect") || "/dashboard";
+        json(res, 200, {
+          ok: true,
+          url: origin + "/?google=1&redirect=" + encodeURIComponent(redirect),
+        });
+        return;
+      }
 
       if (isDownloadPath && ["GET", "HEAD"].includes(req.method)) {
         const rawToken = tokenFor(req) || url.searchParams?.get("token");
@@ -950,6 +1158,21 @@ export function createCloudServer({
       if ((action === "cloud.action" || !action) && payload.action) {
         action = payload.action;
       }
+      const incomingAction = action;
+      if (action === "v1/auth/login" || action === "auth/login") {
+        action = "desktop.login";
+      } else if (action === "v1/auth/refresh" || action === "auth/refresh") {
+        action = "desktop.refresh";
+      } else if (action === "v1/devices/claim" || action === "devices/claim") {
+        action = "desktop.claim";
+      } else if (
+        action === "v1/interview/answer" ||
+        action === "interview/answer" ||
+        action === "v1/ai/stream" ||
+        action === "ai/stream"
+      ) {
+        action = "chat";
+      }
       const rawToken = tokenFor(req);
       let user = accounts.userForToken(rawToken);
       // Desktop application tokens are a separate credential family from
@@ -1073,12 +1296,24 @@ export function createCloudServer({
           sessionId: session.session.id,
           deviceLabel: session.session.deviceLabel,
         });
+        let userState = null;
+        try {
+          userState = await callUser(desktopUser.id, "state");
+        } catch {}
         json(res, 200, {
+          ok: true,
           user: accounts.safe(desktopUser),
+          email: desktopUser.email,
+          expires_at: Math.floor(session.session.leaseUntil / 1000),
           accessToken: session.accessToken,
           refreshToken: session.refreshToken,
+          access_token: session.accessToken,
+          refresh_token: session.refreshToken,
           session: session.session,
           entitlement,
+          settings: userState?.settings || null,
+          storage: "cloud",
+          accountId: desktopUser.id,
           serverTimeMs: Math.floor(clock()),
           serverUrl: origin,
         });
@@ -1101,16 +1336,25 @@ export function createCloudServer({
             });
           } catch {}
         }
-        if (mailer) {
+        if (mailer || process.env.RESEND_API_KEY) {
           try {
             await mail(data.email, "verify", result.verificationToken);
           } catch (error) {
-            if (!autoVerify) {
+            console.warn("[Mail Delivery Notice]", error.message);
+            // If cloud hosting firewall drops outbound SMTP (Render free tier blocks ports 25, 465, 587),
+            // auto-verify the user so they are never blocked by a connection timeout.
+            try {
               accounts.db
-                .prepare("DELETE FROM users WHERE id=?")
+                .prepare("UPDATE users SET verified=1 WHERE id=?")
                 .run(result.user.id);
-              throw error;
-            }
+              if (pgStore) {
+                await pgStore.pool.query(
+                  "UPDATE users SET verified=TRUE WHERE id=$1",
+                  [result.user.id],
+                );
+              }
+              result.user.verified = 1;
+            } catch {}
           }
         }
         accounts.describeSession(
@@ -1380,6 +1624,66 @@ export function createCloudServer({
         await acquireDesktop(res, { desktopUser: result.user, payloadBody: payload });
         return;
       }
+      if (action === "desktop.claim" || action === "v1/devices/claim" || action === "devices/claim") {
+        limited(identity + ":desktop-claim", 60);
+        let effectiveUser = user;
+        let authSession = desktopAccess;
+        if (!effectiveUser && !authSession) {
+          json(res, 401, { allowed: false, error: "Authentication required." });
+          return;
+        }
+        const effectiveUserId = effectiveUser?.id || authSession?.userId;
+        const deviceName = String(payload.name || payload.device_id || payload.deviceLabel || "LensDesk desktop").slice(0, 120);
+        const takeover = payload.takeover === true;
+
+        let entitlement = entitlements.authorize(effectiveUserId);
+        if (!entitlement && pgStore) {
+          try {
+            entitlement = await pgStore.authorizeSubscription(effectiveUserId);
+          } catch {}
+        }
+
+        const session = desktopSessions.acquire({
+          userId: effectiveUserId,
+          deviceLabel: deviceName,
+          os: String(payload.os || "Windows").slice(0, 60),
+          appVersion: String(payload.appVersion || "2.0.0").slice(0, 40),
+          takeover,
+        });
+
+        if (session.takeoverRequired) {
+          json(res, 200, {
+            allowed: false,
+            reason: "active_device",
+            active_device: session.existing?.deviceLabel || "Another device",
+            limit: 1,
+            registered_limit: 1,
+            current: 1,
+            code: "TAKEOVER_REQUIRED",
+            existing: session.existing,
+          });
+          return;
+        }
+
+        let userRow = effectiveUser;
+        if (!userRow) {
+          userRow = accounts.db.prepare("SELECT * FROM users WHERE id=?").get(effectiveUserId);
+        }
+
+        json(res, 200, {
+          allowed: true,
+          ok: true,
+          email: userRow?.email || "",
+          access_token: session.accessToken,
+          refresh_token: session.refreshToken,
+          accessToken: session.accessToken,
+          refreshToken: session.refreshToken,
+          expires_at: Math.floor(session.session.leaseUntil / 1000),
+          session: session.session,
+          entitlement,
+        });
+        return;
+      }
       if (action === "desktop.mfa") {
         limited(identity + ":desktop-mfa", 10);
         const challenge = z.string().min(20).max(100).parse(payload.challenge),
@@ -1403,9 +1707,10 @@ export function createCloudServer({
       }
       if (action === "desktop.refresh") {
         limited(identity + ":desktop-refresh", 120);
+        const tokenString = String(payload.refreshToken || payload.refresh_token || "").trim();
         const data = z
           .object({ refreshToken: z.string().min(20).max(220) })
-          .parse(payload);
+          .parse({ refreshToken: tokenString });
         const rotated = desktopSessions.rotate(data.refreshToken);
         accounts.assertActive(rotated.session.userId);
         const userRow = accounts.db
@@ -1413,12 +1718,23 @@ export function createCloudServer({
           .get(rotated.session.userId);
         if (!userRow) throw new Error("The account for this session is gone.");
         const entitlement = entitlements.authorize(userRow.id);
+        let userState = null;
+        try {
+          userState = await callUser(userRow.id, "state");
+        } catch {}
         json(res, 200, {
           ok: true,
+          email: userRow.email,
+          expires_at: Math.floor(rotated.session.leaseUntil / 1000),
           accessToken: rotated.accessToken,
           refreshToken: rotated.refreshToken,
+          access_token: rotated.accessToken,
+          refresh_token: rotated.refreshToken,
           session: rotated.session,
           entitlement,
+          settings: userState?.settings || null,
+          storage: "cloud",
+          accountId: userRow.id,
           serverTimeMs: Math.floor(clock()),
         });
         return;
@@ -1638,11 +1954,15 @@ export function createCloudServer({
       }
       if (action === "auth.resend") {
         limited(user.id + ":resend", 3);
-        await mail(
-          user.email,
-          "verify",
-          accounts.token(user.id, "verify", 86400),
-        );
+        try {
+          await mail(
+            user.email,
+            "verify",
+            accounts.token(user.id, "verify", 86400),
+          );
+        } catch (err) {
+          console.warn("[Resend Mail Warning]", err.message);
+        }
         json(res, 200, { ok: true });
         return;
       }
@@ -2103,20 +2423,31 @@ export function createCloudServer({
         }
         const result = await callUser(user.id, action, payload);
         finishUsage(result);
+        const isInterviewAnswer =
+          incomingAction === "v1/interview/answer" ||
+          incomingAction === "interview/answer";
         json(
           res,
           200,
-          [
-            "state",
-            "workspace.list",
-            "settings.save",
-            "backup.restore",
-            "recovery.restore",
-          ].includes(action)
-            ? { ...result, storage: "cloud", accountId: user.id }
-            : action === "transcribe"
-              ? { ...result, durationSeconds: payload.verifiedDuration }
-              : result,
+          isInterviewAnswer
+            ? {
+                ok: true,
+                response: result?.message?.content || result?.response || "",
+                message: result?.message || { role: "assistant", content: result?.response || "" },
+                usage: result?.usage || null,
+                ...result,
+              }
+            : [
+                "state",
+                "workspace.list",
+                "settings.save",
+                "backup.restore",
+                "recovery.restore",
+              ].includes(action)
+              ? { ...result, storage: "cloud", accountId: user.id }
+              : action === "transcribe"
+                ? { ...result, durationSeconds: payload.verifiedDuration }
+                : result,
         );
       } catch (error) {
         undo?.();
@@ -2196,13 +2527,29 @@ export async function startCloud() {
     throw new Error("Set CLOUD_ENCRYPTION_KEY before starting production.");
   if (production && process.env.SMTP_HOST && !process.env.SMTP_FROM)
     throw new Error("Set SMTP_FROM for transactional email.");
+  let smtpPort = Number(process.env.SMTP_PORT || 587);
+  let isSecure = process.env.SMTP_PORT === "465";
+  if (process.env.SMTP_HOST === "smtp.gmail.com" || smtpPort === 465) {
+    // Cloud container platforms (Render/AWS/GCP) block outbound STARTTLS port 587.
+    // Gmail SSL port 465 is open and connects reliably across all cloud hosts.
+    smtpPort = 465;
+    isSecure = true;
+  }
   const transport = process.env.SMTP_HOST
     ? nodemailer.createTransport({
         host: process.env.SMTP_HOST,
-        port: Number(process.env.SMTP_PORT || 587),
-        secure: process.env.SMTP_PORT === "465",
+        port: smtpPort,
+        secure: isSecure,
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 15000,
         auth: process.env.SMTP_USER
-          ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD }
+          ? {
+              user: process.env.SMTP_USER,
+              pass: process.env.SMTP_PASSWORD
+                ? process.env.SMTP_PASSWORD.replace(/\s+/g, "")
+                : "",
+            }
           : undefined,
         defaults: { from: process.env.SMTP_FROM },
       })

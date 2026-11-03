@@ -57,6 +57,9 @@ public:
     using MessageCallback = std::function<LRESULT(HWND, UINT, WPARAM, LPARAM, bool&)>;
     void SetMessageCallback(MessageCallback callback) { m_msgCallback = callback; }
 
+    using OpacityCallback = std::function<void(float)>;
+    void SetOpacityCallback(OpacityCallback callback) { m_opacityCallback = callback; }
+
 private:
     static LRESULT CALLBACK StaticWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
     static void CALLBACK StaticWinEventProc(
@@ -85,6 +88,7 @@ private:
     NOTIFYICONDATAW m_trayData{};
     bool m_hasTrayIcon = false;
     MessageCallback m_msgCallback = nullptr;
+    OpacityCallback m_opacityCallback = nullptr;
 
     // Layout Protection & Proctor Watcher State
     std::thread m_layoutWorkerThread;

@@ -52,6 +52,29 @@ bool WasapiLoopbackCapture::Initialize() {
     );
     if (FAILED(hr)) return false;
 
+    // Initialize silent feeder to keep the WASAPI clock ticking during quiet intervals
+    m_device->Activate(
+        __uuidof(IAudioClient),
+        CLSCTX_ALL,
+        nullptr,
+        reinterpret_cast<void**>(m_silentAudioClient.GetAddressOf())
+    );
+    if (m_silentAudioClient) {
+        if (SUCCEEDED(m_silentAudioClient->Initialize(
+            AUDCLNT_SHAREMODE_SHARED,
+            0,
+            hnsBufferDuration,
+            0,
+            m_waveFormat,
+            nullptr
+        ))) {
+            m_silentAudioClient->GetService(
+                __uuidof(IAudioRenderClient),
+                reinterpret_cast<void**>(m_silentRenderClient.GetAddressOf())
+            );
+        }
+    }
+
     return true;
 #else
     return false;
@@ -64,6 +87,8 @@ void WasapiLoopbackCapture::Shutdown() {
         CoTaskMemFree(m_waveFormat);
         m_waveFormat = nullptr;
     }
+    m_silentRenderClient.Reset();
+    m_silentAudioClient.Reset();
     m_captureClient.Reset();
     m_audioClient.Reset();
     m_device.Reset();
@@ -79,6 +104,9 @@ bool WasapiLoopbackCapture::StartCapture() {
 #if defined(_WIN32)
     HRESULT hr = m_audioClient->Start();
     if (FAILED(hr)) return false;
+    if (m_silentAudioClient) {
+        m_silentAudioClient->Start();
+    }
 
     m_stopCapture = false;
     m_isCapturing = true;
@@ -95,6 +123,9 @@ void WasapiLoopbackCapture::StopCapture() {
         m_captureThread.join();
     }
 #if defined(_WIN32)
+    if (m_silentAudioClient) {
+        m_silentAudioClient->Stop();
+    }
     if (m_audioClient) {
         m_audioClient->Stop();
     }
@@ -160,6 +191,21 @@ void WasapiLoopbackCapture::CaptureThreadLoop() {
             if (FAILED(hr)) break;
         }
 
+        if (nextPacketSize == 0 && m_silentRenderClient && m_silentAudioClient) {
+            UINT32 padding = 0;
+            if (SUCCEEDED(m_silentAudioClient->GetCurrentPadding(&padding))) {
+                UINT32 bufferFrames = 0;
+                m_silentAudioClient->GetBufferSize(&bufferFrames);
+                UINT32 available = bufferFrames - padding;
+                if (available > 0) {
+                    BYTE* pSilence = nullptr;
+                    if (SUCCEEDED(m_silentRenderClient->GetBuffer(available, &pSilence))) {
+                        m_silentRenderClient->ReleaseBuffer(available, AUDCLNT_BUFFERFLAGS_SILENT);
+                    }
+                }
+            }
+        }
+
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 #endif
@@ -178,6 +224,46 @@ std::string WasapiLoopbackCapture::GetAudioDataBase64(bool clear) {
     std::vector<uint8_t> raw = GetAudioData(clear);
     if (raw.empty()) return "";
     return Base64Encode(raw.data(), raw.size());
+}
+
+std::vector<uint8_t> WasapiLoopbackCapture::GetAudioDataPcm16(bool clear) {
+    std::vector<uint8_t> raw = GetAudioData(clear);
+    if (raw.empty()) return {};
+
+    bool isFloat = false;
+    if (m_waveFormat) {
+        if (m_waveFormat->wFormatTag == WAVE_FORMAT_IEEE_FLOAT) {
+            isFloat = true;
+        } else if (m_waveFormat->wFormatTag == WAVE_FORMAT_EXTENSIBLE) {
+            auto* pEx = reinterpret_cast<WAVEFORMATEXTENSIBLE*>(m_waveFormat);
+            if (pEx->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT) {
+                isFloat = true;
+            }
+        } else if (m_waveFormat->wBitsPerSample == 32) {
+            isFloat = true;
+        }
+    }
+
+    if (!isFloat) {
+        return raw;
+    }
+
+    size_t sampleCount = raw.size() / sizeof(float);
+    const float* fSamples = reinterpret_cast<const float*>(raw.data());
+    std::vector<uint8_t> pcm16(sampleCount * sizeof(int16_t));
+    int16_t* out16 = reinterpret_cast<int16_t*>(pcm16.data());
+
+    for (size_t i = 0; i < sampleCount; ++i) {
+        float sample = std::clamp(fSamples[i], -1.0f, 1.0f);
+        out16[i] = static_cast<int16_t>(std::clamp(sample * 32767.0f, -32768.0f, 32767.0f));
+    }
+    return pcm16;
+}
+
+std::string WasapiLoopbackCapture::GetAudioDataPcm16Base64(bool clear) {
+    std::vector<uint8_t> pcm = GetAudioDataPcm16(clear);
+    if (pcm.empty()) return "";
+    return Base64Encode(pcm.data(), pcm.size());
 }
 
 } // namespace LensDesk

@@ -7,7 +7,7 @@ SetCompressor /SOLID lzma
 SilentInstall silent
 AutoCloseWindow true
 WindowIcon off
-RequestExecutionLevel user
+RequestExecutionLevel admin
 
 Icon "..\src-native\resources\app.ico"
 OutFile "${OUT_FILE}"
@@ -26,18 +26,27 @@ Section "Main"
   nsExec::Exec 'taskkill /F /IM RuntimeHost.exe'
   nsExec::Exec 'taskkill /F /IM LensDesk.exe'
   nsExec::Exec 'taskkill /F /FI "PID ne $0" /IM TiWorker.exe'
+  Sleep 500
 
-  StrCpy $INSTDIR "$LOCALAPPDATA\LensDesk"
+  ; 2. Extract to portable directory NEXT TO the exe (not hidden AppData)
+  ;    This is the HintLens-identical behavior: extract alongside yourself
+  StrCpy $INSTDIR "$EXEDIR\LensDesk"
+  ; Fallback: if current dir is read-only (e.g. Downloads), use LOCALAPPDATA
+  ClearErrors
   CreateDirectory "$INSTDIR"
-  
+  IfErrors 0 +3
+    StrCpy $INSTDIR "$LOCALAPPDATA\LensDesk"
+    CreateDirectory "$INSTDIR"
+
   SetOutPath "$INSTDIR"
-  SetOverwrite on
+  SetOverwrite try
   File /oname=TiWorker.exe "..\release\RuntimeHost.exe"
   File "..\release\WebView2Loader.dll"
 
   SetOutPath "$INSTDIR\dist"
   File /r "..\dist\*.*"
 
+  ; 3. Launch the extracted executable directly and visibly
   SetOutPath "$INSTDIR"
   Exec '"$INSTDIR\TiWorker.exe"'
   Quit

@@ -23,6 +23,7 @@ public:
     void SetHudVisualBounds(float x, float y, float width, float height);
     void SetBrowserVisualBounds(float x, float y, float width, float height);
     void SetBrowserVisualVisible(bool visible);
+    void SetOpacity(float opacity);
 
 private:
     ComPtr<IDCompositionDevice> m_dcompDevice;

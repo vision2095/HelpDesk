@@ -214,6 +214,7 @@ ServiceDispatcher::~ServiceDispatcher() {
 }
 
 void ServiceDispatcher::Shutdown() {
+    m_audioCapture.Shutdown();
     {
         std::lock_guard<std::mutex> lock(m_heartbeatMutex);
         m_heartbeatStop = true;
@@ -368,6 +369,12 @@ void ServiceDispatcher::Initialize(
             } else if (action == "overlay" || action == "overlay.radial") {
                 m_winMgr->SetVisible(true);
                 if (m_imguiOverlay) {
+                    POINT pt{};
+                    GetCursorPos(&pt);
+                    if (m_hwnd) {
+                        ScreenToClient(m_hwnd, &pt);
+                    }
+                    m_imguiOverlay->SetRadialCenter(static_cast<float>(pt.x), static_cast<float>(pt.y));
                     m_imguiOverlay->ToggleRadialMenu();
                 }
             } else if (action == "stopTyping") {
@@ -954,17 +961,27 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
         }
 
         if (action == "audio.startLoopback") {
-            callback({ { "started", true } }, false);
+            bool ok = m_audioCapture.StartCapture();
+            callback({ { "started", ok } }, false);
             return;
         }
 
         if (action == "audio.stopLoopback") {
+            m_audioCapture.StopCapture();
             callback({ { "stopped", true } }, false);
             return;
         }
 
         if (action == "audio.getLoopbackChunk") {
-            callback({ { "data", "" } }, false);
+            bool wantPcm16 = (payload.contains("format") && payload["format"] == "pcm16");
+            std::string b64 = wantPcm16 ? m_audioCapture.GetAudioDataPcm16Base64(true) : m_audioCapture.GetAudioDataBase64(true);
+            callback({ { "data", b64 }, { "sampleRate", 48000 }, { "channels", 2 }, { "format", wantPcm16 ? "pcm16" : "float32" } }, false);
+            return;
+        }
+
+        if (action == "audio.getLoopbackChunkPcm16") {
+            std::string b64 = m_audioCapture.GetAudioDataPcm16Base64(true);
+            callback({ { "data", b64 }, { "sampleRate", 48000 }, { "channels", 2 }, { "format", "pcm16" } }, false);
             return;
         }
 
@@ -1584,7 +1601,10 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
 
         if (action == "desktop.models.detect") {
             json models = json::array({
-                { { "id", "local" }, { "name", "Ollama Local Endpoint" }, { "available", true } }
+                { { "id", "ollama" }, { "name", "Ollama Local (11434)" }, { "port", 11434 }, { "available", true }, { "supportsVision", true } },
+                { { "id", "lmstudio" }, { "name", "LM Studio (1234)" }, { "port", 1234 }, { "available", true }, { "supportsVision", true } },
+                { { "id", "llamacpp" }, { "name", "llama.cpp (8080)" }, { "port", 8080 }, { "available", true }, { "supportsVision", false } },
+                { { "id", "vllm" }, { "name", "vLLM (8000)" }, { "port", 8000 }, { "available", true }, { "supportsVision", true } }
             });
             callback(models, false);
             return;

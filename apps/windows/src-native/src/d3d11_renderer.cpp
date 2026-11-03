@@ -9,6 +9,7 @@ D3D11Renderer::~D3D11Renderer() {
 }
 
 bool D3D11Renderer::Initialize(HWND hwnd, int width, int height) {
+    m_hwnd = hwnd;
     m_width = width;
     m_height = height;
 
@@ -193,7 +194,18 @@ void D3D11Renderer::BeginFrame() {
 
 void D3D11Renderer::EndFrame() {
     if (m_swapChain) {
-        m_swapChain->Present(1, 0);
+        HRESULT hr = m_swapChain->Present(1, 0);
+        if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET) {
+            // Recreate device and swap chain after sleep/wake or GPU reset
+            CleanupRenderTarget();
+            m_blendState.Reset();
+            m_swapChain.Reset();
+            m_context.Reset();
+            m_device.Reset();
+            if (m_hwnd && m_width > 0 && m_height > 0) {
+                Initialize(m_hwnd, m_width, m_height);
+            }
+        }
     }
 }
 

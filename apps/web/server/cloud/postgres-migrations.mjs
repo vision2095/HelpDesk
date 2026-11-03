@@ -335,27 +335,47 @@ export async function importFromSqlite(pool, sqliteDir) {
     try {
       const users = sqliteDb.prepare("SELECT * FROM users").all();
       for (const u of users) {
-        await client.query(
-          `INSERT INTO users (id, email, name, password, verified, created_at, stripe_customer, subscription_status, subscription_id, subscription_expires)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-           ON CONFLICT (id) DO UPDATE SET
-             email = EXCLUDED.email,
-             name = EXCLUDED.name,
-             password = EXCLUDED.password,
-             verified = EXCLUDED.verified`,
-          [
-            u.id,
-            u.email,
-            u.name,
-            u.password,
-            Boolean(u.verified),
-            u.created_at || new Date().toISOString(),
-            u.stripe_customer || null,
-            u.subscription_status || "free",
-            u.subscription_id || null,
-            u.subscription_expires || 0,
-          ]
+        const existing = await client.query(
+          "SELECT id FROM users WHERE email = $1 OR id = $2 LIMIT 1",
+          [u.email, u.id]
         );
+        if (existing.rows.length > 0) {
+          await client.query(
+            `UPDATE users SET
+              name = COALESCE($1, name),
+              password = COALESCE($2, password),
+              verified = COALESCE($3, verified),
+              subscription_status = COALESCE($4, subscription_status),
+              subscription_expires = COALESCE($5, subscription_expires)
+            WHERE id = $6`,
+            [
+              u.name,
+              u.password,
+              Boolean(u.verified),
+              u.subscription_status || "free",
+              u.subscription_expires || 0,
+              existing.rows[0].id,
+            ]
+          );
+        } else {
+          await client.query(
+            `INSERT INTO users (id, email, name, password, verified, created_at, stripe_customer, subscription_status, subscription_id, subscription_expires)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+             ON CONFLICT DO NOTHING`,
+            [
+              u.id,
+              u.email,
+              u.name,
+              u.password,
+              Boolean(u.verified),
+              u.created_at || new Date().toISOString(),
+              u.stripe_customer || null,
+              u.subscription_status || "free",
+              u.subscription_id || null,
+              u.subscription_expires || 0,
+            ]
+          );
+        }
       }
       if (users.length) console.log(`[SQLite Import] Imported ${users.length} users into PostgreSQL.`);
     } catch (err) {
@@ -418,6 +438,9 @@ export async function importFromSqlite(pool, sqliteDir) {
     await client.query("ROLLBACK");
     console.error("[SQLite Import Failed]", err.message);
   } finally {
+    try {
+      sqliteDb.exec("PRAGMA foreign_keys = ON;");
+    } catch {}
     client.release();
     try {
       sqliteDb.close();
@@ -439,6 +462,10 @@ export async function syncFromPostgresToSqlite(pool, sqliteDir) {
 
   const client = await pool.connect();
   try {
+    try {
+      sqliteDb.exec("PRAGMA foreign_keys = OFF;");
+    } catch {}
+
     // 1. Sync Users from Postgres into SQLite
     try {
       const usersRes = await client.query("SELECT * FROM users");
@@ -454,18 +481,42 @@ export async function syncFromPostgresToSqlite(pool, sqliteDir) {
           subscription_expires = excluded.subscription_expires
       `);
       for (const u of usersRes.rows) {
-        insertUser.run(
-          u.id,
-          u.email,
-          u.name || "",
-          u.password,
-          u.verified ? 1 : 0,
-          u.created_at ? new Date(u.created_at).toISOString() : new Date().toISOString(),
-          u.stripe_customer || null,
-          u.subscription_status || "free",
-          u.subscription_id || null,
-          Number(u.subscription_expires || 0)
-        );
+        const existing = sqliteDb.prepare("SELECT id FROM users WHERE email = ? OR id = ? LIMIT 1").get(u.email, u.id);
+        if (existing) {
+          sqliteDb.prepare(`
+            UPDATE users SET
+              id = ?,
+              email = ?,
+              name = ?,
+              password = ?,
+              verified = ?,
+              subscription_status = ?,
+              subscription_expires = ?
+            WHERE id = ?
+          `).run(
+            u.id,
+            u.email,
+            u.name || "",
+            u.password,
+            u.verified ? 1 : 0,
+            u.subscription_status || "free",
+            Number(u.subscription_expires || 0),
+            existing.id
+          );
+        } else {
+          insertUser.run(
+            u.id,
+            u.email,
+            u.name || "",
+            u.password,
+            u.verified ? 1 : 0,
+            u.created_at ? new Date(u.created_at).toISOString() : new Date().toISOString(),
+            u.stripe_customer || null,
+            u.subscription_status || "free",
+            u.subscription_id || null,
+            Number(u.subscription_expires || 0)
+          );
+        }
       }
       if (usersRes.rows.length) {
         console.log(`[Postgres->SQLite Sync] Synced ${usersRes.rows.length} users into SQLite.`);
@@ -553,6 +604,9 @@ export async function syncFromPostgresToSqlite(pool, sqliteDir) {
   } catch (err) {
     console.error("[Postgres->SQLite Sync Failed]", err.message);
   } finally {
+    try {
+      sqliteDb.exec("PRAGMA foreign_keys = ON;");
+    } catch {}
     client.release();
     try {
       sqliteDb.close();
