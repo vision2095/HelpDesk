@@ -884,6 +884,22 @@ test("HintLens REST API parity endpoints (/api/v1/version/check, /api/v1/billing
   assert.equal(versionBody.ok, true);
   assert.equal(typeof versionBody.downloadUrl, "string");
 
+  // 1b. Native updater endpoint returns a bounded manifest and version fields
+  const updateRes = await fetch(
+    f.url + "/api/v1/updates/check?platform=windows&v=2.0.0",
+  );
+  assert.equal(updateRes.status, 200);
+  const updateBody = await updateRes.json();
+  assert.equal(updateBody.ok, true);
+  assert.equal(updateBody.platform, "windows");
+  assert.equal(updateBody.currentVersion, "2.0.0");
+  assert.equal(typeof updateBody.latestVersion, "string");
+  assert.equal(typeof updateBody.updateAvailable, "boolean");
+  if (updateBody.artifact) {
+    assert.equal(typeof updateBody.artifact.url, "string");
+    assert.match(updateBody.artifact.sha256, /^[a-f0-9]{64}$/);
+  }
+
   // 2. Google OAuth URL endpoint
   const googleRes = await fetch(f.url + "/api/v1/auth/google/url?redirect=/interview");
   assert.equal(googleRes.status, 200);

@@ -46,6 +46,14 @@ jobs:
         run: |
           cmake --build build-native --config Release --verbose --target RuntimeHost
 
+      - name: Configure Nested Windows Workspace Host (W-08)
+        run: |
+          cmake -S apps/windows/src-native -B build-native-apps -A x64 -DCMAKE_BUILD_TYPE=Release
+
+      - name: Compile Nested Windows Workspace Host (W-08)
+        run: |
+          cmake --build build-native-apps --config Release --verbose --target RuntimeHost
+
       - name: Verify PE Binary Architecture (Zero Electron Audit)
         run: |
           node scripts/verify-native-binary.mjs build-native/bin/Release/RuntimeHost.exe
