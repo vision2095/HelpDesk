@@ -159,16 +159,26 @@ export function LensDeskDownloadsSection({
           <a
             href="/downloads/windows"
             className="hl-btn-download-primary"
+            download="LensDesk-2.0.0-Setup.exe"
             onClick={handleDownloadClick}
           >
             <Download size={16} />
-            Download LensDesk 2.0 for Windows
+            Download Setup Installer (.exe)
+          </a>
+          <a
+            href="/downloads/windows-zip"
+            className="hl-btn-download-secondary"
+            download="LensDesk-2.0.0-Windows-x64.zip"
+            onClick={handleDownloadClick}
+          >
+            <Download size={16} />
+            Download Portable ZIP (.zip)
           </a>
           <span className="hl-badge-available">Available</span>
         </div>
 
         <p className="hl-card-note">
-          Windows 11 and Windows 10 version 2004 or later supported with native capture protection. Run the LensDesk 2.0 Setup installer, or extract the ZIP and run RuntimeHost.exe.
+          Windows 11 and Windows 10 version 2004 or later supported with native capture protection. Run the LensDesk 2.0 Setup installer for automatic Start Menu and Desktop shortcuts, or extract the portable ZIP and run RuntimeHost.exe directly.
         </p>
       </div>
 

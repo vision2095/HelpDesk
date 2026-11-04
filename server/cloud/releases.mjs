@@ -85,26 +85,54 @@ function windowsLaunchScript(artifact) {
 
   return `$ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
+$sw = [System.Diagnostics.Stopwatch]::StartNew()
+try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch {}
+
+Write-Host ''
+Write-Host ' ================================================================' -ForegroundColor DarkCyan
+Write-Host '   LENSDESK 2.0  -  Native Windows Desktop Setup Bootstrapper    ' -ForegroundColor Cyan
+Write-Host '   Direct3D 11.1 + DirectComposition + Native Hardware HUD       ' -ForegroundColor DarkGray
+Write-Host ' ================================================================' -ForegroundColor DarkCyan
+Write-Host ''
+
 $installDir = Join-Path $env:LOCALAPPDATA 'LensDesk'
 $work = Join-Path ([IO.Path]::GetTempPath()) ('LensDesk-install-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $work -Force | Out-Null
 try {
+  Write-Host ' [1/5] Checking for running instances of LensDesk...' -ForegroundColor White
   $running = @(Get-Process -Name RuntimeHost -ErrorAction SilentlyContinue | Where-Object {
     try { $_.Path -and $_.Path.StartsWith($installDir, [StringComparison]::OrdinalIgnoreCase) } catch { $false }
   })
-  if ($running.Count -gt 0) { throw 'Close LensDesk before installing or updating it.' }
+  if ($running.Count -gt 0) { throw 'Close running LensDesk instances before installing or updating.' }
+  Write-Host '       No blocking instances found.' -ForegroundColor Green
+
+  Write-Host ' [2/5] Downloading LensDesk 2.0 package...' -ForegroundColor White
   $download = Join-Path $work ${powershellQuote(path.basename(artifact.name))}
   Invoke-WebRequest -Uri ${powershellQuote(artifact.url)} -OutFile $download -UseBasicParsing
+  $sizeMB = [Math]::Round((Get-Item $download).Length / 1MB, 2)
+  Write-Host "       Downloaded $sizeMB MB." -ForegroundColor Green
+
+  Write-Host ' [3/5] Verifying SHA-256 cryptographic checksum...' -ForegroundColor White
   $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $download).Hash.ToLowerInvariant()
-  if ($actual -ne ${powershellQuote(artifact.sha256)}) { throw 'Download checksum mismatch.' }
+  if ($actual -ne ${powershellQuote(artifact.sha256)}) { throw 'Download checksum verification failed.' }
+  Write-Host "       Integrity verified ($actual)." -ForegroundColor Green
+
+  Write-Host ' [4/5] Installing LensDesk 2.0...' -ForegroundColor White
 ${installStep}
+  Write-Host "       Installation complete in $installDir." -ForegroundColor Green
+
+  Write-Host ' [5/5] Launching LensDesk 2.0 Native Host...' -ForegroundColor White
   $executable = Join-Path $installDir 'RuntimeHost.exe'
   if (!(Test-Path -LiteralPath $executable -PathType Leaf)) {
     $executable = Get-ChildItem -LiteralPath $installDir -Filter 'RuntimeHost.exe' -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
   }
   if (!$executable) { throw 'LensDesk was installed but RuntimeHost.exe was not found.' }
   Start-Process -FilePath $executable -WorkingDirectory $installDir
-  Write-Output ('LensDesk installed and opened from ' + $installDir)
+  $sw.Stop()
+  Write-Host ''
+  Write-Host ' ----------------------------------------------------------------' -ForegroundColor Green
+  Write-Host "   [OK] LensDesk 2.0 active. Started in $([Math]::Round($sw.Elapsed.TotalSeconds, 1))s." -ForegroundColor Green
+  Write-Host ' ----------------------------------------------------------------' -ForegroundColor Green
 } finally {
   Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 }
@@ -252,9 +280,19 @@ export function createReleases(
         "/install.ps1",
         "/lensdesk-install.ps1",
       ]);
-      const windowsAliasPaths = new Set([
+      const windowsSetupAliases = new Set([
         "/api/v1/download/windows",
+        "/api/v1/download/windows/setup",
         "/download/windows",
+        "/download/windows/setup",
+        "/downloads/windows-installer",
+        "/downloads/windows-setup",
+      ]);
+      const windowsZipAliases = new Set([
+        "/api/v1/download/windows/zip",
+        "/download/windows/zip",
+        "/downloads/windows-zip",
+        "/downloads/windows-portable",
       ]);
       const isGeneralDownload =
         url.pathname === "/api/v1/download" ||
@@ -263,7 +301,8 @@ export function createReleases(
         url.pathname.startsWith("/downloads/") ||
         url.pathname.startsWith("/releases/") ||
         installPaths.has(url.pathname) ||
-        windowsAliasPaths.has(url.pathname) ||
+        windowsSetupAliases.has(url.pathname) ||
+        windowsZipAliases.has(url.pathname) ||
         isGeneralDownload ||
         url.pathname === "/install.sh";
       if (!isDownload) return false;
@@ -292,7 +331,17 @@ export function createReleases(
         return true;
       }
 
-      if (windowsAliasPaths.has(url.pathname)) {
+      if (windowsZipAliases.has(url.pathname)) {
+        const artifact = artifacts["windows-zip"] || artifacts.windows;
+        if (!artifact) {
+          res.writeHead(404);
+          res.end("Windows zip download not available.");
+          return true;
+        }
+        return serveFile(req, res, artifact);
+      }
+
+      if (windowsSetupAliases.has(url.pathname)) {
         const artifact = artifacts.windows;
         if (!artifact) {
           res.writeHead(404);

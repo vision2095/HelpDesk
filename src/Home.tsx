@@ -48,8 +48,14 @@ const BUILDS = [
   {
     key: "windows",
     platform: "Windows",
-    variant: "64-bit",
-    detail: "Windows 10 & 11 · ZIP",
+    variant: "Setup Installer",
+    detail: "Windows 10 & 11 · 64-bit EXE",
+  },
+  {
+    key: "windows-zip",
+    platform: "Windows",
+    variant: "Portable ZIP",
+    detail: "Windows 10 & 11 · 64-bit ZIP",
   },
 ] as const;
 
@@ -119,13 +125,25 @@ export function Home({ navigate }: HomeProps) {
     {
       key: "windows",
       platform: "Windows",
-      variant: "Portable ZIP (Recommended)",
-      detail: "Windows 10 & 11 · 64-bit ZIP",
+      variant: "Setup Installer (Recommended)",
+      detail: "Windows 10 & 11 · 64-bit EXE",
       artifact: {
-        name: "LensDesk.zip",
+        name: "LensDesk-2.0.0-Setup.exe",
         url: "/downloads/windows",
         version: "2.0.0",
-        size: 1136372,
+        size: 1579777,
+      },
+    },
+    {
+      key: "windows-zip",
+      platform: "Windows",
+      variant: "Portable ZIP",
+      detail: "Windows 10 & 11 · 64-bit ZIP",
+      artifact: {
+        name: "LensDesk-2.0.0-Windows-x64.zip",
+        url: "/downloads/windows-zip",
+        version: "2.0.0",
+        size: 1559451,
       },
     },
     {
@@ -341,11 +359,11 @@ export function Home({ navigate }: HomeProps) {
                 <a
                   className="site-button site-button-primary"
                   href="/downloads/windows"
-                  download="LensDesk.zip"
+                  download="LensDesk-2.0.0-Setup.exe"
                   onClick={handleDownloadClick}
                 >
                   <Download size={16} />
-                  Download for Windows (.ZIP)
+                  Download for Windows
                 </a>
                 <a
                   className="site-button site-button-primary"
@@ -923,7 +941,7 @@ export function Home({ navigate }: HomeProps) {
                         <article className="site-download-card" key={build.key}>
                           <div className="site-download-card-top">
                             <span>
-                              {build.key === "windows" ? (
+                              {build.key.startsWith("windows") ? (
                                 <Laptop size={19} />
                               ) : (
                                 <Aperture size={19} />
@@ -950,7 +968,9 @@ export function Home({ navigate }: HomeProps) {
                           >
                             <Download size={15} />
                             Download{" "}
-                            {build.key.startsWith("windows")
+                            {build.key === "windows"
+                              ? "Setup (.exe)"
+                              : build.key === "windows-zip"
                               ? "ZIP (.zip)"
                               : "DMG"}
                           </a>
@@ -959,9 +979,8 @@ export function Home({ navigate }: HomeProps) {
                     </div>
                     <p className="site-download-note">
                       On macOS, open the DMG and move LensDesk to Applications.
-                      On Windows, extract the entire ZIP before launching.
-                      Permission prompts are expected for screen capture, audio
-                      and auto-type.
+                      On Windows, run the Setup installer or extract the portable ZIP.
+                      Hardware-accelerated screen capture and audio HUD activate automatically.
                     </p>
                   </>
                 ) : (
