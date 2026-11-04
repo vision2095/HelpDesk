@@ -898,6 +898,64 @@ export function createPostgresStore({
     return true;
   }
 
+  async function saveWorkspaceBackup(userId, backupData) {
+    if (!userId) throw withCode("User ID is required.", "INVALID_INPUT");
+    const now = nowMs();
+    await pool.query(
+      `INSERT INTO user_workspaces (user_id, backup_data, revision, created_at, updated_at)
+       VALUES ($1, $2, 1, $3, $3)
+       ON CONFLICT (user_id) DO UPDATE SET
+         backup_data = EXCLUDED.backup_data,
+         revision = user_workspaces.revision + 1,
+         updated_at = EXCLUDED.updated_at`,
+      [userId, JSON.stringify(backupData), now]
+    );
+    await audit(userId, "workspace.backup_saved");
+    return true;
+  }
+
+  async function getWorkspaceBackup(userId) {
+    if (!userId) throw withCode("User ID is required.", "INVALID_INPUT");
+    const res = await pool.query(
+      "SELECT backup_data, revision, updated_at FROM user_workspaces WHERE user_id = $1",
+      [userId]
+    );
+    if (!res.rows || res.rows.length === 0) return null;
+    const row = res.rows[0];
+    const data = typeof row.backup_data === "string" ? JSON.parse(row.backup_data) : row.backup_data;
+    return {
+      backup: data,
+      revision: row.revision,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  async function saveUserSettings(userId, settings) {
+    if (!userId) throw withCode("User ID is required.", "INVALID_INPUT");
+    const now = nowMs();
+    await pool.query(
+      `INSERT INTO user_settings (user_id, settings, updated_at)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (user_id) DO UPDATE SET
+         settings = EXCLUDED.settings,
+         updated_at = EXCLUDED.updated_at`,
+      [userId, JSON.stringify(settings), now]
+    );
+    await audit(userId, "settings.saved");
+    return true;
+  }
+
+  async function getUserSettings(userId) {
+    if (!userId) throw withCode("User ID is required.", "INVALID_INPUT");
+    const res = await pool.query(
+      "SELECT settings, updated_at FROM user_settings WHERE user_id = $1",
+      [userId]
+    );
+    if (!res.rows || res.rows.length === 0) return null;
+    const row = res.rows[0];
+    return typeof row.settings === "string" ? JSON.parse(row.settings) : row.settings;
+  }
+
   return {
     pool,
     safeUser,
@@ -922,6 +980,10 @@ export function createPostgresStore({
     grantSubscription,
     requestPasswordReset,
     resetPasswordWithToken,
+    saveWorkspaceBackup,
+    getWorkspaceBackup,
+    saveUserSettings,
+    getUserSettings,
     userForToken,
     createSession,
   };

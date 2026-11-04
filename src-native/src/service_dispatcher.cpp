@@ -264,6 +264,168 @@ HttpReply HttpPostJson(
     return reply;
 }
 
+HttpReply HttpStreamJson(
+    const std::string& url,
+    const json& payload,
+    const std::string& bearer,
+    const std::string& extraHeaders,
+    std::function<void(const std::string& chunk)> onDelta,
+    std::function<bool()> isCancelled = nullptr,
+    int timeoutMs = 90000
+) {
+    HttpReply reply;
+    std::wstring wideUrl = Utf8ToWide(url);
+    URL_COMPONENTS components{};
+    components.dwStructSize = sizeof(components);
+    components.dwSchemeLength = static_cast<DWORD>(-1);
+    components.dwHostNameLength = static_cast<DWORD>(-1);
+    components.dwUrlPathLength = static_cast<DWORD>(-1);
+    components.dwExtraInfoLength = static_cast<DWORD>(-1);
+    if (!WinHttpCrackUrl(wideUrl.c_str(), static_cast<DWORD>(wideUrl.size()), 0, &components)) {
+        reply.networkError = true;
+        reply.error = "The provider endpoint is invalid.";
+        return reply;
+    }
+    const std::wstring host(components.lpszHostName, components.dwHostNameLength);
+    std::wstring path(components.lpszUrlPath, components.dwUrlPathLength);
+    if (path.empty()) path = L"/";
+    if (components.dwExtraInfoLength > 0) {
+        path.append(components.lpszExtraInfo, components.dwExtraInfoLength);
+    }
+    const bool secure = components.nScheme == INTERNET_SCHEME_HTTPS;
+
+    HINTERNET session = WinHttpOpen(L"LensDesk/2.0 (Windows Native)", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+                                    WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (!session) {
+        reply.networkError = true;
+        reply.error = "Could not initialize the network client.";
+        return reply;
+    }
+    WinHttpSetTimeouts(session, 5000, 5000, timeoutMs, timeoutMs);
+    HINTERNET connection = WinHttpConnect(session, host.c_str(), components.nPort, 0);
+    if (!connection) {
+        reply.networkError = true;
+        reply.error = "Could not connect to the provider.";
+        WinHttpCloseHandle(session);
+        return reply;
+    }
+    HINTERNET request = WinHttpOpenRequest(connection, L"POST", path.c_str(), nullptr,
+                                           WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
+                                           secure ? WINHTTP_FLAG_SECURE : 0);
+    if (!request) {
+        reply.networkError = true;
+        reply.error = "Could not create the provider request.";
+        WinHttpCloseHandle(connection);
+        WinHttpCloseHandle(session);
+        return reply;
+    }
+    std::wstring headers =
+        L"Content-Type: application/json\r\n"
+        L"Accept: text/event-stream, application/json\r\n";
+    if (!bearer.empty()) {
+        headers += L"Authorization: Bearer " + Utf8ToWide(bearer) + L"\r\n";
+    }
+    if (!extraHeaders.empty()) {
+        headers += Utf8ToWide(extraHeaders);
+    }
+    const std::string body = payload.dump();
+    BOOL sent = WinHttpSendRequest(request, headers.c_str(), static_cast<DWORD>(-1L),
+                                   const_cast<char*>(body.data()), static_cast<DWORD>(body.size()),
+                                   static_cast<DWORD>(body.size()), 0);
+    if (!sent || !WinHttpReceiveResponse(request, nullptr)) {
+        reply.networkError = true;
+        reply.error = "Could not reach the AI provider. Check your connection.";
+        WinHttpCloseHandle(request);
+        WinHttpCloseHandle(connection);
+        WinHttpCloseHandle(session);
+        return reply;
+    }
+    DWORD status = 0;
+    DWORD statusSize = sizeof(status);
+    WinHttpQueryHeaders(request, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+                        WINHTTP_HEADER_NAME_BY_INDEX, &status, &statusSize, WINHTTP_NO_HEADER_INDEX);
+    reply.status = static_cast<int>(status);
+
+    if (reply.status < 200 || reply.status >= 300) {
+        char errBuf[4096]{};
+        DWORD errRead = 0;
+        if (WinHttpReadData(request, errBuf, sizeof(errBuf) - 1, &errRead) && errRead > 0) {
+            reply.text.assign(errBuf, errRead);
+            try { reply.body = json::parse(reply.text); } catch (...) {}
+        }
+        if (reply.status == 401) reply.error = "Invalid API key or unauthorized access for this provider.";
+        else if (reply.status == 429) reply.error = "Rate limit or quota exceeded for this provider.";
+        else if (reply.status == 403) reply.error = "Access forbidden. Check your provider permissions.";
+        else reply.error = "Provider error HTTP " + std::to_string(reply.status);
+        WinHttpCloseHandle(request);
+        WinHttpCloseHandle(connection);
+        WinHttpCloseHandle(session);
+        return reply;
+    }
+
+    char buffer[4096]{};
+    DWORD read = 0;
+    std::string lineBuffer;
+    while (WinHttpReadData(request, buffer, sizeof(buffer) - 1, &read) && read > 0) {
+        if (isCancelled && isCancelled()) {
+            reply.error = "Request cancelled.";
+            break;
+        }
+        lineBuffer.append(buffer, read);
+        size_t newlinePos = 0;
+        while ((newlinePos = lineBuffer.find('\n')) != std::string::npos) {
+            std::string line = lineBuffer.substr(0, newlinePos);
+            lineBuffer.erase(0, newlinePos + 1);
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+
+            if (line.rfind("data: ", 0) == 0) {
+                std::string dataStr = line.substr(6);
+                if (dataStr == "[DONE]") continue;
+                try {
+                    json dataJson = json::parse(dataStr);
+                    std::string deltaText;
+                    if (dataJson.contains("choices") && dataJson["choices"].is_array() && !dataJson["choices"].empty()) {
+                        const auto& choice = dataJson["choices"][0];
+                        if (choice.contains("delta") && choice["delta"].contains("content")) {
+                            deltaText = choice["delta"]["content"].get<std::string>();
+                        } else if (choice.contains("text")) {
+                            deltaText = choice["text"].get<std::string>();
+                        }
+                    } else if (dataJson.contains("type") && dataJson["type"] == "content_block_delta" &&
+                               dataJson.contains("delta") && dataJson["delta"].contains("text")) {
+                        deltaText = dataJson["delta"]["text"].get<std::string>();
+                    } else if (dataJson.contains("candidates") && dataJson["candidates"].is_array() && !dataJson["candidates"].empty()) {
+                        const auto& cand = dataJson["candidates"][0];
+                        if (cand.contains("content") && cand["content"].contains("parts") && !cand["content"]["parts"].empty()) {
+                            deltaText = cand["content"]["parts"][0].value("text", "");
+                        }
+                    } else if (dataJson.contains("response")) {
+                        deltaText = dataJson["response"].get<std::string>();
+                    }
+                    if (!deltaText.empty()) {
+                        reply.text += deltaText;
+                        if (onDelta) onDelta(deltaText);
+                    }
+                } catch (...) {
+                }
+            }
+        }
+    }
+    WinHttpCloseHandle(request);
+    WinHttpCloseHandle(connection);
+    WinHttpCloseHandle(session);
+
+    if (reply.text.empty() && !lineBuffer.empty()) {
+        try {
+            reply.body = json::parse(lineBuffer);
+            reply.text = ExtractAssistantText("", reply.body);
+        } catch (...) {
+            reply.text = lineBuffer;
+        }
+    }
+    return reply;
+}
+
 std::string ExtractAssistantText(const std::string& provider, const json& body) {
     if (provider == "anthropic") {
         if (body.contains("content") && body["content"].is_array()) {
@@ -2295,12 +2457,27 @@ void ServiceDispatcher::HandleChat(const json& payload, DispatchResponseCallback
         }
 
         HttpReply reply;
+        std::shared_ptr<std::atomic<bool>> streamedAnyDelta = std::make_shared<std::atomic<bool>>(false);
+        auto onDelta = [this, requestId, streamedAnyDelta](const std::string& chunk) {
+            if (!chunk.empty()) streamedAnyDelta->store(true);
+            if (!requestId.empty()) {
+                PostToUi([this, requestId, chunk]() {
+                    BroadcastEvent("lens:chat", {
+                        { "requestId", requestId },
+                        { "type", "delta" },
+                        { "text", chunk }
+                    });
+                });
+            }
+        };
+
+        requestBody["stream"] = true;
         if (provider == "anthropic") {
             const std::string headers =
                 "x-api-key: " + apiKey + "\r\nanthropic-version: 2023-06-01\r\n";
-            reply = HttpPostJson(endpoint, requestBody, "", headers, 90000);
+            reply = HttpStreamJson(endpoint, requestBody, "", headers, onDelta, nullptr, 90000);
         } else {
-            reply = HttpPostJson(endpoint, requestBody, apiKey, "", 90000);
+            reply = HttpStreamJson(endpoint, requestBody, apiKey, "", onDelta, nullptr, 90000);
         }
 
         if (reply.networkError || reply.status < 200 || reply.status >= 300) {
@@ -2310,7 +2487,10 @@ void ServiceDispatcher::HandleChat(const json& payload, DispatchResponseCallback
             return;
         }
 
-        std::string answer = ExtractAssistantText(provider, reply.body);
+        std::string answer = reply.text;
+        if (TrimText(answer).empty()) {
+            answer = ExtractAssistantText(provider, reply.body);
+        }
         if (TrimText(answer).empty()) {
             PostToUi([callback]() { callback("The AI provider returned an empty response.", true); });
             return;
@@ -2343,13 +2523,16 @@ void ServiceDispatcher::HandleChat(const json& payload, DispatchResponseCallback
             }
         }
 
-        PostToUi([this, callback, requestId, answer, session]() {
+        const bool didStream = streamedAnyDelta->load();
+        PostToUi([this, callback, requestId, answer, session, didStream]() {
             if (!requestId.empty()) {
-                BroadcastEvent("lens:chat", {
-                    { "requestId", requestId },
-                    { "type", "delta" },
-                    { "text", answer }
-                });
+                if (!didStream) {
+                    BroadcastEvent("lens:chat", {
+                        { "requestId", requestId },
+                        { "type", "delta" },
+                        { "text", answer }
+                    });
+                }
                 BroadcastEvent("lens:chat", {
                     { "requestId", requestId },
                     { "type", "done" },
@@ -2414,13 +2597,30 @@ void ServiceDispatcher::StartBrowserLogin(DispatchResponseCallback callback) {
             serverUrl = m_cloud.GetServerUrl();
         }
 
-        std::string redirectUri = "http://127.0.0.1:" + std::to_string(port) + "/callback";
-        std::string authUrl = serverUrl + "/login?redirect_uri=" + redirectUri + "&source=desktop";
+        // Generate PKCE code_verifier, code_challenge (S256), and cryptographically random state
+        const std::string codeVerifier = GeneratePkceVerifier(64);
+        const std::string codeChallenge = GeneratePkceChallenge(codeVerifier);
+        const std::string state = GenerateRandomState(32);
+
+        const std::string redirectUri = "http://127.0.0.1:" + std::to_string(port) + "/callback";
+        const std::string authUrl = serverUrl + "/login?redirect_uri=" + redirectUri +
+            "&state=" + state +
+            "&code_challenge=" + codeChallenge +
+            "&code_challenge_method=S256&source=desktop";
 
         ShellExecuteW(nullptr, L"open", Utf8ToWide(authUrl).c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 
         bool completed = false;
         auto startTime = std::chrono::steady_clock::now();
+
+        auto getQueryParam = [](const std::string& qs, const std::string& key) -> std::string {
+            std::string prefix = key + "=";
+            size_t p = qs.find(prefix);
+            if (p == std::string::npos) return "";
+            size_t start = p + prefix.size();
+            size_t end = qs.find('&', start);
+            return qs.substr(start, end == std::string::npos ? std::string::npos : end - start);
+        };
 
         while (!completed) {
             if (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - startTime).count() > 120) {
@@ -2441,43 +2641,132 @@ void ServiceDispatcher::StartBrowserLogin(DispatchResponseCallback callback) {
                 size_t firstLineEnd = req.find("\r\n");
                 std::string firstLine = (firstLineEnd != std::string::npos) ? req.substr(0, firstLineEnd) : req;
 
+                std::string query;
+                size_t qPos = firstLine.find('?');
+                size_t spPos = firstLine.find(' ', qPos);
+                if (qPos != std::string::npos && spPos != std::string::npos) {
+                    query = firstLine.substr(qPos + 1, spPos - qPos - 1);
+                }
+
                 if (firstLine.find("GET /callback") != std::string::npos) {
-                    std::string html = 
-                        "<!DOCTYPE html><html><head><meta charset='utf-8'><title>LensDesk</title>"
-                        "<style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;"
-                        "background:#0a0c12;font-family:'Segoe UI',system-ui,sans-serif;color:#e8eaf2}"
-                        ".card{text-align:center;padding:48px 64px;border-radius:18px;background:rgba(255,255,255,.05);"
-                        "border:1px solid rgba(255,255,255,.1);box-shadow:0 24px 60px rgba(0,0,0,.45)}"
-                        ".brand{font-size:14px;font-weight:700;letter-spacing:.3em;text-transform:uppercase;color:#5ea2ff;margin-bottom:24px}"
-                        "h1{font-size:22px;margin:0 0 8px}p{font-size:14px;color:#9aa1b5;margin:0}</style></head>"
-                        "<body><div class='card'><div class='brand'>LensDesk</div><h1>Completing sign-in&#8230;</h1>"
-                        "<p>Just a moment while we link your desktop session.</p></div>"
-                        "<script>var h=location.hash?location.hash.substring(1):location.search.substring(1);"
-                        "if(h){location.replace('/done?'+h);}else{document.querySelector('h1').textContent='No token received.';"
-                        "document.querySelector('p').textContent='You can close this window and try again from LensDesk.';}</script>"
-                        "</body></html>";
-                    std::string res = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: " +
-                        std::to_string(html.size()) + "\r\nConnection: close\r\n\r\n" + html;
-                    send(clientSock, res.data(), static_cast<int>(res.size()), 0);
-                } else if (firstLine.find("GET /done") != std::string::npos) {
-                    std::string query;
-                    size_t qPos = firstLine.find('?');
-                    size_t spPos = firstLine.find(' ', qPos);
-                    if (qPos != std::string::npos && spPos != std::string::npos) {
-                        query = firstLine.substr(qPos + 1, spPos - qPos - 1);
+                    std::string code = getQueryParam(query, "code");
+                    std::string incomingState = getQueryParam(query, "state");
+                    std::string error = getQueryParam(query, "error");
+
+                    if (!error.empty()) {
+                        std::string cancelHtml =
+                            "<!DOCTYPE html><html><head><meta charset='utf-8'><title>LensDesk</title>"
+                            "<style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;"
+                            "background:#0a0c12;font-family:'Segoe UI',system-ui,sans-serif;color:#e8eaf2}"
+                            ".card{text-align:center;padding:48px 64px;border-radius:18px;background:rgba(255,255,255,.05);"
+                            "border:1px solid rgba(255,255,255,.1)}"
+                            ".brand{font-size:14px;font-weight:700;letter-spacing:.3em;text-transform:uppercase;color:#ef4444;margin-bottom:24px}"
+                            "h1{font-size:22px;color:#ef4444;margin:0 0 8px}p{font-size:14px;color:#9aa1b5;margin:0}</style></head>"
+                            "<body><div class='card'><div class='brand'>LensDesk</div><h1>Sign-in Cancelled</h1>"
+                            "<p>You can close this tab and return to LensDesk.</p></div></body></html>";
+                        std::string res = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: " +
+                            std::to_string(cancelHtml.size()) + "\r\nConnection: close\r\n\r\n" + cancelHtml;
+                        send(clientSock, res.data(), static_cast<int>(res.size()), 0);
+                        closesocket(clientSock);
+                        PostToUi([callback]() { callback("Sign-in was cancelled in the browser.", true); });
+                        break;
                     }
 
-                    auto getParam = [](const std::string& qs, const std::string& key) -> std::string {
-                        std::string prefix = key + "=";
-                        size_t p = qs.find(prefix);
-                        if (p == std::string::npos) return "";
-                        size_t start = p + prefix.size();
-                        size_t end = qs.find('&', start);
-                        return qs.substr(start, end == std::string::npos ? std::string::npos : end - start);
-                    };
+                    if (code.empty()) {
+                        // Intermediate landing page for token extraction fallback
+                        std::string html = 
+                            "<!DOCTYPE html><html><head><meta charset='utf-8'><title>LensDesk</title>"
+                            "<style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;"
+                            "background:#0a0c12;font-family:'Segoe UI',system-ui,sans-serif;color:#e8eaf2}"
+                            ".card{text-align:center;padding:48px 64px;border-radius:18px;background:rgba(255,255,255,.05);"
+                            "border:1px solid rgba(255,255,255,.1);box-shadow:0 24px 60px rgba(0,0,0,.45)}"
+                            ".brand{font-size:14px;font-weight:700;letter-spacing:.3em;text-transform:uppercase;color:#5ea2ff;margin-bottom:24px}"
+                            "h1{font-size:22px;margin:0 0 8px}p{font-size:14px;color:#9aa1b5;margin:0}</style></head>"
+                            "<body><div class='card'><div class='brand'>LensDesk</div><h1>Completing sign-in&#8230;</h1>"
+                            "<p>Just a moment while we link your desktop session.</p></div>"
+                            "<script>var h=location.hash?location.hash.substring(1):location.search.substring(1);"
+                            "if(h){location.replace('/done?'+h);}else{document.querySelector('h1').textContent='No authorization code received.';"
+                            "document.querySelector('p').textContent='You can close this window and try again from LensDesk.';}</script>"
+                            "</body></html>";
+                        std::string res = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: " +
+                            std::to_string(html.size()) + "\r\nConnection: close\r\n\r\n" + html;
+                        send(clientSock, res.data(), static_cast<int>(res.size()), 0);
+                    } else {
+                        // Strict CSRF state verification
+                        if (incomingState.empty() || incomingState != state) {
+                            std::string csrfHtml =
+                                "<!DOCTYPE html><html><head><meta charset='utf-8'><title>Security Error</title>"
+                                "<style>body{background:#0a0c12;font-family:sans-serif;color:#ef4444;text-align:center;padding:50px}</style></head>"
+                                "<body><h1>Security Check Failed</h1><p>CSRF state parameter mismatch. Request rejected.</p></body></html>";
+                            std::string res = "HTTP/1.1 403 Forbidden\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: " +
+                                std::to_string(csrfHtml.size()) + "\r\nConnection: close\r\n\r\n" + csrfHtml;
+                            send(clientSock, res.data(), static_cast<int>(res.size()), 0);
+                            closesocket(clientSock);
+                            PostToUi([callback]() { callback("OAuth security check failed: CSRF state mismatch.", true); });
+                            break;
+                        }
 
-                    std::string token = getParam(query, "access_token");
-                    std::string refreshToken = getParam(query, "refresh_token");
+                        // Exchange authorization code for desktop session tokens via PKCE
+                        const std::string exchangeEndpoint = serverUrl + "/api/desktop.exchangeCode";
+                        json exchangePayload = {
+                            { "code", code },
+                            { "code_verifier", codeVerifier },
+                            { "redirect_uri", redirectUri }
+                        };
+                        HttpReply exchangeReply = HttpPostJson(exchangeEndpoint, exchangePayload, "", "", 15000);
+
+                        if (!exchangeReply.networkError && exchangeReply.status == 200 &&
+                            exchangeReply.body.contains("access_token")) {
+                            std::string accessToken = exchangeReply.body["access_token"];
+                            std::string refreshToken = exchangeReply.body.value("refresh_token", "");
+
+                            json gateResult;
+                            {
+                                std::lock_guard<std::mutex> cloudLock(m_cloudMutex);
+                                gateResult = m_cloud.ApplyTokens(accessToken, refreshToken);
+                            }
+                            if (m_cloud.HasSession()) {
+                                std::string userId = m_cloud.GetUserId();
+                                std::string email = m_cloud.GetUserEmail();
+                                if (m_storageMgr && !userId.empty()) {
+                                    m_storageMgr->SetCurrentAccount(userId, email);
+                                }
+                                BroadcastEvent("lens:gate", gateResult);
+                                completed = true;
+                            }
+
+                            std::string successHtml = 
+                                "<!DOCTYPE html><html><head><meta charset='utf-8'><title>LensDesk</title>"
+                                "<style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;"
+                                "background:#0a0c12;font-family:'Segoe UI',system-ui,sans-serif;color:#e8eaf2}"
+                                ".card{text-align:center;padding:48px 64px;border-radius:18px;background:rgba(255,255,255,.05);"
+                                "border:1px solid rgba(255,255,255,.1);box-shadow:0 24px 60px rgba(0,0,0,.45)}"
+                                ".brand{font-size:14px;font-weight:700;letter-spacing:.3em;text-transform:uppercase;color:#4ade80;margin-bottom:24px}"
+                                "h1{font-size:22px;color:#4ade80;margin:0 0 8px}p{font-size:14px;color:#9aa1b5;margin:0}</style></head>"
+                                "<body><div class='card'><div class='brand'>LensDesk</div><h1>Sign-in Complete!</h1>"
+                                "<p>You can close this tab and return to LensDesk.</p></div></body></html>";
+                            std::string res = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: " +
+                                std::to_string(successHtml.size()) + "\r\nConnection: close\r\n\r\n" + successHtml;
+                            send(clientSock, res.data(), static_cast<int>(res.size()), 0);
+
+                            PostToUi([callback, gateResult]() { callback(gateResult, false); });
+                        } else {
+                            std::string errStr = exchangeReply.error.empty() ? "Authorization code exchange failed." : exchangeReply.error;
+                            std::string failHtml = 
+                                "<!DOCTYPE html><html><head><meta charset='utf-8'><title>LensDesk</title>"
+                                "<style>body{background:#0a0c12;font-family:sans-serif;color:#ef4444;text-align:center;padding:50px}</style></head>"
+                                "<body><h1>Sign-in Failed</h1><p>" + errStr + "</p></body></html>";
+                            std::string res = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: " +
+                                std::to_string(failHtml.size()) + "\r\nConnection: close\r\n\r\n" + failHtml;
+                            send(clientSock, res.data(), static_cast<int>(res.size()), 0);
+                            closesocket(clientSock);
+                            PostToUi([callback, errStr]() { callback(errStr, true); });
+                            break;
+                        }
+                    }
+                } else if (firstLine.find("GET /done") != std::string::npos) {
+                    std::string token = getQueryParam(query, "access_token");
+                    std::string refreshToken = getQueryParam(query, "refresh_token");
 
                     if (!token.empty()) {
                         json gateResult;

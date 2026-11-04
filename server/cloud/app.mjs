@@ -102,7 +102,8 @@ export function createCloudServer({
         ? new Stripe(stripeSecret, { maxNetworkRetries: 2, timeout: 20000 })
         : null),
     stores = new Map(),
-    attempts = new Map();
+    attempts = new Map(),
+    pkceCodes = new Map();
   const plans = loadPlans(process.env);
   applyMigrations(accounts.db);
   const audit = (userId, event, detail) => {
@@ -955,6 +956,22 @@ export function createCloudServer({
         }
         if (req.method === "GET") {
           let userState = null;
+          if (pgStore) {
+            try {
+              const pgSettings = await pgStore.getUserSettings(authUser.id);
+              if (pgSettings) {
+                json(res, 200, {
+                  ok: true,
+                  settings: pgSettings,
+                  storage: "cloud",
+                  accountId: authUser.id,
+                  user: accounts.safe(authUser),
+                  serverTimeMs: Math.floor(clock()),
+                });
+                return;
+              }
+            } catch {}
+          }
           try {
             userState = await callUser(authUser.id, "state");
           } catch {
@@ -981,6 +998,11 @@ export function createCloudServer({
         const raw = Buffer.concat(chunks);
         const payload = JSON.parse(raw.toString() || "{}");
         const settingsData = payload.settings && typeof payload.settings === "object" ? payload.settings : payload;
+        if (pgStore) {
+          try {
+            await pgStore.saveUserSettings(authUser.id, settingsData);
+          } catch {}
+        }
         const result = await callUser(authUser.id, "settings.save", settingsData);
         json(res, 200, {
           ok: true,
@@ -1682,6 +1704,104 @@ export function createCloudServer({
         await acquireDesktop(res, { desktopUser: result.user, payloadBody: payload });
         return;
       }
+      if (action === "desktop.issueCode" || action === "v1/auth/issueCode" || action === "auth/issueCode") {
+        limited(identity + ":desktop-issue-code", 30);
+        let effectiveUser = user;
+        if (!effectiveUser && payload.token) {
+          effectiveUser = accounts.userForToken(payload.token);
+          if (!effectiveUser && pgStore) {
+            try {
+              effectiveUser = await pgStore.userForToken(payload.token);
+            } catch {}
+          }
+        }
+        if (!effectiveUser) {
+          json(res, 401, { error: "Authentication required to issue authorization code." });
+          return;
+        }
+        const challenge = String(payload.code_challenge || payload.codeChallenge || "").trim();
+        const redirectUri = String(payload.redirect_uri || payload.redirectUri || "").trim();
+        if (!challenge) {
+          json(res, 400, { error: "Missing PKCE code_challenge." });
+          return;
+        }
+        const code = "ldc_" + randomBytes(32).toString("base64url");
+        pkceCodes.set(code, {
+          userId: effectiveUser.id,
+          codeChallenge: challenge,
+          redirectUri,
+          createdAt: Date.now(),
+          used: false,
+        });
+        json(res, 200, {
+          ok: true,
+          code,
+          expiresIn: 300,
+        });
+        return;
+      }
+      if (action === "desktop.exchangeCode" || action === "v1/auth/exchangeCode" || action === "auth/exchangeCode") {
+        limited(identity + ":desktop-exchange-code", 30);
+        const code = String(payload.code || "").trim();
+        const verifier = String(payload.code_verifier || payload.codeVerifier || "").trim();
+        const redirectUri = String(payload.redirect_uri || payload.redirectUri || "").trim();
+        if (!code || !verifier) {
+          json(res, 400, { error: "Missing authorization code or code_verifier." });
+          return;
+        }
+        const entry = pkceCodes.get(code);
+        if (!entry) {
+          json(res, 400, { error: "Invalid or expired authorization code." });
+          return;
+        }
+        if (Date.now() - entry.createdAt > 300000) {
+          pkceCodes.delete(code);
+          json(res, 400, { error: "Authorization code has expired." });
+          return;
+        }
+        if (entry.used) {
+          pkceCodes.delete(code);
+          audit(entry.userId, "oauth.replay_detected", { code });
+          json(res, 400, { error: "Authorization code has already been used (replay detected)." });
+          return;
+        }
+        entry.used = true;
+        if (entry.redirectUri && redirectUri && entry.redirectUri !== redirectUri) {
+          json(res, 400, { error: "Redirect URI mismatch." });
+          return;
+        }
+        const expectedChallenge = createHash("sha256").update(verifier).digest("base64url");
+        let challengeMatches = false;
+        try {
+          challengeMatches = timingSafeEqual(
+            Buffer.from(expectedChallenge),
+            Buffer.from(entry.codeChallenge)
+          );
+        } catch {
+          challengeMatches = false;
+        }
+        if (!challengeMatches) {
+          json(res, 400, { error: "Invalid PKCE code verifier." });
+          return;
+        }
+        let targetUser = accounts.db?.prepare("SELECT * FROM users WHERE id=?").get(entry.userId);
+        if (!targetUser && pgStore) {
+          try {
+            const uRes = await pgStore.pool.query("SELECT * FROM users WHERE id = $1", [entry.userId]);
+            targetUser = uRes.rows[0];
+          } catch {}
+        }
+        if (!targetUser) {
+          json(res, 404, { error: "User account not found." });
+          return;
+        }
+        if (!targetUser.verified) {
+          json(res, 403, { error: "User email is not verified." });
+          return;
+        }
+        await acquireDesktop(res, { desktopUser: targetUser, payloadBody: payload });
+        return;
+      }
       if (action === "desktop.claim" || action === "v1/devices/claim" || action === "devices/claim") {
         limited(identity + ":desktop-claim", 60);
         let effectiveUser = user;
@@ -2060,10 +2180,24 @@ export function createCloudServer({
         return;
       }
       if (action === "cloud.pull") {
+        if (pgStore) {
+          try {
+            const pgBackup = await pgStore.getWorkspaceBackup(user.id);
+            if (pgBackup && pgBackup.backup) {
+              json(res, 200, pgBackup.backup);
+              return;
+            }
+          } catch {}
+        }
         json(res, 200, await callUser(user.id, "backup"));
         return;
       }
       if (action === "cloud.push") {
+        if (pgStore) {
+          try {
+            await pgStore.saveWorkspaceBackup(user.id, payload);
+          } catch {}
+        }
         await callUser(user.id, "backup.restore", payload);
         json(res, 200, { ok: true });
         return;

@@ -281,6 +281,28 @@ export const PG_MIGRATIONS = [
       `);
     },
   },
+  {
+    id: "0002-lensdesk-workspaces-and-settings",
+    async run(client) {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS user_workspaces (
+          user_id TEXT PRIMARY KEY,
+          backup_data JSONB NOT NULL,
+          revision INTEGER NOT NULL DEFAULT 1,
+          created_at BIGINT NOT NULL,
+          updated_at BIGINT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_user_workspaces_updated ON user_workspaces(updated_at);
+
+        CREATE TABLE IF NOT EXISTS user_settings (
+          user_id TEXT PRIMARY KEY,
+          settings JSONB NOT NULL,
+          updated_at BIGINT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_user_settings_updated ON user_settings(updated_at);
+      `);
+    },
+  },
 ];
 
 export async function runPostgresMigrations(pool) {
