@@ -18,6 +18,7 @@ public:
     json Login(const json& payload);
     json CompleteMfa(const json& payload);
     json Logout();
+    json ApplyTokens(const std::string& accessToken, const std::string& refreshToken);
     json Validate();
     json EnsureValid();
     json Configure(const std::string& serverUrl);

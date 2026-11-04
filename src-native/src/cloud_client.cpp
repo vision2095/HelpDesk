@@ -856,6 +856,16 @@ json CloudClient::Logout() {
     return GetGateView();
 }
 
+json CloudClient::ApplyTokens(const std::string& accessToken, const std::string& refreshToken) {
+    m_token = accessToken;
+    m_refreshToken = refreshToken;
+    m_lastVerifiedAtMs = NowMs();
+    m_phase = "active";
+    m_reason.clear();
+    Save();
+    return Validate();
+}
+
 json CloudClient::Validate() {
     if (!HasSession()) {
         m_phase = "signed_out";

@@ -41,6 +41,7 @@ public:
 
 private:
     void HandleChat(const json& payload, DispatchResponseCallback callback);
+    void StartBrowserLogin(DispatchResponseCallback callback);
     void PostToUi(std::function<void()> work);
     void HeartbeatLoop();
     json BuildFullState();

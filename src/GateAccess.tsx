@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   ExternalLink,
+  Globe,
   KeyRound,
   Loader2,
   LogOut,
@@ -343,6 +344,32 @@ export function GateAccess({
     }
   }
 
+  const [browserBusy, setBrowserBusy] = useState(false);
+
+  async function startBrowserLogin() {
+    setBrowserBusy(true);
+    setFormError("");
+    onNotice("Opening your default browser to complete sign-in...");
+    try {
+      const res: any = await window.lens!.invoke("gate.browserLogin");
+      if (res && (res.phase === "active" || res.success)) {
+        clearSecrets();
+        onSignedIn();
+        onNotice("Signed in via browser. Desktop access is active on this device.");
+      }
+    } catch (err: any) {
+      const msg = message(err);
+      if (!msg.includes("cancelled") && !msg.includes("closed")) {
+        setFormError(msg);
+        onError(err);
+      } else {
+        onNotice("Browser sign-in was cancelled.");
+      }
+    } finally {
+      setBrowserBusy(false);
+    }
+  }
+
   const floatingVariant = variant === "floating";
   const phase = view.phase || "signed_out";
   const entitlement = view.entitlement;
@@ -554,7 +581,7 @@ export function GateAccess({
                 </label>
               </>
             )}
-            <button className="button primary full-width" disabled={busy}>
+            <button className="button primary full-width" disabled={busy || browserBusy}>
               {busy ? (
                 <Loader2 size={16} className="spin" />
               ) : (
@@ -562,6 +589,26 @@ export function GateAccess({
               )}
               {challenge ? "Verify and sign in" : "Sign in"}
             </button>
+            {!challenge && (
+              <>
+                <div style={{ textAlign: "center", margin: "12px 0 8px", fontSize: "12px", opacity: 0.6 }}>
+                  <span>or</span>
+                </div>
+                <button
+                  type="button"
+                  className="button secondary full-width"
+                  disabled={busy || browserBusy}
+                  onClick={startBrowserLogin}
+                >
+                  {browserBusy ? (
+                    <Loader2 size={15} className="spin" />
+                  ) : (
+                    <Globe size={15} />
+                  )}
+                  {browserBusy ? "Waiting for browser..." : "Sign in with Browser / Google"}
+                </button>
+              </>
+            )}
             {challenge && (
               <button
                 type="button"

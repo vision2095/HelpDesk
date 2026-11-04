@@ -56,6 +56,104 @@ struct HttpReply {
     bool networkError = false;
 };
 
+HttpReply HttpGet(
+    const std::string& url,
+    const std::string& bearer = "",
+    int timeoutMs = 2000
+) {
+    HttpReply reply;
+#ifdef _WIN32
+    std::wstring wideUrl = Utf8ToWide(url);
+    URL_COMPONENTS components{};
+    components.dwStructSize = sizeof(components);
+    components.dwSchemeLength = static_cast<DWORD>(-1);
+    components.dwHostNameLength = static_cast<DWORD>(-1);
+    components.dwUrlPathLength = static_cast<DWORD>(-1);
+    components.dwExtraInfoLength = static_cast<DWORD>(-1);
+    if (!WinHttpCrackUrl(wideUrl.c_str(), static_cast<DWORD>(wideUrl.size()), 0, &components)) {
+        reply.networkError = true;
+        reply.error = "The endpoint is invalid.";
+        return reply;
+    }
+    const std::wstring host(components.lpszHostName, components.dwHostNameLength);
+    std::wstring path(components.lpszUrlPath, components.dwUrlPathLength);
+    if (path.empty()) path = L"/";
+    if (components.dwExtraInfoLength > 0) {
+        path.append(components.lpszExtraInfo, components.dwExtraInfoLength);
+    }
+    const bool secure = components.nScheme == INTERNET_SCHEME_HTTPS;
+
+    HINTERNET session = WinHttpOpen(L"LensDesk/2.0 (Windows Native)", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+                                    WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (!session) {
+        reply.networkError = true;
+        return reply;
+    }
+    WinHttpSetTimeouts(session, 1000, 1000, timeoutMs, timeoutMs);
+    HINTERNET connection = WinHttpConnect(session, host.c_str(), components.nPort, 0);
+    if (!connection) {
+        reply.networkError = true;
+        WinHttpCloseHandle(session);
+        return reply;
+    }
+    HINTERNET request = WinHttpOpenRequest(connection, L"GET", path.c_str(), nullptr,
+                                           WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
+                                           secure ? WINHTTP_FLAG_SECURE : 0);
+    if (!request) {
+        reply.networkError = true;
+        WinHttpCloseHandle(connection);
+        WinHttpCloseHandle(session);
+        return reply;
+    }
+    std::wstring headers = L"Accept: application/json\r\n";
+    if (!bearer.empty()) {
+        headers += L"Authorization: Bearer " + Utf8ToWide(bearer) + L"\r\n";
+    }
+    if (!WinHttpSendRequest(request, headers.c_str(), static_cast<DWORD>(headers.size()),
+                            nullptr, 0, 0, 0)) {
+        reply.networkError = true;
+        WinHttpCloseHandle(request);
+        WinHttpCloseHandle(connection);
+        WinHttpCloseHandle(session);
+        return reply;
+    }
+    if (!WinHttpReceiveResponse(request, nullptr)) {
+        reply.networkError = true;
+        WinHttpCloseHandle(request);
+        WinHttpCloseHandle(connection);
+        WinHttpCloseHandle(session);
+        return reply;
+    }
+    DWORD statusCode = 0;
+    DWORD statusSize = sizeof(statusCode);
+    WinHttpQueryHeaders(request, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+                        WINHTTP_HEADER_NAME_BY_INDEX, &statusCode, &statusSize, WINHTTP_NO_HEADER_INDEX);
+    reply.status = static_cast<int>(statusCode);
+
+    std::string responseBody;
+    DWORD bytesAvailable = 0;
+    while (WinHttpQueryDataAvailable(request, &bytesAvailable) && bytesAvailable > 0) {
+        std::vector<char> buffer(bytesAvailable);
+        DWORD bytesRead = 0;
+        if (WinHttpReadData(request, buffer.data(), bytesAvailable, &bytesRead) && bytesRead > 0) {
+            responseBody.append(buffer.data(), bytesRead);
+        }
+    }
+    WinHttpCloseHandle(request);
+    WinHttpCloseHandle(connection);
+    WinHttpCloseHandle(session);
+
+    if (!responseBody.empty()) {
+        try {
+            reply.body = json::parse(responseBody);
+        } catch (...) {
+            reply.body = json::object();
+        }
+    }
+#endif
+    return reply;
+}
+
 HttpReply HttpPostJson(
     const std::string& url,
     const json& payload,
@@ -1287,13 +1385,41 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
             return;
         }
 
-        if (action == "cloud.pull" || action == "cloud.push") {
-            m_workers.emplace_back([this, action, payload, callback]() {
+        if (action == "cloud.pull") {
+            m_workers.emplace_back([this, payload, callback]() {
                 try {
                     json result;
                     {
                         std::lock_guard<std::mutex> cloudLock(m_cloudMutex);
-                        result = m_cloud.CloudRequest(action, payload);
+                        result = m_cloud.CloudRequest("cloud.pull", payload);
+                    }
+                    if (m_storageMgr && result.is_object() && result.contains("version") && result["version"] == 1) {
+                        std::string err;
+                        m_storageMgr->RestoreBackup(result, err);
+                    }
+                    json state = BuildFullState();
+                    PostToUi([callback, state]() { callback(state, false); });
+                } catch (const std::exception& e) {
+                    const std::string error = e.what();
+                    PostToUi([callback, error]() { callback(error, true); });
+                }
+            });
+            return;
+        }
+
+        if (action == "cloud.push") {
+            m_workers.emplace_back([this, payload, callback]() {
+                try {
+                    json pushPayload = payload;
+                    if (pushPayload.empty() || !pushPayload.contains("version")) {
+                        if (m_storageMgr) {
+                            pushPayload = m_storageMgr->CreateBackup();
+                        }
+                    }
+                    json result;
+                    {
+                        std::lock_guard<std::mutex> cloudLock(m_cloudMutex);
+                        result = m_cloud.CloudRequest("cloud.push", pushPayload);
                     }
                     PostToUi([callback, result]() { callback(result, false); });
                 } catch (const std::exception& e) {
@@ -1530,6 +1656,11 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
         // --- 7. Gate & Authentication ---
         // Desktop access is decided only by the hosted LensDesk service.
         // There is no local "active" fallback.
+        if (action == "gate.browserLogin") {
+            StartBrowserLogin(callback);
+            return;
+        }
+
         if (action == "gate.login") {
             json result;
             json gate;
@@ -1759,22 +1890,143 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
         }
 
         if (action == "desktop.models.detect") {
-            json models = json::array({
-                { { "id", "ollama" }, { "name", "Ollama Local (11434)" }, { "port", 11434 }, { "available", true }, { "supportsVision", true } },
-                { { "id", "lmstudio" }, { "name", "LM Studio (1234)" }, { "port", 1234 }, { "available", true }, { "supportsVision", true } },
-                { { "id", "llamacpp" }, { "name", "llama.cpp (8080)" }, { "port", 8080 }, { "available", true }, { "supportsVision", false } },
-                { { "id", "vllm" }, { "name", "vLLM (8000)" }, { "port", 8000 }, { "available", true }, { "supportsVision", true } }
+            m_workers.emplace_back([this, callback]() {
+                json results = json::array();
+
+                // 1. Ollama on 11434
+                HttpReply ollamaReply = HttpGet("http://127.0.0.1:11434/api/tags", "", 1200);
+                json ollamaEntry = {
+                    { "id", "ollama" },
+                    { "name", "Ollama Local (11434)" },
+                    { "port", 11434 },
+                    { "available", false },
+                    { "supportsVision", false },
+                    { "models", json::array() }
+                };
+                if (!ollamaReply.networkError && ollamaReply.status == 200 && ollamaReply.body.contains("models") && ollamaReply.body["models"].is_array()) {
+                    ollamaEntry["available"] = true;
+                    for (const auto& m : ollamaReply.body["models"]) {
+                        std::string name = m.value("name", "");
+                        if (!name.empty()) {
+                            bool isVision = (name.find("vision") != std::string::npos || name.find("llava") != std::string::npos || name.find("vl") != std::string::npos);
+                            ollamaEntry["models"].push_back({
+                                { "id", name },
+                                { "name", name },
+                                { "supportsVision", isVision }
+                            });
+                            if (isVision) ollamaEntry["supportsVision"] = true;
+                        }
+                    }
+                }
+                results.push_back(ollamaEntry);
+
+                // 2. LM Studio on 1234
+                HttpReply lmReply = HttpGet("http://127.0.0.1:1234/v1/models", "", 1200);
+                json lmEntry = {
+                    { "id", "lmstudio" },
+                    { "name", "LM Studio (1234)" },
+                    { "port", 1234 },
+                    { "available", false },
+                    { "supportsVision", false },
+                    { "models", json::array() }
+                };
+                if (!lmReply.networkError && lmReply.status == 200 && lmReply.body.contains("data") && lmReply.body["data"].is_array()) {
+                    lmEntry["available"] = true;
+                    for (const auto& m : lmReply.body["data"]) {
+                        std::string id = m.value("id", "");
+                        if (!id.empty()) {
+                            bool isVision = (id.find("vision") != std::string::npos || id.find("llava") != std::string::npos || id.find("vl") != std::string::npos);
+                            lmEntry["models"].push_back({ { "id", id }, { "name", id }, { "supportsVision", isVision } });
+                            if (isVision) lmEntry["supportsVision"] = true;
+                        }
+                    }
+                }
+                results.push_back(lmEntry);
+
+                // 3. llama.cpp on 8080
+                HttpReply llamaReply = HttpGet("http://127.0.0.1:8080/v1/models", "", 1200);
+                json llamaEntry = {
+                    { "id", "llamacpp" },
+                    { "name", "llama.cpp (8080)" },
+                    { "port", 8080 },
+                    { "available", false },
+                    { "supportsVision", false },
+                    { "models", json::array() }
+                };
+                if (!llamaReply.networkError && llamaReply.status == 200) {
+                    llamaEntry["available"] = true;
+                    if (llamaReply.body.contains("data") && llamaReply.body["data"].is_array()) {
+                        for (const auto& m : llamaReply.body["data"]) {
+                            std::string id = m.value("id", "");
+                            if (!id.empty()) llamaEntry["models"].push_back({ { "id", id }, { "name", id } });
+                        }
+                    }
+                }
+                results.push_back(llamaEntry);
+
+                // 4. vLLM on 8000
+                HttpReply vllmReply = HttpGet("http://127.0.0.1:8000/v1/models", "", 1200);
+                json vllmEntry = {
+                    { "id", "vllm" },
+                    { "name", "vLLM (8000)" },
+                    { "port", 8000 },
+                    { "available", false },
+                    { "supportsVision", false },
+                    { "models", json::array() }
+                };
+                if (!vllmReply.networkError && vllmReply.status == 200) {
+                    vllmEntry["available"] = true;
+                    if (vllmReply.body.contains("data") && vllmReply.body["data"].is_array()) {
+                        for (const auto& m : vllmReply.body["data"]) {
+                            std::string id = m.value("id", "");
+                            if (!id.empty()) vllmEntry["models"].push_back({ { "id", id }, { "name", id } });
+                        }
+                    }
+                }
+                results.push_back(vllmEntry);
+
+                PostToUi([callback, results]() { callback(results, false); });
             });
-            callback(models, false);
             return;
         }
 
         if (action == "model.list") {
+            const std::string prov = payload.value("provider", "");
+            if (prov == "local") {
+                m_workers.emplace_back([this, callback]() {
+                    json localModels = json::array();
+                    HttpReply ollamaReply = HttpGet("http://127.0.0.1:11434/api/tags", "", 1200);
+                    if (!ollamaReply.networkError && ollamaReply.status == 200 && ollamaReply.body.contains("models") && ollamaReply.body["models"].is_array()) {
+                        for (const auto& m : ollamaReply.body["models"]) {
+                            std::string name = m.value("name", "");
+                            if (!name.empty()) {
+                                bool isVision = (name.find("vision") != std::string::npos || name.find("llava") != std::string::npos || name.find("vl") != std::string::npos);
+                                localModels.push_back({ { "id", name }, { "name", name }, { "provider", "local" }, { "supportsVision", isVision } });
+                            }
+                        }
+                    }
+                    HttpReply lmReply = HttpGet("http://127.0.0.1:1234/v1/models", "", 1200);
+                    if (!lmReply.networkError && lmReply.status == 200 && lmReply.body.contains("data") && lmReply.body["data"].is_array()) {
+                        for (const auto& m : lmReply.body["data"]) {
+                            std::string id = m.value("id", "");
+                            if (!id.empty()) {
+                                bool isVision = (id.find("vision") != std::string::npos || id.find("llava") != std::string::npos || id.find("vl") != std::string::npos);
+                                localModels.push_back({ { "id", id }, { "name", id }, { "provider", "local" }, { "supportsVision", isVision } });
+                            }
+                        }
+                    }
+                    if (localModels.empty()) {
+                        localModels.push_back({ { "id", "llama3.2" }, { "name", "Ollama Local (Default)" }, { "provider", "local" }, { "supportsVision", false } });
+                    }
+                    PostToUi([callback, localModels]() { callback(localModels, false); });
+                });
+                return;
+            }
             json models = json::array({
                 { { "id", "gpt-4o" }, { "name", "GPT-4o (Omni)" }, { "provider", "openai" } },
                 { { "id", "claude-3-5-sonnet" }, { "name", "Claude 3.5 Sonnet" }, { "provider", "anthropic" } },
                 { { "id", "gemini-1.5-pro" }, { "name", "Gemini 1.5 Pro" }, { "provider", "google" } },
-                { { "id", "ollama-local" }, { "name", "Ollama Local Model" }, { "provider", "local" } }
+                { { "id", "llama3.2" }, { "name", "Ollama Local Model" }, { "provider", "local" } }
             });
             callback(models, false);
             return;
@@ -2078,6 +2330,19 @@ void ServiceDispatcher::HandleChat(const json& payload, DispatchResponseCallback
 
         if (m_storageMgr) m_storageMgr->SaveSession(session);
 
+        // CAP-19: Save answered screenshot/session to cloud account asynchronously when signed in
+        {
+            std::lock_guard<std::mutex> cloudLock(m_cloudMutex);
+            if (m_cloud.HasSession()) {
+                m_workers.emplace_back([this, session]() {
+                    try {
+                        std::lock_guard<std::mutex> lock(m_cloudMutex);
+                        m_cloud.CloudRequest("session.save", session);
+                    } catch (...) {}
+                });
+            }
+        }
+
         PostToUi([this, callback, requestId, answer, session]() {
             if (!requestId.empty()) {
                 BroadcastEvent("lens:chat", {
@@ -2094,6 +2359,179 @@ void ServiceDispatcher::HandleChat(const json& payload, DispatchResponseCallback
             callback(session, false);
         });
     });
+}
+
+void ServiceDispatcher::StartBrowserLogin(DispatchResponseCallback callback) {
+#ifdef _WIN32
+    m_workers.emplace_back([this, callback]() {
+        WSADATA wsaData;
+        if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+            PostToUi([callback]() { callback("Could not initialize network socket for browser login.", true); });
+            return;
+        }
+
+        SOCKET serverSock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+        if (serverSock == INVALID_SOCKET) {
+            WSACleanup();
+            PostToUi([callback]() { callback("Could not create local socket for browser login.", true); });
+            return;
+        }
+
+        sockaddr_in addr{};
+        addr.sin_family = AF_INET;
+        addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+        addr.sin_port = 0; // OS allocates ephemeral port
+
+        if (bind(serverSock, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == SOCKET_ERROR) {
+            closesocket(serverSock);
+            WSACleanup();
+            PostToUi([callback]() { callback("Could not bind local loopback port for browser login.", true); });
+            return;
+        }
+
+        int addrLen = sizeof(addr);
+        if (getsockname(serverSock, reinterpret_cast<sockaddr*>(&addr), &addrLen) == SOCKET_ERROR) {
+            closesocket(serverSock);
+            WSACleanup();
+            PostToUi([callback]() { callback("Could not determine local port for browser login.", true); });
+            return;
+        }
+
+        int port = ntohs(addr.sin_port);
+        if (listen(serverSock, 1) == SOCKET_ERROR) {
+            closesocket(serverSock);
+            WSACleanup();
+            PostToUi([callback]() { callback("Could not listen on local port for browser login.", true); });
+            return;
+        }
+
+        DWORD timeoutMs = 120000;
+        setsockopt(serverSock, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&timeoutMs), sizeof(timeoutMs));
+
+        std::string serverUrl;
+        {
+            std::lock_guard<std::mutex> cloudLock(m_cloudMutex);
+            serverUrl = m_cloud.GetServerUrl();
+        }
+
+        std::string redirectUri = "http://127.0.0.1:" + std::to_string(port) + "/callback";
+        std::string authUrl = serverUrl + "/login?redirect_uri=" + redirectUri + "&source=desktop";
+
+        ShellExecuteW(nullptr, L"open", Utf8ToWide(authUrl).c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+
+        bool completed = false;
+        auto startTime = std::chrono::steady_clock::now();
+
+        while (!completed) {
+            if (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - startTime).count() > 120) {
+                break;
+            }
+
+            sockaddr_in clientAddr{};
+            int clientLen = sizeof(clientAddr);
+            SOCKET clientSock = accept(serverSock, reinterpret_cast<sockaddr*>(&clientAddr), &clientLen);
+            if (clientSock == INVALID_SOCKET) {
+                break;
+            }
+
+            char buffer[4096]{};
+            int bytesRead = recv(clientSock, buffer, sizeof(buffer) - 1, 0);
+            if (bytesRead > 0) {
+                std::string req(buffer, bytesRead);
+                size_t firstLineEnd = req.find("\r\n");
+                std::string firstLine = (firstLineEnd != std::string::npos) ? req.substr(0, firstLineEnd) : req;
+
+                if (firstLine.find("GET /callback") != std::string::npos) {
+                    std::string html = 
+                        "<!DOCTYPE html><html><head><meta charset='utf-8'><title>LensDesk</title>"
+                        "<style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;"
+                        "background:#0a0c12;font-family:'Segoe UI',system-ui,sans-serif;color:#e8eaf2}"
+                        ".card{text-align:center;padding:48px 64px;border-radius:18px;background:rgba(255,255,255,.05);"
+                        "border:1px solid rgba(255,255,255,.1);box-shadow:0 24px 60px rgba(0,0,0,.45)}"
+                        ".brand{font-size:14px;font-weight:700;letter-spacing:.3em;text-transform:uppercase;color:#5ea2ff;margin-bottom:24px}"
+                        "h1{font-size:22px;margin:0 0 8px}p{font-size:14px;color:#9aa1b5;margin:0}</style></head>"
+                        "<body><div class='card'><div class='brand'>LensDesk</div><h1>Completing sign-in&#8230;</h1>"
+                        "<p>Just a moment while we link your desktop session.</p></div>"
+                        "<script>var h=location.hash?location.hash.substring(1):location.search.substring(1);"
+                        "if(h){location.replace('/done?'+h);}else{document.querySelector('h1').textContent='No token received.';"
+                        "document.querySelector('p').textContent='You can close this window and try again from LensDesk.';}</script>"
+                        "</body></html>";
+                    std::string res = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: " +
+                        std::to_string(html.size()) + "\r\nConnection: close\r\n\r\n" + html;
+                    send(clientSock, res.data(), static_cast<int>(res.size()), 0);
+                } else if (firstLine.find("GET /done") != std::string::npos) {
+                    std::string query;
+                    size_t qPos = firstLine.find('?');
+                    size_t spPos = firstLine.find(' ', qPos);
+                    if (qPos != std::string::npos && spPos != std::string::npos) {
+                        query = firstLine.substr(qPos + 1, spPos - qPos - 1);
+                    }
+
+                    auto getParam = [](const std::string& qs, const std::string& key) -> std::string {
+                        std::string prefix = key + "=";
+                        size_t p = qs.find(prefix);
+                        if (p == std::string::npos) return "";
+                        size_t start = p + prefix.size();
+                        size_t end = qs.find('&', start);
+                        return qs.substr(start, end == std::string::npos ? std::string::npos : end - start);
+                    };
+
+                    std::string token = getParam(query, "access_token");
+                    std::string refreshToken = getParam(query, "refresh_token");
+
+                    if (!token.empty()) {
+                        json gateResult;
+                        {
+                            std::lock_guard<std::mutex> cloudLock(m_cloudMutex);
+                            gateResult = m_cloud.ApplyTokens(token, refreshToken);
+                        }
+                        if (m_cloud.HasSession()) {
+                            std::string userId = m_cloud.GetUserId();
+                            std::string email = m_cloud.GetUserEmail();
+                            if (m_storageMgr && !userId.empty()) {
+                                m_storageMgr->SetCurrentAccount(userId, email);
+                            }
+                            BroadcastEvent("lens:gate", gateResult);
+                            completed = true;
+                        }
+
+                        std::string html = 
+                            "<!DOCTYPE html><html><head><meta charset='utf-8'><title>LensDesk</title>"
+                            "<style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;"
+                            "background:#0a0c12;font-family:'Segoe UI',system-ui,sans-serif;color:#e8eaf2}"
+                            ".card{text-align:center;padding:48px 64px;border-radius:18px;background:rgba(255,255,255,.05);"
+                            "border:1px solid rgba(255,255,255,.1);box-shadow:0 24px 60px rgba(0,0,0,.45)}"
+                            ".brand{font-size:14px;font-weight:700;letter-spacing:.3em;text-transform:uppercase;color:#4ade80;margin-bottom:24px}"
+                            "h1{font-size:22px;color:#4ade80;margin:0 0 8px}p{font-size:14px;color:#9aa1b5;margin:0}</style></head>"
+                            "<body><div class='card'><div class='brand'>LensDesk</div><h1>Sign-in Complete!</h1>"
+                            "<p>You can close this tab and return to LensDesk.</p></div></body></html>";
+                        std::string res = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: " +
+                            std::to_string(html.size()) + "\r\nConnection: close\r\n\r\n" + html;
+                        send(clientSock, res.data(), static_cast<int>(res.size()), 0);
+
+                        PostToUi([callback, gateResult]() { callback(gateResult, false); });
+                    } else {
+                        std::string res = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                        send(clientSock, res.data(), static_cast<int>(res.size()), 0);
+                    }
+                } else {
+                    std::string res = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                    send(clientSock, res.data(), static_cast<int>(res.size()), 0);
+                }
+            }
+            closesocket(clientSock);
+        }
+
+        closesocket(serverSock);
+        WSACleanup();
+
+        if (!completed) {
+            PostToUi([callback]() { callback("Browser sign-in timed out or was closed.", true); });
+        }
+    });
+#else
+    callback("Browser login is only supported on Windows.", true);
+#endif
 }
 
 } // namespace LensDesk

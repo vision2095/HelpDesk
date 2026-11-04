@@ -96,6 +96,7 @@ target_link_libraries(RuntimeHost PRIVATE
     mmdevapi
     runtimeobject
     windowsapp
+    ws2_32
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/webview2/lib/x64/WebView2LoaderStatic.lib
 )
 
