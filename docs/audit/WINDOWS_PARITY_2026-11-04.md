@@ -90,31 +90,31 @@ Local validation after these changes: `npm test` passed 286 tests in each reposi
 
 ## 4. Final Production Windows Verification & Release Manifest
 
-- **GitHub Actions CI Run:** [41796097365](https://github.com/VivekGitNinja/LensDesk2.0/actions/runs/41796097365)
-- **Git Commit:** `145002bb14e95ea943db2de27ccca18fc496c171`
-- **Runner Environment:** Microsoft Windows Server 2022 (`windows-latest`), MSVC 19.41 (Visual Studio 2022), C++20, Node.js v22.23.4
-- **Workflow Result:** **SUCCESS (All 20 Steps Passed, Duration: 14m36s, Job ID: 126460459567)**
+- **GitHub Actions CI Run:** [41805588874](https://github.com/VivekGitNinja/LensDesk2.0/actions/runs/41805588874)
+- **Git Commit:** `f8b8bf40167c2099905fe1c2be5da3c6d2580222`
+- **Runner Environment:** Microsoft Windows Server 2022 (`windows-latest`), MSVC 19.51 (Visual Studio 2022), C++20, Node.js v22.23.4
+- **Workflow Result:** **SUCCESS (All 21 Steps Passed, Duration: 13m59s, Job ID: 126491663190)**
 
 ### Verified Step Execution Log:
 1. `Set up job` — Complete
-2. `Checkout Repository` — Complete
+2. `Checkout Repository` — Complete (Commit `f8b8bf4`)
 3. `Setup Node.js 22` — Complete
 4. `Install Node Dependencies` — Complete
 5. `Install Media Tools and NSIS` — Complete
 6. `Build React 19 Production Bundle` — Complete (Vite production build)
-7. `Run Core Test Suite` — Complete (**286 passed, 0 failed**)
+7. `Run Core Test Suite` — Complete (**290 passed, 0 failed**)
 8. `Configure CMake Native Host (MSVC C++20)` — Complete (Production host build)
-9. `Compile RuntimeHost.exe (C++20 MSVC)` — Complete (`build-native/bin/Release/RuntimeHost.exe`)
+9. `Compile RuntimeHost.exe (C++20 MSVC)` — Complete (`build-native/bin/Release/RuntimeHost.exe`, 1,813,504 bytes)
 10. `Configure Nested Windows Workspace Host (W-08)` — Complete (`apps/windows/src-native`)
 11. `Compile Nested Windows Workspace Host (W-08)` — Complete (`build-native-apps/bin/Release/RuntimeHost.exe`)
 12. `Verify PE Binary Architecture (Zero Electron Audit)` — Complete (**ZERO Electron confirmed, Genuine LensDesk Product Metadata confirmed**)
-13. `Run Native Architecture Unit Tests` — Complete (**All native C++ tests passed**)
+13. `Run Native Architecture Unit Tests` — Complete (**All 25 native architecture tests passed**)
 14. `Execute Real Windows Runtime & Win32 Integration Test` — Complete (**Real Win32 window, D3D11, DirectComposition, WASAPI, WinRT OCR verified**)
 15. `Build isolated GUI fixture host (never packaged)` — Complete (`build-native-test/bin/Release/RuntimeHostTest.exe`)
 16. `Execute Windows GUI fixture test (not real login or AI)` — Complete (**ALL 8 PHASES PASSED completely!**)
-17. `Package Standalone Portable Zip (HintLens-identical layout)` — Complete (`release/LensDesk-2.0.0-Windows-x64.zip`)
+17. `Package Standalone Portable Zip (HintLens-identical layout)` — Complete (`release/LensDesk-2.0.0-Windows-x64.zip`, 1,545,625 bytes)
 18. `Verify Native Portable ZIP Contents` — Complete (**HintLens-identical standalone structure verified**)
-19. `Compile NSIS Windows Installer` — Complete (`release/LensDesk-2.0.0-Setup.exe`)
+19. `Compile NSIS Windows Installer` — Complete (`release/LensDesk-2.0.0-Setup.exe`, 1,566,275 bytes)
 20. `Execute Independent Package & Installer Verification Test` — Complete (**Zero Electron installer verification passed**)
 21. `Upload Native Windows Release Artifacts` — Complete (`LensDesk-2.0.0-Windows-x64-Native`)
 
@@ -122,13 +122,13 @@ Local validation after these changes: `npm test` passed 286 tests in each reposi
 
 | Release Artifact | File Path | File Size | SHA-256 Checksum |
 |---|---|---|---|
-| **Windows NSIS Installer** | `LensDesk-2.0.0-Setup.exe` | 1,794,375 bytes | `18e731d69623930dde4bd9a3701dcbf8af18480f196f32b1e8e0a35270a19a70` |
-| **Standalone Portable Archive** | `LensDesk-2.0.0-Windows-x64.zip` | 1,842,658 bytes | `01f4e17168942c25cd89c664959857672c33aab99d175ea9a9dc8af5d43da30d` |
-| **Native Production Executable** | `RuntimeHost.exe` | 1,752,576 bytes | `e0d935f771f998dbb708060a27749335ef66c06c728b981edb1772ca2dfc8801` |
+| **Windows NSIS Installer** | `LensDesk-2.0.0-Setup.exe` | 1,566,275 bytes | `b7b77cde578ef798710b27d996142855a7cbccdbcd1f6aae6e2e2b8227046cb6` |
+| **Standalone Portable Archive** | `LensDesk-2.0.0-Windows-x64.zip` | 1,545,625 bytes | `63b4eac64fde657a298700032192d51a83296bdbe4d800175daca5ad431e6d19` |
+| **Native Production Executable** | `RuntimeHost.exe` | 1,813,504 bytes | `11e3c7d05f93d215254cd85efc3ac25a988b8ea863499e3ece14304480631925` |
 | **Microsoft Edge WebView2 SDK** | `WebView2Loader.dll` | 194,912 bytes | `d3fce90bdeecb08596e377dea6a316354dd8949e32ff09b89d51be00c14e21b6` |
 
 ### Verified Interactive Windows GUI Evidence Artifacts:
-- `00-login-gate-verified.png` — Real Win32 window, React 19 UI DOM rendered, login gate view active.
+- `00-login-gate-verified.png` — Real Win32 window, React 19 UI DOM rendered, login gate view active with "Sign in with Browser / Google".
 - `01-ui-loaded.png` — Authenticated HUD session view rendered with full control bar and assistant chat area.
 - `02-textarea-typed.png` — Interactive text input, click-to-focus, and input event dispatch verified.
 - `03-assistant-streamed.png` — Prompt submission and simulated streaming assistant token rendering verified.
