@@ -100,7 +100,7 @@ export function LensDeskDownloadsSection({
           </div>
           <h1>One window. Wherever you work<span>.</span></h1>
           <p>
-            Get the official LensDesk desktop application for macOS and Windows, featuring hardware-accelerated stealth overlay and instant activation.
+            Get the official LensDesk 2.0 desktop application for macOS and Windows, featuring hardware-accelerated stealth overlay and instant activation.
           </p>
         </div>
       </div>
@@ -162,13 +162,13 @@ export function LensDeskDownloadsSection({
             onClick={handleDownloadClick}
           >
             <Download size={16} />
-            Download for Windows
+            Download LensDesk 2.0 for Windows
           </a>
           <span className="hl-badge-available">Available</span>
         </div>
 
         <p className="hl-card-note">
-          Windows 11 and Windows 10 version 2004 or later supported with native capture protection. Run the LensDesk Setup installer, or extract the ZIP and run RuntimeHost.exe.
+          Windows 11 and Windows 10 version 2004 or later supported with native capture protection. Run the LensDesk 2.0 Setup installer, or extract the ZIP and run RuntimeHost.exe.
         </p>
       </div>
 

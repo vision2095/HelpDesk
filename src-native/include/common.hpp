@@ -54,7 +54,7 @@ using json = nlohmann::json;
 using Microsoft::WRL::ComPtr;
 
 // Application version and metadata
-constexpr const wchar_t* APP_NAME = L"";
+constexpr const wchar_t* APP_NAME = L"LensDesk 2.0";
 constexpr const wchar_t* APP_VERSION = L"2.0.0";
 constexpr const wchar_t* WINDOW_CLASS_NAME = L"LensDesk_Overlay_Host_Class";
 #ifdef LENSDESK_ENABLE_TEST_AUTH

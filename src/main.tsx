@@ -713,14 +713,14 @@ function App() {
   }, []);
   useEffect(() => {
     const pageTitles: Record<string, string> = {
-      home: "LensDesk — Your thinking space",
-      admin: "LensDesk — Admin Command Center",
-      account: "LensDesk — Account & Billing",
-      downloads: "LensDesk — Download Desktop App",
-      workspace: "LensDesk — Workspace",
-      settings: "LensDesk — Settings",
-      profiles: "LensDesk — Assistant Profiles",
-      sessions: "LensDesk — Session History",
+      home: "LensDesk 2.0 — Your thinking space",
+      admin: "LensDesk 2.0 — Admin Command Center",
+      account: "LensDesk 2.0 — Account & Billing",
+      downloads: "LensDesk 2.0 — Download Desktop App",
+      workspace: "LensDesk 2.0 — Workspace",
+      settings: "LensDesk 2.0 — Settings",
+      profiles: "LensDesk 2.0 — Assistant Profiles",
+      sessions: "LensDesk 2.0 — Session History",
     };
     if (pageTitles[page]) {
       document.title = pageTitles[page];
@@ -3061,7 +3061,7 @@ function App() {
                         }}
                       />
                     ) : (
-                      <h2 className="workspace-header-title">LensDesk Assistant</h2>
+                      <h2 className="workspace-header-title">LensDesk 2.0 Assistant</h2>
                     )}
                     <div className="mode-chips">
                       {(["general", "coding", "system-design", "behavioral"] as Mode[]).map((m) => (

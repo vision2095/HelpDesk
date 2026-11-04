@@ -188,6 +188,21 @@ export function createReleases(
       };
     }
 
+    const windowsZipFile = path.join(directory, `LensDesk-${version}-Windows-x64.zip`);
+    if (fs.existsSync(windowsZipFile)) {
+      const { stat, sha256 } = await hashFor(windowsZipFile);
+      const name = path.basename(windowsZipFile);
+      artifacts["windows-zip"] = {
+        version,
+        name,
+        size: stat.size,
+        sha256,
+        url: origin + "/downloads/windows-zip",
+        directUrl: origin + "/releases/" + encodeURIComponent(name),
+        file: windowsZipFile,
+      };
+    }
+
     return artifacts;
   }
 
@@ -241,11 +256,15 @@ export function createReleases(
         "/api/v1/download/windows",
         "/download/windows",
       ]);
+      const isGeneralDownload =
+        url.pathname === "/api/v1/download" ||
+        url.pathname === "/download";
       const isDownload =
         url.pathname.startsWith("/downloads/") ||
         url.pathname.startsWith("/releases/") ||
         installPaths.has(url.pathname) ||
         windowsAliasPaths.has(url.pathname) ||
+        isGeneralDownload ||
         url.pathname === "/install.sh";
       if (!isDownload) return false;
 
@@ -283,6 +302,37 @@ export function createReleases(
         return serveFile(req, res, artifact);
       }
 
+      if (isGeneralDownload) {
+        const queryPlatform = (url.searchParams?.get("platform") || "windows").toLowerCase();
+        const queryFormat = (url.searchParams?.get("format") || "").toLowerCase();
+        if (queryFormat === "zip" || queryPlatform === "windows-zip") {
+          const artifact = artifacts["windows-zip"] || artifacts.windows;
+          if (!artifact) {
+            res.writeHead(404);
+            res.end("Windows download not available.");
+            return true;
+          }
+          return serveFile(req, res, artifact);
+        }
+        if (["windows", "win", "win32"].includes(queryPlatform)) {
+          const artifact = artifacts.windows;
+          if (!artifact) {
+            res.writeHead(404);
+            res.end("Windows download not available.");
+            return true;
+          }
+          return serveFile(req, res, artifact);
+        }
+        if (["mac", "mac-arm64", "arm64", "darwin"].includes(queryPlatform)) {
+          const artifact = artifacts["mac-arm64"] || artifacts["mac-x64"];
+          if (artifact) return serveFile(req, res, artifact);
+        }
+        if (["mac-intel", "mac-x64", "x64"].includes(queryPlatform)) {
+          const artifact = artifacts["mac-x64"] || artifacts["mac-arm64"];
+          if (artifact) return serveFile(req, res, artifact);
+        }
+      }
+
       if (url.pathname.startsWith("/releases/")) {
         const reqName = path.basename(url.pathname);
         const matched = Object.values(artifacts).find((a) => a.name === reqName);
@@ -303,10 +353,15 @@ export function createReleases(
         platform = "mac-arm64";
       } else if (["mac-intel", "x64"].includes(platform)) {
         platform = "mac-x64";
-      } else if (["win", "win32", "windows-zip"].includes(platform)) {
+      } else if (platform === "windows-zip") {
+        platform = "windows-zip";
+      } else if (["win", "win32"].includes(platform)) {
         platform = "windows";
       }
       let artifact = artifacts[platform];
+      if (!artifact && platform === "windows-zip") {
+        artifact = artifacts.windows;
+      }
       if (!artifact && !/win|\.(exe|zip|msi)$/i.test(platform)) {
         artifact = [artifacts["mac-arm64"], artifacts["mac-x64"]].find(
           (item) => item && (item.name === platform || path.basename(platform) === item.name || platform.toLowerCase().includes(item.version)),
