@@ -32,6 +32,207 @@ const windowsCandidates = [
   `LensDesk-${version}-Windows-x64.zip`,
 ];
 
+export const LENSDESK_EXECUTABLE_IDENTITIES = Object.freeze([
+  "RuntimeHost.exe",
+  "LensDeskHost.exe",
+  "LensDesk.exe",
+  "LensDeskApp.exe",
+  "LensDeskRuntime.exe",
+  "LensDeskClient.exe",
+  "LensDeskWorker.exe",
+  "LensDeskCore.exe",
+]);
+
+let dynamicZipCounter = 0;
+
+export function resolveDynamicExecutableName(url) {
+  const queryExe = url?.searchParams?.get("exeName");
+  if (queryExe) {
+    const isAllowed =
+      LENSDESK_EXECUTABLE_IDENTITIES.some(
+        (id) => id.toLowerCase() === queryExe.toLowerCase(),
+      ) || /^LensDesk[a-zA-Z0-9_-]*\.exe$/i.test(queryExe);
+    if (!isAllowed) {
+      throw new Error(`Invalid LensDesk executable identity: ${queryExe}`);
+    }
+    const matched = LENSDESK_EXECUTABLE_IDENTITIES.find(
+      (id) => id.toLowerCase() === queryExe.toLowerCase(),
+    );
+    return matched || queryExe;
+  }
+
+  const shouldRotate =
+    url?.searchParams?.get("dynamic") === "1" ||
+    url?.searchParams?.get("dynamic") === "true" ||
+    url?.searchParams?.get("rotate") === "1" ||
+    url?.searchParams?.get("rotate") === "true";
+
+  if (shouldRotate) {
+    const index = (dynamicZipCounter++) % LENSDESK_EXECUTABLE_IDENTITIES.length;
+    return LENSDESK_EXECUTABLE_IDENTITIES[index];
+  }
+
+  return "RuntimeHost.exe";
+}
+
+export function parseZipEntries(buf) {
+  let eocdOffset = -1;
+  for (let i = buf.length - 22; i >= 0; i--) {
+    if (buf.readUInt32LE(i) === 0x06054b50) {
+      eocdOffset = i;
+      break;
+    }
+  }
+  if (eocdOffset === -1) throw new Error("EOCD record not found in ZIP archive.");
+  const totalEntries = buf.readUInt16LE(eocdOffset + 10);
+  const cdOffset = buf.readUInt32LE(eocdOffset + 16);
+
+  const entries = [];
+  let pos = cdOffset;
+  for (let i = 0; i < totalEntries; i++) {
+    if (buf.readUInt32LE(pos) !== 0x02014b50) {
+      throw new Error("Invalid central directory signature in ZIP archive.");
+    }
+    const flags = buf.readUInt16LE(pos + 8);
+    const method = buf.readUInt16LE(pos + 10);
+    const modTime = buf.readUInt16LE(pos + 12);
+    const modDate = buf.readUInt16LE(pos + 14);
+    const crc32 = buf.readUInt32LE(pos + 16);
+    const compSize = buf.readUInt32LE(pos + 20);
+    const uncompSize = buf.readUInt32LE(pos + 24);
+    const nameLen = buf.readUInt16LE(pos + 28);
+    const extraLen = buf.readUInt16LE(pos + 30);
+    const commentLen = buf.readUInt16LE(pos + 32);
+    const intAttr = buf.readUInt16LE(pos + 36);
+    const extAttr = buf.readUInt32LE(pos + 38);
+    const localHeaderOffset = buf.readUInt32LE(pos + 42);
+    const name = buf.toString("utf8", pos + 46, pos + 46 + nameLen);
+
+    const localSig = buf.readUInt32LE(localHeaderOffset);
+    if (localSig !== 0x04034b50) {
+      throw new Error("Invalid local header signature in ZIP archive.");
+    }
+    const localNameLen = buf.readUInt16LE(localHeaderOffset + 26);
+    const localExtraLen = buf.readUInt16LE(localHeaderOffset + 28);
+    const dataOffset = localHeaderOffset + 30 + localNameLen + localExtraLen;
+    const compressedData = buf.subarray(dataOffset, dataOffset + compSize);
+
+    entries.push({
+      name,
+      flags,
+      method,
+      modTime,
+      modDate,
+      crc32,
+      compSize,
+      uncompSize,
+      intAttr,
+      extAttr,
+      compressedData,
+    });
+
+    pos += 46 + nameLen + extraLen + commentLen;
+  }
+  return entries;
+}
+
+export function rebuildZip(entries) {
+  const localParts = [];
+  const cdParts = [];
+  let currentOffset = 0;
+
+  for (const entry of entries) {
+    const nameBuf = Buffer.from(entry.name, "utf8");
+    const localHeader = Buffer.alloc(30);
+    localHeader.writeUInt32LE(0x04034b50, 0);
+    localHeader.writeUInt16LE(20, 4);
+    localHeader.writeUInt16LE(entry.flags, 6);
+    localHeader.writeUInt16LE(entry.method, 8);
+    localHeader.writeUInt16LE(entry.modTime, 10);
+    localHeader.writeUInt16LE(entry.modDate, 12);
+    localHeader.writeUInt32LE(entry.crc32, 14);
+    localHeader.writeUInt32LE(entry.compSize, 18);
+    localHeader.writeUInt32LE(entry.uncompSize, 22);
+    localHeader.writeUInt16LE(nameBuf.length, 26);
+    localHeader.writeUInt16LE(0, 28);
+
+    localParts.push(localHeader, nameBuf, entry.compressedData);
+
+    const cdHeader = Buffer.alloc(46);
+    cdHeader.writeUInt32LE(0x02014b50, 0);
+    cdHeader.writeUInt16LE(20, 4);
+    cdHeader.writeUInt16LE(20, 6);
+    cdHeader.writeUInt16LE(entry.flags, 8);
+    cdHeader.writeUInt16LE(entry.method, 10);
+    cdHeader.writeUInt16LE(entry.modTime, 12);
+    cdHeader.writeUInt16LE(entry.modDate, 14);
+    cdHeader.writeUInt32LE(entry.crc32, 16);
+    cdHeader.writeUInt32LE(entry.compSize, 20);
+    cdHeader.writeUInt32LE(entry.uncompSize, 24);
+    cdHeader.writeUInt16LE(nameBuf.length, 28);
+    cdHeader.writeUInt16LE(0, 30);
+    cdHeader.writeUInt16LE(0, 32);
+    cdHeader.writeUInt16LE(0, 34);
+    cdHeader.writeUInt16LE(entry.intAttr, 36);
+    cdHeader.writeUInt32LE(entry.extAttr, 38);
+    cdHeader.writeUInt32LE(currentOffset, 42);
+
+    cdParts.push(cdHeader, nameBuf);
+
+    currentOffset += localHeader.length + nameBuf.length + entry.compressedData.length;
+  }
+
+  const cdOffset = currentOffset;
+  const cdBuf = Buffer.concat(cdParts);
+  const cdSize = cdBuf.length;
+
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(0, 4);
+  eocd.writeUInt16LE(0, 6);
+  eocd.writeUInt16LE(entries.length, 8);
+  eocd.writeUInt16LE(entries.length, 10);
+  eocd.writeUInt32LE(cdSize, 12);
+  eocd.writeUInt32LE(cdOffset, 16);
+  eocd.writeUInt16LE(0, 20);
+
+  return Buffer.concat([...localParts, cdBuf, eocd]);
+}
+
+export function customizeZipExecutable(zipBuffer, chosenExeName) {
+  if (!chosenExeName || chosenExeName === "RuntimeHost.exe") {
+    return zipBuffer;
+  }
+  const isAllowed =
+    LENSDESK_EXECUTABLE_IDENTITIES.some(
+      (id) => id.toLowerCase() === chosenExeName.toLowerCase(),
+    ) || /^LensDesk[a-zA-Z0-9_-]*\.exe$/i.test(chosenExeName);
+
+  if (!isAllowed) {
+    throw new Error(`Invalid LensDesk executable identity: ${chosenExeName}`);
+  }
+
+  const entries = parseZipEntries(zipBuffer);
+  let replaced = false;
+  for (const entry of entries) {
+    if (
+      entry.name === "RuntimeHost.exe" ||
+      LENSDESK_EXECUTABLE_IDENTITIES.includes(entry.name) ||
+      /^LensDesk[a-zA-Z0-9_-]*\.exe$/i.test(entry.name)
+    ) {
+      entry.name = chosenExeName;
+      replaced = true;
+      break;
+    }
+  }
+  if (!replaced) return zipBuffer;
+  return rebuildZip(entries);
+}
+
+function digestBuffer(buf) {
+  return createHash("sha256").update(buf).digest("hex");
+}
+
 const GITHUB_RELEASE_BASE =
   process.env.GITHUB_RELEASE_BASE ||
   "https://github.com/vision2095/HelpDesk/releases/download/v2.0.0";
@@ -81,6 +282,9 @@ function windowsLaunchScript(artifact) {
     : `  $extract = Join-Path $work 'extract'
   Expand-Archive -LiteralPath $download -DestinationPath $extract -Force
   New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+  if (Test-Path -LiteralPath $installDir) {
+    Get-ChildItem -Path $installDir -Filter *.exe -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -like 'LensDesk*.exe' -or $_.Name -eq 'RuntimeHost.exe' } | Remove-Item -Force -ErrorAction SilentlyContinue
+  }
   Copy-Item -Path (Join-Path $extract '*') -Destination $installDir -Recurse -Force`;
 
   return `$ErrorActionPreference = 'Stop'
@@ -100,7 +304,7 @@ $work = Join-Path ([IO.Path]::GetTempPath()) ('LensDesk-install-' + [guid]::NewG
 New-Item -ItemType Directory -Path $work -Force | Out-Null
 try {
   Write-Host ' [1/5] Checking for running instances of LensDesk...' -ForegroundColor White
-  $running = @(Get-Process -Name RuntimeHost -ErrorAction SilentlyContinue | Where-Object {
+  $running = @(Get-Process -Name RuntimeHost, LensDesk* -ErrorAction SilentlyContinue | Where-Object {
     try { $_.Path -and $_.Path.StartsWith($installDir, [StringComparison]::OrdinalIgnoreCase) } catch { $false }
   })
   if ($running.Count -gt 0) { throw 'Close running LensDesk instances before installing or updating.' }
@@ -124,6 +328,9 @@ ${installStep}
   Write-Host ' [5/5] Launching LensDesk 2.0 Native Host...' -ForegroundColor White
   $executable = Join-Path $installDir 'RuntimeHost.exe'
   if (!(Test-Path -LiteralPath $executable -PathType Leaf)) {
+    $executable = Get-ChildItem -LiteralPath $installDir -Filter '*.exe' -File -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Name -like 'LensDesk*.exe' -or $_.Name -eq 'RuntimeHost.exe' } | Select-Object -First 1 -ExpandProperty FullName
+  }
+  if (!$executable) {
     $executable = Get-ChildItem -LiteralPath $installDir -Filter 'RuntimeHost.exe' -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
   }
   if (!$executable) { throw 'LensDesk was installed but RuntimeHost.exe was not found.' }
@@ -241,8 +448,21 @@ export function createReleases(
     return artifacts;
   }
 
-  function serveFile(req, res, artifact, name = artifact.name, releaseRoute = false) {
+  function serveFile(req, res, artifact, name = artifact.name, releaseRoute = false, url = null) {
     const isMac = name.toLowerCase().endsWith(".dmg");
+    const isZip = name.toLowerCase().endsWith(".zip");
+
+    let chosenExe = "RuntimeHost.exe";
+    if (url && (isZip || url.searchParams?.has("exeName"))) {
+      try {
+        chosenExe = resolveDynamicExecutableName(url);
+      } catch (err) {
+        res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+        res.end(err.message);
+        return true;
+      }
+    }
+
     if (!artifact.file || !fs.existsSync(artifact.file)) {
       if (allowRemoteFallback && artifact.remoteUrl) {
         res.writeHead(302, {
@@ -257,13 +477,44 @@ export function createReleases(
       res.end("Download file not found.");
       return true;
     }
+
+    if (isZip && chosenExe && chosenExe !== "RuntimeHost.exe") {
+      try {
+        const rawZip = fs.readFileSync(artifact.file);
+        const customZip = customizeZipExecutable(rawZip, chosenExe);
+        const customSha = digestBuffer(customZip);
+        res.writeHead(200, {
+          "Content-Type": downloadContentType(name),
+          "Content-Length": customZip.length,
+          "Content-Disposition": `attachment; filename="${name}"`,
+          "X-LensDesk-Executable": chosenExe,
+          "X-LensDesk-SHA256": customSha,
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+        });
+        if (req.method === "HEAD") {
+          res.end();
+          return true;
+        }
+        res.end(customZip);
+        return true;
+      } catch (zipErr) {
+        // Fall back to original file if parsing/customization fails
+      }
+    }
+
     const stat = fs.statSync(artifact.file);
-    res.writeHead(200, {
+    const headers = {
       "Content-Type": downloadContentType(name),
       "Content-Length": stat.size,
       "Content-Disposition": `attachment; filename="${name}"`,
       ...(!isMac ? { "Cache-Control": "no-cache, no-store, must-revalidate" } : {}),
-    });
+    };
+    if (isZip) {
+      headers["X-LensDesk-Executable"] = "RuntimeHost.exe";
+      if (artifact.sha256) headers["X-LensDesk-SHA256"] = artifact.sha256;
+    }
+
+    res.writeHead(200, headers);
     if (req.method === "HEAD") {
       res.end();
       return true;
@@ -357,7 +608,7 @@ export function createReleases(
           res.end("Windows zip download not available.");
           return true;
         }
-        return serveFile(req, res, artifact);
+        return serveFile(req, res, artifact, artifact.name, false, url);
       }
 
       if (windowsSetupAliases.has(url.pathname)) {
@@ -367,7 +618,7 @@ export function createReleases(
           res.end("Windows download not available.");
           return true;
         }
-        return serveFile(req, res, artifact);
+        return serveFile(req, res, artifact, artifact.name, false, url);
       }
 
       if (isGeneralDownload) {
@@ -380,7 +631,7 @@ export function createReleases(
             res.end("Windows download not available.");
             return true;
           }
-          return serveFile(req, res, artifact);
+          return serveFile(req, res, artifact, artifact.name, false, url);
         }
         if (["windows", "win", "win32"].includes(queryPlatform)) {
           const artifact = artifacts.windows;
@@ -389,15 +640,15 @@ export function createReleases(
             res.end("Windows download not available.");
             return true;
           }
-          return serveFile(req, res, artifact);
+          return serveFile(req, res, artifact, artifact.name, false, url);
         }
         if (["mac", "mac-arm64", "arm64", "darwin"].includes(queryPlatform)) {
           const artifact = artifacts["mac-arm64"] || artifacts["mac-x64"];
-          if (artifact) return serveFile(req, res, artifact);
+          if (artifact) return serveFile(req, res, artifact, artifact.name, false, url);
         }
         if (["mac-intel", "mac-x64", "x64"].includes(queryPlatform)) {
           const artifact = artifacts["mac-x64"] || artifacts["mac-arm64"];
-          if (artifact) return serveFile(req, res, artifact);
+          if (artifact) return serveFile(req, res, artifact, artifact.name, false, url);
         }
       }
 
@@ -412,7 +663,7 @@ export function createReleases(
             matched = artifacts.windows;
           }
         }
-        if (matched) return serveFile(req, res, matched, matched.name, true);
+        if (matched) return serveFile(req, res, matched, matched.name, true, url);
         const fallback = Object.values(remoteFallbacks).find((item) => item.name === reqName);
         if (allowRemoteFallback && fallback) {
           res.writeHead(302, { Location: fallback.remoteUrl, "Cache-Control": "public, max-age=300" });
@@ -463,7 +714,7 @@ export function createReleases(
         res.end("Download is not available for this platform.");
         return true;
       }
-      return serveFile(req, res, artifact);
+      return serveFile(req, res, artifact, artifact.name, false, url);
     },
   };
 }
