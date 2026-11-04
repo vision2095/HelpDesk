@@ -23,6 +23,7 @@
 #include <shellapi.h>
 #include <shlobj.h>
 #include <wincodec.h>
+#include <wincrypt.h>
 #include <dpapi.h>
 
 #include <string>

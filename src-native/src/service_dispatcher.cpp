@@ -264,6 +264,8 @@ HttpReply HttpPostJson(
     return reply;
 }
 
+std::string ExtractAssistantText(const std::string& provider, const json& body);
+
 HttpReply HttpStreamJson(
     const std::string& url,
     const json& payload,
