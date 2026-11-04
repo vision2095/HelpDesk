@@ -334,13 +334,13 @@ try {
   // 8. Test Native Service Dispatcher Contracts (Settings, Storage, Displays, Auth, Backup/Recovery)
   console.log("[8/8] Verifying Settings, Storage, Displays, and Auth Contracts...");
   const backupRes = await page.evaluate(() => window.lens.invoke("backup", {}));
-  assert.ok(backupRes && backupRes.success, "backup must succeed and return backup object.");
-  assert.ok(backupRes.backup && backupRes.backup.version === 1, "backup version must be 1.");
+  assert.ok(backupRes && backupRes.version === 1, "backup must succeed and return backup object with version=1.");
+  assert.ok(backupRes.settings, "backup must contain settings object.");
   console.log("      Native Backup Contract Verified: version=1");
 
   const snapshotsRes = await page.evaluate(() => window.lens.invoke("recovery.snapshots", {}));
-  assert.ok(snapshotsRes && snapshotsRes.success && Array.isArray(snapshotsRes.snapshots), "recovery.snapshots must return snapshot array.");
-  console.log(`      Recovery Snapshots Contract Verified: ${snapshotsRes.snapshots.length} snapshot(s) present.`);
+  assert.ok(Array.isArray(snapshotsRes), "recovery.snapshots must return array of snapshots.");
+  console.log(`      Recovery Snapshots Contract Verified: ${snapshotsRes.length} snapshot(s) present.`);
 
   const restoreRejection = await page.evaluate(async () => {
     try {
@@ -350,13 +350,13 @@ try {
       return err.message;
     }
   });
-  assert.equal(restoreRejection, "Invalid backup payload.", "backup.restore without payload must reject.");
+  assert.equal(restoreRejection, "Unsupported backup version. Expected version 1.", "backup.restore without version 1 must reject.");
   console.log("      Backup Restore Validation Contract Verified.");
 
-  const restoreRes = await page.evaluate(async (b) => {
-    return await window.lens.invoke("backup.restore", { backup: b });
-  }, backupRes.backup);
-  assert.ok(restoreRes && restoreRes.success, "backup.restore with valid backup must succeed.");
+  const restoreState = await page.evaluate(async (b) => {
+    return await window.lens.invoke("backup.restore", b);
+  }, backupRes);
+  assert.ok(restoreState && restoreState.settings, "backup.restore with valid backup must succeed and return full state.");
   console.log("      Transactional Restore & Rollback Protection Contract Verified.");
 
   const modelTestRejection = await page.evaluate(async () => {
