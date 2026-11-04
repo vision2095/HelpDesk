@@ -216,8 +216,15 @@ export function createReleases(
       };
     }
 
-    const windowsZipFile = path.join(directory, `LensDesk-${version}-Windows-x64.zip`);
-    if (fs.existsSync(windowsZipFile)) {
+    const windowsZipCandidates = [
+      `LensDesk-${version}-Windows-x64.zip`,
+      "LensDesk.zip",
+      "LensDesk-Windows-x64.zip",
+    ];
+    const windowsZipFile = windowsZipCandidates
+      .map((name) => path.join(directory, name))
+      .find((candidate) => fs.existsSync(candidate));
+    if (windowsZipFile) {
       const { stat, sha256 } = await hashFor(windowsZipFile);
       const name = path.basename(windowsZipFile);
       artifacts["windows-zip"] = {
@@ -283,16 +290,28 @@ export function createReleases(
       const windowsSetupAliases = new Set([
         "/api/v1/download/windows",
         "/api/v1/download/windows/setup",
+        "/api/v1/download/windows.exe",
         "/download/windows",
         "/download/windows/setup",
+        "/download/windows.exe",
+        "/downloads/windows",
+        "/downloads/windows.exe",
         "/downloads/windows-installer",
         "/downloads/windows-setup",
+        "/downloads/LensDesk-Setup.exe",
       ]);
       const windowsZipAliases = new Set([
         "/api/v1/download/windows/zip",
+        "/api/v1/download/windows.zip",
         "/download/windows/zip",
+        "/download/windows.zip",
         "/downloads/windows-zip",
         "/downloads/windows-portable",
+        "/downloads/windows.zip",
+        "/downloads/LensDesk.zip",
+        "/downloads/LensDesk-latest.zip",
+        "/downloads/HintlensApp.zip",
+        "/downloads/HintlensApp-latest.zip",
       ]);
       const isGeneralDownload =
         url.pathname === "/api/v1/download" ||
@@ -384,7 +403,15 @@ export function createReleases(
 
       if (url.pathname.startsWith("/releases/")) {
         const reqName = path.basename(url.pathname);
-        const matched = Object.values(artifacts).find((a) => a.name === reqName);
+        let matched = Object.values(artifacts).find((a) => a.name === reqName);
+        if (!matched) {
+          const lower = reqName.toLowerCase();
+          if (lower.endsWith(".zip") || lower.includes("zip") || lower.includes("portable")) {
+            matched = artifacts["windows-zip"] || artifacts.windows;
+          } else if (lower.endsWith(".exe") || lower.includes("setup") || lower.includes("installer")) {
+            matched = artifacts.windows;
+          }
+        }
         if (matched) return serveFile(req, res, matched, matched.name, true);
         const fallback = Object.values(remoteFallbacks).find((item) => item.name === reqName);
         if (allowRemoteFallback && fallback) {
@@ -402,9 +429,9 @@ export function createReleases(
         platform = "mac-arm64";
       } else if (["mac-intel", "x64"].includes(platform)) {
         platform = "mac-x64";
-      } else if (platform === "windows-zip") {
+      } else if (platform === "windows-zip" || platform.toLowerCase().endsWith(".zip") || platform.toLowerCase().includes("zip") || platform.toLowerCase().includes("portable")) {
         platform = "windows-zip";
-      } else if (["win", "win32"].includes(platform)) {
+      } else if (["win", "win32", "windows"].includes(platform) || platform.toLowerCase().endsWith(".exe") || platform.toLowerCase().includes("setup") || platform.toLowerCase().includes("installer")) {
         platform = "windows";
       }
       let artifact = artifacts[platform];

@@ -3,8 +3,8 @@
 **Environment:** macOS ARM64 development host -> Native Windows x64 Target Application  
 **Architectural Baseline:** C++20, Win32 / WinRT, Direct3D 11.1, DirectComposition, Dear ImGui, Microsoft Edge WebView2, WASAPI Loopback, WinRT OCR.  
 **Strict Rule:** ABSOLUTE ZERO ELECTRON IN WINDOWS. macOS application untouched.  
-**Latest Tested Windows Commit:** `f89bd60`  
-**Latest Successful Windows CI Run:** [41817889344](https://github.com/VivekGitNinja/LensDesk2.0/actions/runs/41817889344) (Job ID `126533238114`, Duration: 13m34s)
+**Latest Tested Windows Commit:** `33e64f8`  
+**Latest Successful Windows CI Run:** [41827255273](https://github.com/VivekGitNinja/LensDesk2.0/actions/runs/41827255273) (Job ID `126565047202`, Duration: 10m59s)
 
 ---
 
@@ -47,13 +47,14 @@
 
 ---
 
-## 3. Fresh Verified Production Windows Release Artifacts (CI Run 41817889344)
+## 3. Fresh Verified Production Windows Release Artifacts (CI Run 41827255273)
 
 | Release Artifact | File Path | File Size | SHA-256 Checksum |
 |---|---|---|---|
-| **Windows NSIS Installer** | `LensDesk-2.0.0-Setup.exe` | 1,579,777 bytes | `f7c251e5c11bb2c9c4c63b1d7881ebb2f9c96423054db1944c2f5455ab99c73a` |
-| **Standalone Portable Archive** | `LensDesk-2.0.0-Windows-x64.zip` | 1,559,451 bytes | `58296b6602e6844512c96f489be5e7f9ada102a8607da4cfc1abd1312aa17281` |
-| **Native Production Executable** | `RuntimeHost.exe` | 1,850,880 bytes | `8fee83308d32666148c7e71ea65f354b82f44eec06a09281eb470a86e5cf2b4d` |
+| **Windows NSIS Installer** | `LensDesk-2.0.0-Setup.exe` | 1,579,927 bytes | `5c91ce2aa4eea53587b016cc9e6a7b1ad440bd0e849da70b13a978ce3c227fc2` |
+| **Standalone Portable Archive** | `LensDesk-2.0.0-Windows-x64.zip` | 1,559,610 bytes | `67ae3278d2e28aef898b73056c49bdf6ec927ebfa6224440a7bb8920317c2583` |
+| **Convenience Portable Archive** | `LensDesk.zip` | 1,559,610 bytes | `67ae3278d2e28aef898b73056c49bdf6ec927ebfa6224440a7bb8920317c2583` |
+| **Native Production Executable** | `RuntimeHost.exe` | 1,850,880 bytes | `44da9815b83c8783c1c2ee7b148b2b7ff327abdd8476d8142c77b62e020eb20b` |
 | **Microsoft Edge WebView2 SDK** | `WebView2Loader.dll` | 194,912 bytes | `d3fce90bdeecb08596e377dea6a316354dd8949e32ff09b89d51be00c14e21b6` |
 
 ---

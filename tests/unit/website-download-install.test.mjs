@@ -127,23 +127,81 @@ test("Website authentication gate protects Windows downloads", async (t) => {
   const downloadedZipBytes = Buffer.from(await zipDlResp.arrayBuffer());
   assert.deepEqual(downloadedZipBytes, zipBytes);
 
-  // 6. Alternative route /download?platform=windows works with token
-  const altResp = await fetch(
-    `${serverUrl}/download?platform=windows&token=${userToken}`,
-  );
-  assert.equal(altResp.status, 200);
-  assert.equal(
-    altResp.headers.get("content-disposition"),
-    `attachment; filename="${setupName}"`,
-  );
+  // 6. Comprehensive route validation for all supported aliases
+  const setupRoutes = [
+    "/downloads/windows",
+    "/downloads/windows.exe",
+    "/downloads/windows-installer",
+    "/downloads/windows-setup",
+    "/downloads/LensDesk-Setup.exe",
+    "/download/windows",
+    "/download/windows/setup",
+    "/download/windows.exe",
+    "/api/v1/download/windows",
+    "/api/v1/download/windows/setup",
+    `/releases/${setupName}`,
+    "/releases/LensDesk-Setup.exe",
+  ];
+  for (const r of setupRoutes) {
+    const sep = r.includes("?") ? "&" : "?";
+    const res = await fetch(`${serverUrl}${r}${sep}token=${userToken}`);
+    assert.equal(res.status, 200, `Setup route ${r} failed with status ${res.status}`);
+    assert.equal(
+      res.headers.get("content-type"),
+      "application/vnd.microsoft.portable-executable",
+      `Setup route ${r} content-type mismatch`,
+    );
+    assert.equal(
+      res.headers.get("content-disposition"),
+      `attachment; filename="${setupName}"`,
+      `Setup route ${r} disposition mismatch`,
+    );
+    const b = Buffer.from(await res.arrayBuffer());
+    assert.deepEqual(b, setupBytes, `Setup route ${r} byte mismatch`);
+  }
+
+  const zipRoutes = [
+    "/downloads/windows-zip",
+    "/downloads/windows-portable",
+    "/downloads/windows.zip",
+    "/downloads/LensDesk.zip",
+    "/downloads/LensDesk-latest.zip",
+    "/download/windows/zip",
+    "/download/windows.zip",
+    "/download?platform=windows&format=zip",
+    "/api/v1/download/windows/zip",
+    "/api/v1/download?platform=windows&format=zip",
+    `/releases/${zipName}`,
+    "/releases/LensDesk.zip",
+  ];
+  for (const r of zipRoutes) {
+    const sep = r.includes("?") ? "&" : "?";
+    const res = await fetch(`${serverUrl}${r}${sep}token=${userToken}`);
+    assert.equal(res.status, 200, `ZIP route ${r} failed with status ${res.status}`);
+    assert.equal(
+      res.headers.get("content-type"),
+      "application/zip",
+      `ZIP route ${r} content-type mismatch`,
+    );
+    assert.equal(
+      res.headers.get("content-disposition"),
+      `attachment; filename="${zipName}"`,
+      `ZIP route ${r} disposition mismatch`,
+    );
+    const b = Buffer.from(await res.arrayBuffer());
+    assert.deepEqual(b, zipBytes, `ZIP route ${r} byte mismatch`);
+  }
 
   // 7. Authenticated PowerShell script includes correct hash verification
-  const psResp = await fetch(`${serverUrl}/lensdesk-install.ps1?token=${userToken}`);
-  assert.equal(psResp.status, 200);
-  const psScript = await psResp.text();
-  assert.ok(psScript.includes(expectedHash));
-  assert.ok(psScript.includes("RuntimeHost.exe"));
-  assert.ok(psScript.includes("Start-Process -FilePath $download"));
+  for (const psRoute of ["/lensdesk-install.ps1", "/install.ps1"]) {
+    const psResp = await fetch(`${serverUrl}${psRoute}?token=${userToken}`);
+    assert.equal(psResp.status, 200, psRoute);
+    const psScript = await psResp.text();
+    assert.ok(psScript.includes(expectedHash), `${psRoute} missing expected hash`);
+    assert.ok(psScript.includes("RuntimeHost.exe"), `${psRoute} missing RuntimeHost.exe`);
+    assert.ok(psScript.includes("Start-Process -FilePath $download"), `${psRoute} missing Start-Process`);
+    assert.ok(psScript.includes("LENSDESK 2.0"), `${psRoute} missing ANSI banner`);
+  }
 });
 
 test("Windows installer configuration and packaging guarantee LensDesk 2.0 branding", () => {
