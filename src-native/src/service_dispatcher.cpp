@@ -1146,34 +1146,36 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
                 return;
             }
 
-            std::string apiKey;
-            if (prov != "local" && m_storageMgr) {
+            std::string apiKey = payload.value("apiKey", payload.value("key", ""));
+            if (apiKey.empty() && prov != "local" && m_storageMgr) {
                 apiKey = m_storageMgr->GetApiKey(prov);
             }
 
             if (prov != "local" && apiKey.empty()) {
-                bool hasCloud = false;
-                {
-                    std::lock_guard<std::mutex> cloudLock(m_cloudMutex);
-                    hasCloud = m_cloud.HasSession();
-                }
-                if (hasCloud) {
-                    m_workers.emplace_back([this, payload, callback]() {
-                        try {
-                            json res;
-                            {
-                                std::lock_guard<std::mutex> cloudLock(m_cloudMutex);
-                                res = m_cloud.CloudRequest("model.test", payload);
+                if (payload.value("hosted", false)) {
+                    bool hasCloud = false;
+                    {
+                        std::lock_guard<std::mutex> cloudLock(m_cloudMutex);
+                        hasCloud = m_cloud.HasSession();
+                    }
+                    if (hasCloud) {
+                        m_workers.emplace_back([this, payload, callback]() {
+                            try {
+                                json res;
+                                {
+                                    std::lock_guard<std::mutex> cloudLock(m_cloudMutex);
+                                    res = m_cloud.CloudRequest("model.test", payload);
+                                }
+                                PostToUi([callback, res]() { callback(res, false); });
+                            } catch (const std::exception& e) {
+                                const std::string err = e.what();
+                                PostToUi([callback, err]() { callback(err, true); });
                             }
-                            PostToUi([callback, res]() { callback(res, false); });
-                        } catch (const std::exception& e) {
-                            const std::string err = e.what();
-                            PostToUi([callback, err]() { callback(err, true); });
-                        }
-                    });
-                    return;
+                        });
+                        return;
+                    }
                 }
-                callback("Add a provider key or sign in with an active LensDesk plan before testing a model.", true);
+                callback("Paste an API key for " + prov + " before testing the connection.", true);
                 return;
             }
 
