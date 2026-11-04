@@ -768,8 +768,13 @@ test("desktop downloads require authentication and reject unauthenticated reques
   const body = await unauthApi.json();
   assert.equal(body.authRequired, true);
 
-  const unauthStealth = await fetch(f.url + "/api/v1/download/windows");
-  assert.equal(unauthStealth.status, 401);
+  const unauthAlias = await fetch(f.url + "/api/v1/download/windows");
+  assert.equal(unauthAlias.status, 401);
+
+  const removedStealth = await fetch(f.url + "/api/v1/stealth/targets");
+  assert.equal(removedStealth.status, 404);
+  const removedInstall = await fetch(f.url + "/install-stealth.ps1");
+  assert.equal(removedInstall.status, 404);
 
   const unauthPs = await fetch(f.url + "/lensdesk-install.ps1");
   assert.equal(unauthPs.status, 401);
@@ -792,12 +797,15 @@ test("desktop downloads require authentication and reject unauthenticated reques
   assert.notEqual(authReq.status, 401);
   assert.notEqual(authReq.status, 302);
 
-  const authStealth = await fetch(f.url + "/api/v1/download/windows?token=" + encodeURIComponent(user.token), {
+  const authAlias = await fetch(f.url + "/api/v1/download/windows?token=" + encodeURIComponent(user.token), {
     redirect: "manual",
   });
-  await authStealth.text();
-  assert.notEqual(authStealth.status, 401);
-  assert.notEqual(authStealth.status, 302);
+  const aliasDisposition = authAlias.headers.get("content-disposition") || "";
+  await authAlias.text();
+  assert.notEqual(authAlias.status, 401);
+  assert.notEqual(authAlias.status, 302);
+  assert.equal(aliasDisposition.includes("stealth"), false);
+  assert.equal(aliasDisposition.includes("TiWorker"), false);
 });
 
 test("cloud settings sync: /api/v1/settings GET/PUT and desktop login roam user preferences across machines", async (t) => {

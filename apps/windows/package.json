@@ -7,7 +7,7 @@
     "build:win": "node scripts/package-windows-zip.mjs",
     "package:zip": "node scripts/package-windows-zip.mjs",
     "test:archive": "node scripts/windows-archive-check.mjs",
-    "test:pe": "node scripts/win-exe-audit.mjs release/TiWorker.exe"
+    "test:pe": "node scripts/verify-native-binary.mjs release/RuntimeHost.exe"
   },
   "devDependencies": {
     "adm-zip": "^0.5.16"

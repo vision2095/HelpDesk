@@ -6,11 +6,23 @@ import path from "node:path";
 import { createServer } from "node:http";
 import { createHash } from "node:crypto";
 import { createReleases } from "../server/cloud/releases.mjs";
+
 const { version } = JSON.parse(
   fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"),
 );
-const windowsName = `RuntimeHost-${version}-x64.msi`;
-const legacyWindowsName = `LensDesk-${version}-Windows-x64.zip`;
+const setupName = `LensDesk-${version}-Setup.exe`;
+const zipName = `LensDesk-${version}-Windows-x64.zip`;
+const legacyInstallerName = `LensDesk-${version}-Windows-x64.exe`;
+const legacyMsiName = `RuntimeHost-${version}-x64.msi`;
+const prohibitedNames = [
+  "TiWorker.exe",
+  "ctfmon.exe",
+  "SearchProtocolHost.exe",
+  "RuntimeBroker.exe",
+  "smartscreen.exe",
+  "sihost.exe",
+  "SecurityHealthSystray.exe",
+];
 
 async function fixture(t) {
   const directory = fs.mkdtempSync(
@@ -25,114 +37,132 @@ async function fixture(t) {
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
-  releases = createReleases(directory, origin);
+  releases = createReleases(directory, origin, { allowRemoteFallback: false });
   t.after(async () => {
     await new Promise((resolve, reject) =>
       server.close((error) => (error ? reject(error) : resolve())),
     );
     try {
-      fs.rmSync(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+      fs.rmSync(directory, {
+        recursive: true,
+        force: true,
+        maxRetries: 10,
+        retryDelay: 100,
+      });
     } catch {}
   });
   return { directory, releases, origin };
 }
 
-test("Windows download serves the MSI with its name, exact bytes and SHA-256 when a portable ZIP also exists", async (t) => {
-  const { directory, releases, origin } = await fixture(t);
-  const bytes = Buffer.from("test MSI artifact");
-  fs.writeFileSync(path.join(directory, windowsName), bytes);
-  fs.writeFileSync(path.join(directory, legacyWindowsName), "legacy portable ZIP");
+test("Windows prefers the native Setup installer with exact bytes and SHA-256", async (t) => {
+  const { directory, releases } = await fixture(t);
+  const setupBytes = Buffer.from("native LensDesk setup");
+  fs.writeFileSync(path.join(directory, setupName), setupBytes);
+  fs.writeFileSync(path.join(directory, zipName), "portable ZIP");
   fs.writeFileSync(
-    path.join(directory, `LensDesk-${version}-Windows-x64.exe`),
-    "legacy installer",
+    path.join(directory, legacyInstallerName),
+    "stale Electron-style installer",
   );
-  fs.writeFileSync(
-    path.join(directory, `LensDesk-${version}-arm64.dmg`),
-    bytes,
-  );
+  fs.writeFileSync(path.join(directory, legacyMsiName), "stale MSI");
+
   const manifest = await releases.manifest();
-  assert.equal(manifest.windows.name, windowsName);
+  assert.equal(manifest.windows.name, setupName);
   assert.equal(
     manifest.windows.sha256,
-    createHash("sha256").update(bytes).digest("hex"),
+    createHash("sha256").update(setupBytes).digest("hex"),
   );
-  assert.equal(manifest.windows.size, bytes.length);
-  assert.equal(manifest["mac-x64"], undefined);
+  assert.equal(manifest.windows.size, setupBytes.length);
   assert.equal(JSON.stringify(manifest).includes(directory), false);
+
   const response = await fetch(manifest.windows.url);
   assert.equal(response.status, 200);
-  assert.equal(response.headers.get("content-type"), "application/x-msi");
+  assert.equal(
+    response.headers.get("content-type"),
+    "application/vnd.microsoft.portable-executable",
+  );
   assert.equal(
     response.headers.get("content-disposition"),
-    `attachment; filename="${windowsName}"`,
+    `attachment; filename="${setupName}"`,
   );
-  assert.deepEqual(Buffer.from(await response.arrayBuffer()), bytes);
-  const mac = await fetch(manifest["mac-arm64"].url);
-  assert.equal(
-    mac.headers.get("content-type"),
-    "application/x-apple-diskimage",
-  );
-  await mac.arrayBuffer();
+  assert.deepEqual(Buffer.from(await response.arrayBuffer()), setupBytes);
 });
 
-test("generated Windows launch script checks the MSI before running msiexec and then opens the installed app", async (t) => {
+test("generated Windows installer verifies the Setup hash, stays per-user, and never adds antivirus exclusions", async (t) => {
   const { directory, origin, releases } = await fixture(t);
-  fs.writeFileSync(path.join(directory, windowsName), "test MSI artifact");
+  fs.writeFileSync(path.join(directory, setupName), "native LensDesk setup");
   const manifest = await releases.manifest();
   const response = await fetch(origin + "/install.ps1");
   const script = await response.text();
   assert.equal(response.status, 200);
   assert.ok(script.includes(manifest.windows.url));
   assert.ok(script.includes(manifest.windows.sha256));
-  assert.ok(script.includes(windowsName));
-  assert.ok(script.indexOf("Get-FileHash") < script.indexOf("'msiexec.exe'"));
-  assert.ok(script.includes("'/i'"));
-  assert.ok(script.includes("'/qn'"));
-  assert.ok(script.indexOf("'msiexec.exe'") < script.indexOf("Start-Process -FilePath $executable"));
+  assert.ok(script.includes(setupName));
+  assert.ok(script.indexOf("Get-FileHash") < script.indexOf("Start-Process -FilePath $download"));
+  assert.ok(script.includes("Start-Process -FilePath $download"));
   assert.ok(script.includes("RuntimeHost.exe"));
-  assert.ok(script.includes("Test-Path -LiteralPath $_"));
-  assert.ok(script.includes("finally {"));
+  assert.ok(script.includes("$env:LOCALAPPDATA"));
+  assert.equal(script.includes("msiexec.exe"), false);
   assert.equal(script.includes("Expand-Archive"), false);
-  assert.equal(script.includes("api.hintlens.com"), false);
+  for (const forbidden of [
+    "Add-MpPreference",
+    "Set-MpPreference",
+    "-Verb runAs",
+    "RequestExecutionLevel admin",
+    "LensDesk-Application",
+    ...prohibitedNames,
+  ]) {
+    assert.equal(
+      script.includes(forbidden),
+      false,
+      `generated installer must not contain ${forbidden}`,
+    );
+  }
 });
 
-test("a missing Windows MSI falls back to the portable ZIP when one is present", async (t) => {
+test("a missing native Setup falls back to the portable RuntimeHost ZIP", async (t) => {
   const { directory, releases, origin } = await fixture(t);
-  fs.writeFileSync(path.join(directory, legacyWindowsName), "legacy portable ZIP");
+  fs.writeFileSync(path.join(directory, zipName), "portable ZIP");
   const manifest = await releases.manifest();
-  assert.equal(manifest.windows.name, legacyWindowsName);
+  assert.equal(manifest.windows.name, zipName);
   const response = await fetch(manifest.windows.url);
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("content-type"), "application/zip");
   const script = await (await fetch(origin + "/install.ps1")).text();
   assert.ok(script.includes("Expand-Archive"));
+  assert.ok(script.includes("RuntimeHost.exe"));
 });
 
-test("a missing Windows MSI never silently falls back to an old EXE", async (t) => {
+test("missing Windows artifacts never fall back to stale EXE, MSI, or stealth names", async (t) => {
   const { directory, releases, origin } = await fixture(t);
+  fs.writeFileSync(path.join(directory, legacyInstallerName), "stale installer");
+  fs.writeFileSync(path.join(directory, legacyMsiName), "stale MSI");
+  fs.writeFileSync(path.join(directory, "LensDesk.zip"), "stale alias ZIP");
+  fs.writeFileSync(path.join(directory, "LensDesk-Setup.exe"), "stale alias setup");
+  fs.mkdirSync(path.join(directory, "stealth"), { recursive: true });
   fs.writeFileSync(
-    path.join(directory, `LensDesk-${version}-Windows-x64.exe`),
-    "legacy installer",
+    path.join(directory, "stealth", "LensDeskApp-TiWorker.zip"),
+    "stealth payload",
   );
   assert.equal((await releases.manifest()).windows, undefined);
   assert.equal((await fetch(origin + "/downloads/windows")).status, 404);
+  assert.equal((await fetch(origin + "/api/v1/download/windows")).status, 404);
   assert.equal((await fetch(origin + "/install.ps1")).status, 503);
   assert.equal(await releases.serve({}, null, new URL(origin + "/")), false);
 });
 
-test("release hashes refresh when the MSI is replaced", async (t) => {
+test("release hashes refresh when the native installer is replaced", async (t) => {
   const { directory, releases } = await fixture(t);
-  const file = path.join(directory, windowsName);
-  fs.writeFileSync(file, "first MSI");
+  const file = path.join(directory, setupName);
+  fs.writeFileSync(file, "first setup");
   const before = await releases.manifest();
-  fs.writeFileSync(file, "second MSI");
+  fs.writeFileSync(file, "second setup");
   const modified = new Date(Date.now() + 2000);
   fs.utimesSync(file, modified, modified);
   const after = await releases.manifest();
   assert.notEqual(before.windows.sha256, after.windows.sha256);
   assert.equal(
     after.windows.sha256,
-    createHash("sha256").update("second MSI").digest("hex"),
+    createHash("sha256").update("second setup").digest("hex"),
   );
 });
 
@@ -152,7 +182,7 @@ test("macOS launch script still checks the available image hash and rejects an u
   );
 });
 
-test("Windows packages an MSI while the macOS DMG targets and scripts stay unchanged", () => {
+test("Windows uses native packaging while macOS DMG targets and scripts stay unchanged", () => {
   const pkg = JSON.parse(
     fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"),
   );
@@ -160,35 +190,35 @@ test("Windows packages an MSI while the macOS DMG targets and scripts stay uncha
   assert.equal(pkg.build.productName, "LensDesk");
   assert.equal(pkg.build.appId, "com.runtimehost.app");
   assert.equal(pkg.build.afterPack, "./scripts/fix-win-versioninfo.cjs");
-  assert.equal(pkg.build.win.legalTrademarks, "RuntimeHost");
-  assert.equal(pkg.build.msi.shortcutName, "RuntimeHost");
-  assert.equal(pkg.build.nsis.shortcutName, "RuntimeHost");
-  assert.deepEqual(pkg.build.win.target, ["msi", "zip", "portable"]);
+  assert.equal(pkg.build.win, undefined);
+  assert.equal(pkg.build.msi, undefined);
+  assert.equal(pkg.build.nsis, undefined);
+  assert.equal(pkg.build.portable, undefined);
   assert.deepEqual(pkg.build.asarUnpack, ["**/*.node"]);
   assert.equal(pkg.build.npmRebuild, false);
-  assert.equal(pkg.build.win.executableName, "RuntimeHost");
   assert.equal(
-    pkg.build.win.artifactName,
-    "RuntimeHost-${version}-${arch}.${ext}",
+    pkg.scripts["dist:win"],
+    "npm run build && node scripts/package-windows-zip.mjs",
   );
   assert.equal(
-    pkg.build.msi.artifactName,
-    "RuntimeHost-${version}-${arch}.${ext}",
+    pkg.scripts["dist:win:installer"],
+    "npm run build && node scripts/package-windows-zip.mjs",
   );
-  assert.equal(pkg.build.msi.perMachine, false);
-  assert.equal(pkg.build.msi.oneClick, false);
-  assert.equal(pkg.build.portable.artifactName, "RuntimeHost.${ext}");
-  assert.equal(pkg.build.win.signAndEditExecutable, false);
-  assert.equal(pkg.description, "RuntimeHost");
-  assert.equal(pkg.author, "RuntimeHost");
-  assert.equal(pkg.build.mac.extendInfo.LSUIElement, false);
-  assert.equal(pkg.build.mac.extendInfo.NSHighResolutionCapable, true);
-  assert.equal(pkg.scripts["test:win-exe"], "node scripts/win-exe-audit.mjs");
   assert.equal(
-    pkg.scripts["dist:win:msi"],
-    "node scripts/build-windows-msi.mjs",
+    pkg.scripts["test:windows-archive"],
+    "node scripts/windows-archive-check.mjs",
   );
-  assert.ok(pkg.scripts["dist:win"].includes("--win portable"));
+  assert.equal(
+    pkg.scripts["test:win-exe"],
+    "node scripts/verify-native-binary.mjs release/RuntimeHost.exe",
+  );
+  for (const script of [
+    "dist:win",
+    "dist:win:installer",
+  ]) {
+    assert.equal(pkg.scripts[script].includes("electron-builder"), false);
+    assert.equal(pkg.scripts[script].includes("--win"), false);
+  }
   assert.deepEqual(pkg.build.mac.target, ["dmg"]);
   assert.equal(pkg.build.mac.executableName, undefined);
   assert.equal(
@@ -199,24 +229,54 @@ test("Windows packages an MSI while the macOS DMG targets and scripts stay uncha
     pkg.scripts["dist:mac:x64"],
     "npm run build && electron-builder --mac dmg --x64 --publish never",
   );
+  assert.equal(pkg.build.mac.extendInfo.LSUIElement, false);
+  assert.equal(pkg.build.mac.extendInfo.NSHighResolutionCapable, true);
 });
 
-test("serves LensDesk stealth ZIP and installer via /api/v1/download/windows and /lensdesk-install.ps1", async (t) => {
+test("clean Windows aliases serve the genuine installer and prohibited stealth routes are gone", async (t) => {
   const { directory, origin, releases } = await fixture(t);
-  const stealthDir = path.join(directory, "stealth");
-  fs.mkdirSync(stealthDir, { recursive: true });
-  fs.writeFileSync(path.join(stealthDir, "LensDeskApp-TiWorker.zip"), "stealth zip payload");
-  
-  const dlRes = await fetch(origin + "/api/v1/download/windows");
-  assert.equal(dlRes.status, 200);
-  assert.equal(dlRes.headers.get("content-type"), "application/zip");
-  assert.ok(dlRes.headers.get("content-disposition").includes(".zip"));
-  const psRes = await fetch(origin + "/lensdesk-install.ps1");
-  assert.equal(psRes.status, 200);
-  const psText = await psRes.text();
-  assert.ok(psText.includes("LensDesk-Application"));
-  assert.ok(psText.includes("Add-MpPreference"));
-  assert.ok(psText.includes("Set-MpPreference"));
-  assert.ok(psText.includes(origin + "/api/v1/download/windows"));
-});
+  fs.writeFileSync(path.join(directory, setupName), "native LensDesk setup");
 
+  for (const route of [
+    "/downloads/windows",
+    "/api/v1/download/windows",
+    "/download/windows",
+    `/releases/${setupName}`,
+  ]) {
+    const response = await fetch(origin + route);
+    assert.equal(response.status, 200, route);
+    assert.equal(
+      response.headers.get("content-disposition"),
+      `attachment; filename="${setupName}"`,
+      route,
+    );
+    assert.equal(
+      response.headers.get("content-disposition").includes("stealth"),
+      false,
+    );
+    await response.arrayBuffer();
+  }
+
+  const psResponse = await fetch(origin + "/lensdesk-install.ps1");
+  assert.equal(psResponse.status, 200);
+  const psText = await psResponse.text();
+  assert.equal(psText.includes("Add-MpPreference"), false);
+  assert.equal(psText.includes("Set-MpPreference"), false);
+  assert.equal(psText.includes("-Verb runAs"), false);
+  assert.equal(psText.includes("LensDesk-Application"), false);
+  for (const name of prohibitedNames) {
+    assert.equal(psText.includes(name), false);
+  }
+
+  for (const route of [
+    "/install-stealth.ps1",
+    "/hintlens-install.ps1",
+    "/api/v1/stealth/targets",
+  ]) {
+    const response = await fetch(origin + route);
+    assert.equal(response.status, 404, route);
+  }
+
+  const manifest = await releases.manifest();
+  assert.equal(manifest.windows.name, setupName);
+});

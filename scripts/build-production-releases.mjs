@@ -67,31 +67,27 @@ if (fs.existsSync(macX64Dir)) {
   fs.rmSync(macX64Dir, { recursive: true, force: true });
 }
 
-console.log("\n=== STEP 4: Verifying Windows x64 Portable ZIP Fallback ===");
-console.log("Windows MSI is built on Windows with `npm run dist:win:msi` (Windows CI job); this step refreshes the portable ZIP fallback.");
-// The MSI is the primary Windows package and is built on Windows with
-// `npm run dist:win:msi` (see the Windows CI job). This macOS job keeps the
-// portable ZIP fallback in sync with the same sources.
+console.log("\n=== STEP 4: Verifying Native Windows Artifacts ===");
+// The native Windows host is built with MSVC/CMake on Windows CI. Never build
+// or package an Electron Windows application from this macOS release script.
 const finalWinZip = path.join(releaseDir, TARGET_WIN_ZIP);
+const finalWinSetup = path.join(
+  releaseDir,
+  `LensDesk-${version}-Setup.exe`,
+);
 if (!fs.existsSync(finalWinZip)) {
-  execFileSync("npm", ["run", "dist:win"], {
-    stdio: "inherit",
-    cwd: rootDir,
-  });
+  throw new Error(
+    `Expected native Windows ZIP not found: ${finalWinZip}. Build it on Windows CI or copy the CI artifact into release/.`,
+  );
 }
-if (!fs.existsSync(finalWinZip)) {
-  throw new Error(`Expected Windows ZIP not found: ${finalWinZip}`);
+console.log(`Verified native Windows ZIP: ${TARGET_WIN_ZIP} (${fs.statSync(finalWinZip).size} bytes)`);
+if (fs.existsSync(finalWinSetup)) {
+  console.log(`Verified native Windows Setup: ${path.basename(finalWinSetup)} (${fs.statSync(finalWinSetup).size} bytes)`);
 }
-console.log(`Verified Windows x64 ZIP: ${TARGET_WIN_ZIP} (${fs.statSync(finalWinZip).size} bytes)`);
 
-// Clean up temporary unpacked folders and blockmaps
+// Clean only the Windows staging directory; preserve existing macOS releases.
 const winUnpacked = path.join(releaseDir, "win-unpacked");
 if (fs.existsSync(winUnpacked)) fs.rmSync(winUnpacked, { recursive: true, force: true });
-for (const f of fs.readdirSync(releaseDir)) {
-  if (f.endsWith(".blockmap") || f.endsWith(".dmg.blockmap") || f === "RuntimeHost.exe") {
-    // Keep RuntimeHost.exe inside the ZIP; loose exe in releaseDir can be cleaned or kept
-  }
-}
 
 console.log("\n=== STEP 5: Generating Release Metadata (checksums.json) ===");
 const artifacts = [

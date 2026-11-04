@@ -1,10 +1,14 @@
-name: Build desktop applications
+name: Build macOS desktop applications
 on:
   workflow_dispatch:
   push:
     tags: ["v*"]
 permissions:
   contents: read
+
+# Native Windows artifacts are built and verified by
+# .github/workflows/windows-native-build.yml. This workflow must not produce
+# an Electron Windows package or require Windows/Electron runtime acceptance.
 jobs:
   package:
     strategy:
@@ -17,9 +21,6 @@ jobs:
           - os: macos-latest
             command: npx electron-builder --mac --x64 --publish never
             name: macOS-Intel
-          - os: windows-latest
-            command: npm run dist:win:msi
-            name: Windows-x64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -32,9 +33,6 @@ jobs:
       - name: Install media tools on macOS
         if: runner.os == 'macOS'
         run: brew list ffmpeg || brew install ffmpeg
-      - name: Install media tools on Windows
-        if: runner.os == 'Windows'
-        run: choco install ffmpeg -y --no-progress
       - run: npm test
       - run: npm run build
       - run: npm run test:desktop
@@ -44,15 +42,11 @@ jobs:
       - run: ${{ matrix.command }}
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
-      - run: npm run test:windows-msi
-        if: runner.os == 'Windows'
       - uses: actions/upload-artifact@v4
         with:
           name: LensDesk-${{ matrix.name }}
           path: |
-            release/*.msi
             release/*.dmg
             release/*.zip
-            release/*.exe
             release/*.blockmap
           if-no-files-found: error

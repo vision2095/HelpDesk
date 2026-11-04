@@ -1,5 +1,7 @@
 # RuntimeHost Y1–Y8 and V1–V9 Release Report
 
+> **Historical report — superseded.** This document records an earlier Electron/MSI experiment. The supported Windows product is the native C++20 host described in [docs/WINDOWS_DISTRIBUTION.md](docs/WINDOWS_DISTRIBUTION.md) and [docs/audit/WINDOWS_PARITY_2026-11-04.md](docs/audit/WINDOWS_PARITY_2026-11-04.md). Do not use its MSI, Electron, stealth, Safe Exam Browser, or process-renaming sections as current build or deployment guidance.
+
 - Repository: /Users/vivek/new repo/lensdesk-reviewed-1.3.6
 - Date: 2026-10-22
 - Host: macOS Darwin arm64, Node v26.7.0, Electron 44.9.0, electron-builder 26.15.3

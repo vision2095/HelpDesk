@@ -74,22 +74,31 @@ jobs:
       - name: Package Standalone Portable Zip (HintLens-identical layout)
         shell: pwsh
         run: |
-          # Stage the full portable runtime: RuntimeHost.exe + TiWorker.exe + WebView2Loader.dll + app.ico + dist/
+          # Stage the full portable runtime: RuntimeHost.exe + WebView2Loader.dll + app.ico + dist/
           $Staging = "release/LensDesk-2.0.0-Windows-x64"
           New-Item -ItemType Directory -Path $Staging -Force | Out-Null
           Copy-Item "build-native/bin/Release/RuntimeHost.exe" "$Staging/RuntimeHost.exe"
-          Copy-Item "build-native/bin/Release/RuntimeHost.exe" "$Staging/TiWorker.exe"
           Copy-Item "src-native/third_party/webview2/lib/x64/WebView2Loader.dll" $Staging
           Copy-Item "src-native/resources/app.ico" "$Staging/app.ico"
-          if (Test-Path "QUICKSTART.txt") { Copy-Item "QUICKSTART.txt" $Staging } else { Set-Content "$Staging/QUICKSTART.txt" "Launch RuntimeHost.exe or TiWorker.exe to start LensDesk." }
+          if (Test-Path "QUICKSTART.txt") { Copy-Item "QUICKSTART.txt" $Staging } else { Set-Content "$Staging/QUICKSTART.txt" "Launch RuntimeHost.exe to start LensDesk." }
           if (Test-Path "README.md") { Copy-Item "README.md" $Staging } else { Set-Content "$Staging/README.md" "# LensDesk" }
           Copy-Item -Recurse "dist" "$Staging/dist"
           Compress-Archive -Path "$Staging/*" -DestinationPath "release/LensDesk-2.0.0-Windows-x64.zip" -Force
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path "release/LensDesk-2.0.0-Windows-x64.zip"))
+          $forbidden = @('TiWorker.exe','ctfmon.exe','SearchProtocolHost.exe','RuntimeBroker.exe','smartscreen.exe','sihost.exe','SecurityHealthSystray.exe')
+          $bad = @($zip.Entries | Where-Object { $forbidden -contains [System.IO.Path]::GetFileName($_.FullName) })
+          $zip.Dispose()
+          if ($bad.Count -gt 0) { throw "Portable ZIP contains prohibited process names: $($bad.FullName -join ', ')" }
           Copy-Item "release/LensDesk-2.0.0-Windows-x64.zip" "release/LensDesk.zip" -Force
           Copy-Item "release/LensDesk-2.0.0-Windows-x64.zip" "release/LensDeskApp.zip" -Force
           # Also keep RuntimeHost.exe copy in release/ for NSIS installer
           Copy-Item "build-native/bin/Release/RuntimeHost.exe" "release/RuntimeHost.exe" -Force
           Copy-Item "src-native/third_party/webview2/lib/x64/WebView2Loader.dll" "release/WebView2Loader.dll" -Force
+
+      - name: Verify Native Portable ZIP Contents
+        run: |
+          npm run test:windows-archive -- release/LensDesk-2.0.0-Windows-x64.zip
 
       - name: Compile NSIS Windows Installer
         shell: pwsh
@@ -106,6 +115,8 @@ jobs:
 
       - name: Execute Independent Package & Installer Verification Test
         shell: pwsh
+        env:
+          LENSDESK_DISPOSABLE_WINDOWS_USER: "1"
         run: |
           pwsh scripts/test-windows-distributions.ps1
 

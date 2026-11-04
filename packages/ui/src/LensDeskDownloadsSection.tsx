@@ -151,7 +151,7 @@ export function LensDeskDownloadsSection({
           </div>
           <div className="hl-card-title-group">
             <h3>Manual Download (Windows)</h3>
-            <p>Native stealth overlay (Portable 64-bit ZIP archive).</p>
+            <p>Native Windows host (per-user Setup installer or portable 64-bit ZIP).</p>
           </div>
         </div>
 
@@ -163,13 +163,13 @@ export function LensDeskDownloadsSection({
             onClick={handleDownloadClick}
           >
             <Download size={16} />
-            Download for Windows (.zip)
+            Download for Windows
           </a>
           <span className="hl-badge-available">Available</span>
         </div>
 
         <p className="hl-card-note">
-          Windows 11 and Windows 10 version 2004 or later supported with native stealth capture exclusion. Extract ZIP and run LensDesk.exe.
+          Windows 11 and Windows 10 version 2004 or later supported with native capture protection. Run the LensDesk Setup installer, or extract the ZIP and run RuntimeHost.exe.
         </p>
       </div>
 
@@ -253,7 +253,7 @@ export function LensDeskDownloadsSection({
           <div className="hl-card-title-group">
             <h3>Quick Install via PowerShell (Windows - Recommended)</h3>
             <p>
-              Get LensDesk running in under 10 seconds. No manual extraction, no browser warnings &mdash; just one command.
+              Downloads the native Windows installer, verifies its SHA-256 checksum, and installs per-user.
             </p>
           </div>
         </div>

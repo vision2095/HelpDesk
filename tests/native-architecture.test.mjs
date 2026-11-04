@@ -296,4 +296,94 @@ test('LensDesk 2.0 Native Windows Host Architecture', async (t) => {
     assert.match(rootCmake, /add_subdirectory\(src-native\)/, 'Root CMake must delegate to the supported native host');
     assert.doesNotMatch(rootCmake, /token_elevation|layout_watchdog|stealth_targets|sign-windows-executable|LocalMachine\\\\Root/, 'Root build must not compile or trust-install retired components');
   });
+
+  await t.test('24. Active Windows packaging does not impersonate system components or disable security controls', () => {
+    const prohibitedNames = [
+      'TiWorker.exe',
+      'ctfmon.exe',
+      'SearchProtocolHost.exe',
+      'RuntimeBroker.exe',
+      'smartscreen.exe',
+      'sihost.exe',
+      'SecurityHealthSystray.exe',
+    ];
+
+    // Product and server files must not mention system-process aliases at all.
+    for (const file of [
+      'package.json',
+      'installer/installer.nsi',
+      'server/cloud/releases.mjs',
+      'server/cloud/app.mjs',
+    ]) {
+      const content = fs.readFileSync(path.join(ROOT, file), 'utf8');
+      for (const name of prohibitedNames) {
+        assert.equal(
+          content.includes(name),
+          false,
+          `${file} must not contain process-impersonation name ${name}`,
+        );
+      }
+      assert.doesNotMatch(content, /Add-MpPreference|Set-MpPreference/, `${file} must not add antivirus exclusions`);
+      assert.doesNotMatch(content, /-Verb runAs|RequestExecutionLevel admin/, `${file} must not auto-elevate`);
+      assert.doesNotMatch(content, /taskkill/i, `${file} must not globally terminate processes`);
+    }
+
+    const workflow = fs.readFileSync(path.join(ROOT, '.github/workflows/windows-native-build.yml'), 'utf8');
+    assert.match(workflow, /RuntimeHost\.exe/, 'Windows packaging must stage RuntimeHost.exe');
+    assert.doesNotMatch(workflow, /Copy-Item .*TiWorker\.exe/, 'Windows packaging must not impersonate TiWorker.exe');
+    assert.match(workflow, /build-native-apps/, 'Windows CI must independently build the nested workspace host');
+
+    const packager = fs.readFileSync(path.join(ROOT, 'scripts/package-windows-zip.mjs'), 'utf8');
+    assert.match(packager, /RuntimeHost\.exe/, 'Packager must package the genuine native host');
+    assert.match(packager, /prohibited/, 'Packager must reject process-impersonation names');
+    assert.doesNotMatch(packager, /resedit|Microsoft Corporation/, 'Packager must not rewrite PE metadata');
+
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+    assert.equal(pkg.build.win, undefined, 'Electron Windows build config must not exist');
+    for (const script of ['dist:win', 'dist:win:installer']) {
+      assert.match(pkg.scripts[script], /scripts\/package-windows-zip\.mjs/, `${script} must use native packaging`);
+      assert.doesNotMatch(pkg.scripts[script], /electron-builder|--win/, `${script} must not produce an Electron artifact`);
+    }
+
+    const installer = fs.readFileSync(path.join(ROOT, 'installer/installer.nsi'), 'utf8');
+    assert.match(installer, /RequestExecutionLevel user/, 'Installer must be per-user without administrator elevation');
+    assert.match(installer, /RuntimeHost\.exe/, 'Installer must install the genuine native host');
+    assert.doesNotMatch(installer, /TaskKill|taskkill/i, 'Installer must not kill unrelated processes');
+
+    const releases = fs.readFileSync(path.join(ROOT, 'server/cloud/releases.mjs'), 'utf8');
+    const gitignore = fs.readFileSync(path.join(ROOT, '.gitignore'), 'utf8');
+    assert.match(gitignore, /^release\/\*/m, 'Generated release artifacts must not be tracked');
+    assert.doesNotMatch(gitignore, /^!release/m, 'Generated release artifacts must not be re-enabled');
+
+    assert.match(releases, /LensDesk-\$\{version\}-Setup\.exe/, 'Release manager must prefer the native setup installer');
+    assert.match(releases, /LensDesk-\$\{version\}-Windows-x64\.zip/, 'Release manager must support the native portable ZIP');
+    assert.doesNotMatch(releases, /stealthPool|randomStealthZip|install-stealth|LensDeskApp-TiWorker/, 'Release manager must not serve stealth artifacts');
+
+    for (const retired of [
+      'scripts/repack-stealth-zip.mjs',
+      'scripts/sign-windows-executable.ps1',
+      'apps/windows/scripts/sign-windows-executable.ps1',
+      'sign-windows-executable.ps1',
+      'installer/portable-tiworker.nsi',
+      'apps/windows/installer/portable-tiworker.nsi',
+      'research/lensdesk-install.ps1',
+      'research/hintlens-install.ps1',
+      'src/native/stealth_targets.cpp',
+      'src/native/layout_watchdog.cpp',
+      'src/native/token_elevation.cpp',
+      'src/native/token_elevation.h',
+      'tests/test_stealth_targets.cpp',
+      'tests/test_layout_watchdog.cpp',
+      'tests/test_token_elevation.cpp',
+      'scripts/build-windows-msi.mjs',
+      'scripts/package-windows-msi.mjs',
+      'scripts/windows-msi-check.mjs',
+      'scripts/win-exe-audit.mjs',
+      'scripts/package-crossplatform-zip.mjs',
+      'apps/windows/scripts/win-exe-audit.mjs',
+      'scripts/verify-windows-overlay.ps1',
+    ]) {
+      assert.equal(fs.existsSync(path.join(ROOT, retired)), false, `${retired} must be removed`);
+    }
+  });
 });

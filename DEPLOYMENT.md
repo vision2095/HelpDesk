@@ -23,15 +23,16 @@ The Compose named volume `workspace` contains account SQLite files, cloud worksp
 
 ## Publish desktop installers
 
-Build the macOS and Windows installers with the same app version. For version 1.2.0, the current release service expects:
+Build the macOS and native Windows artifacts with the same app version. The release service expects:
 
-- `release/LensDesk-1.2.0-arm64.dmg` (Apple Silicon)
-- `release/LensDesk-1.2.0.dmg` (Intel)
-- `release/RuntimeHost-1.2.0-x64.msi` (legacy `LensDesk-1.2.0-Windows-x64.zip` remains a fallback)
+- `release/LensDesk-<version>-macOS-Apple-Silicon-arm64.dmg` (Apple Silicon)
+- `release/LensDesk-<version>-macOS-Intel-x64.dmg` (Intel)
+- `release/LensDesk-<version>-Setup.exe` (native per-user Windows installer)
+- `release/LensDesk-<version>-Windows-x64.zip` (native portable fallback)
 
-The matching ZIP archives are also built for both Mac architectures. Put the DMGs and Windows installer directly in the `release/` root; the Compose configuration mounts that directory read-only at `/releases`. The service reads the version from `package.json`; filenames must match that version. The public homepage lists only files that exist. Downloads are served at `/downloads/mac-arm64`, `/downloads/mac-x64`, and `/downloads/windows`. `cloud.public` returns the corresponding sizes and SHA-256 checksums.
+Put the DMGs, native Windows Setup, and ZIP directly in the `release/` root; the Compose configuration mounts that directory read-only at `/releases`. The service reads the version from `package.json`; filenames must match that version. The public homepage lists only files that exist. Downloads are served at `/downloads/mac-arm64`, `/downloads/mac-x64`, and `/downloads/windows`. `cloud.public` returns the corresponding sizes and SHA-256 checksums.
 
-The service also generates `/install.ps1` and `/install.sh` from actual files and checksums. These install **your LensDesk release**, not HintLens. They do not request administrator/root privileges. The Windows script runs the MSI installer silently and then opens LensDesk; the macOS script copies the app into the user's Applications directory. Signing/notarization remains necessary for a normal public installation experience.
+The service generates `/install.ps1` and `/install.sh` from actual files and checksums. These install **your LensDesk release**, not HintLens. They do not request administrator/root privileges. The Windows script verifies the Setup or portable ZIP SHA-256, installs under `%LOCALAPPDATA%\LensDesk`, and opens LensDesk without antivirus exclusions or process-name impersonation; the macOS script copies the app into the user's Applications directory. Signing/notarization remains necessary for a normal public installation experience.
 
 Connect the desktop app under **Account & cloud**, using `https://YOUR_DOMAIN`, then sign in. Choose Upload this device or Restore from cloud deliberately: these replace the destination workspace and preserve an encrypted pre-restore recovery snapshot. When the desktop lacks a local provider key, it can use signed-in hosted access and save the relevant session to the account.
 

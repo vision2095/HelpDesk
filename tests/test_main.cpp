@@ -9,8 +9,6 @@ namespace LensDesk::Native {
 }
 
 // Declarations of individual module runners
-int run_test_token_elevation();
-int run_test_layout_watchdog();
 int run_test_ocr_pipeline();
 int run_test_focus_gate();
 int run_test_typing_dynamics();
@@ -20,7 +18,6 @@ int run_test_hotkey_dispatcher();
 int run_test_sanitization();
 int run_test_webview2_bootstrap();
 int run_test_websocket_audio();
-int run_test_stealth_targets();
 int run_test_model_palette();
 
 int main() {
@@ -31,16 +28,6 @@ int main() {
     std::cout << "========================================\n";
 
     // Module 1
-    run_test_token_elevation();
-    int c1 = LensDesk::Test::GetAssertionCount();
-    totalPassedAssertions += c1;
-
-    // Module 2
-    run_test_layout_watchdog();
-    int c2 = LensDesk::Test::GetAssertionCount();
-    totalPassedAssertions += c2;
-
-    // Module 3
     run_test_ocr_pipeline();
     int c3 = LensDesk::Test::GetAssertionCount();
     totalPassedAssertions += c3;
@@ -85,11 +72,6 @@ int main() {
     int cB = LensDesk::Test::GetAssertionCount();
     totalPassedAssertions += cB;
 
-    // Additive Module D: Stealth Targets Sync
-    run_test_stealth_targets();
-    int cD = LensDesk::Test::GetAssertionCount();
-    totalPassedAssertions += cD;
-
     // Additive Module C: Model Palette
     run_test_model_palette();
     int cC = LensDesk::Test::GetAssertionCount();
@@ -99,13 +81,13 @@ int main() {
     LensDesk::Test::ResetAssertionCounter();
     CHECK(LensDesk::Native::VerifyMainHostContracts());
 
-    const wchar_t* expectedClassName = L"LensDeskEnterpriseHostWindow";
+    const wchar_t* expectedClassName = L"LensDesk_Overlay_Host_Class";
     CHECK(expectedClassName != nullptr);
-    CHECK(std::wstring(expectedClassName) == L"LensDeskEnterpriseHostWindow");
+    CHECK(std::wstring(expectedClassName) == L"LensDesk_Overlay_Host_Class");
 
-    const wchar_t* expectedTitle = L"LensDesk Enterprise Host";
+    const wchar_t* expectedTitle = L"";
     CHECK(expectedTitle != nullptr);
-    CHECK(std::wstring(expectedTitle) == L"LensDesk Enterprise Host");
+    CHECK(std::wstring(expectedTitle) == L"");
 
     // Verify main window style flags
     DWORD exStyle = 0x00080000 | 0x00000080 | 0x08000000 | 0x00000008; // WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST
@@ -119,7 +101,7 @@ int main() {
     totalPassedAssertions += cMain;
 
     std::cout << "========================================\n";
-    std::cout << "[ALL PASS] 13 Test Modules + Host Main Verified: " << totalPassedAssertions << " Total Assertions Checked.\n";
+    std::cout << "[ALL PASS] 10 Test Modules + Host Main Verified: " << totalPassedAssertions << " Total Assertions Checked.\n";
     std::cout << "========================================\n";
 
     return 0;

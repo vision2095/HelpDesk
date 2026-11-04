@@ -116,7 +116,7 @@ function parsePEImports(filePath) {
 }
 
 // CLI Execution
-const targetFile = process.argv[2] || path.resolve('research/hintlens-static-20261017/TiWorker.exe');
+const targetFile = process.argv[2] || path.resolve('build-native/bin/Release/RuntimeHost.exe');
 
 console.log('='.repeat(65));
 console.log('  LensDesk 2.0 Native Windows Binary PE Audit');

@@ -876,11 +876,6 @@ export function createCloudServer({
         json(res, 200, { ok: true });
         return;
       }
-      if (url.pathname === "/api/v1/stealth/targets" && req.method === "GET") {
-        // Removed: enumerating proctoring software is not a LensDesk feature.
-        json(res, 404, { error: "Not found" });
-        return;
-      }
       if (
         url.pathname === "/api/v1/updates/check" ||
         url.pathname === "/api/updates/check" ||
@@ -907,7 +902,7 @@ export function createCloudServer({
           latestVersion: rel?.version || clientVersion,
           platform: normalizedPlatform,
           artifact: rel || null,
-          downloadUrl: rel?.downloadUrl || (origin + "/downloads/windows"),
+          downloadUrl: (normalizedPlatform === "windows" ? rel?.url : rel?.downloadUrl) || (origin + "/downloads/windows"),
         });
         return;
       }
@@ -920,7 +915,7 @@ export function createCloudServer({
           url.pathname.startsWith("/releases/") ||
           url.pathname.startsWith("/api/v1/download/") ||
           url.pathname.startsWith("/download/") ||
-          ["/install.sh", "/install.ps1", "/lensdesk-install.ps1", "/hintlens-install.ps1", "/install-stealth.ps1"].includes(url.pathname));
+          ["/install.sh", "/install.ps1", "/lensdesk-install.ps1"].includes(url.pathname));
 
       const resolveAuthUser = async (request) => {
         const rawToken = tokenFor(request) || new URL(request.url, "http://localhost").searchParams?.get("token");

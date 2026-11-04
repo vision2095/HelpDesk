@@ -169,8 +169,10 @@ export async function handleWebSocketTranscribeUpgrade(req, socket, head, option
   let batchSecondsActual = 0;
   let totalSeconds = 0;
   let transcript = "";
-  let inFlight = false;
-  let failures = 0;
+  let activeFlush = null;
+  let stopping = false;
+  let sessionSampleRate = 0;
+  let sessionChannels = 0;
   let pendingSequences = [];
 
   function sendText(obj) {
@@ -202,27 +204,46 @@ export async function handleWebSocketTranscribeUpgrade(req, socket, head, option
   }
 
   function appendBatch(payload, sampleRate, channels, seq) {
-    if (batch.length && (batchSampleRate !== sampleRate || batchChannels !== channels)) {
-      flushBatch().catch(() => {});
+    if (batchBytes + payload.length > MAX_BATCH_BYTES) {
+      sendError("The audio batch is too large.", { fatal: true, code: 1009 });
+      return false;
+    }
+    const seconds = payload.length / (sampleRate * channels * 2);
+    if (totalSeconds + batchSecondsActual + seconds > maxSessionSeconds) {
+      sendError("The live transcription session reached its time limit.", { fatal: true, code: 1009 });
+      return false;
     }
     batchSampleRate = sampleRate;
     batchChannels = channels;
     batch.push(payload);
     batchBytes += payload.length;
-    batchSecondsActual += payload.length / (sampleRate * channels * 2);
+    batchSecondsActual += seconds;
     pendingSequences.push(seq);
-    if (totalSeconds + batchSecondsActual > maxSessionSeconds) {
-      sendError("The live transcription session reached its time limit.", { fatal: true, code: 1009 });
-      return;
-    }
-    if (!inFlight && batchSecondsActual >= batchSeconds) {
+    if (!activeFlush && batchSecondsActual >= batchSeconds) {
       flushBatch().catch(() => {});
     }
+    return true;
   }
 
   async function flushBatch() {
-    if (inFlight || closed || !batch.length) return;
-    inFlight = true;
+    // Serialize provider calls. A stop must wait for the active call, then
+    // flush any remaining audio before sending the final transcript.
+    if (activeFlush) {
+      await activeFlush;
+      return flushBatch();
+    }
+    if (closed || !batch.length) return;
+    const operation = transcribeBatch();
+    activeFlush = operation;
+    try {
+      await operation;
+    } finally {
+      if (activeFlush === operation) activeFlush = null;
+    }
+    if (!closed && batchSecondsActual >= batchSeconds) await flushBatch();
+  }
+
+  async function transcribeBatch() {
     const pcm = Buffer.concat(batch, batchBytes);
     const sampleRate = batchSampleRate;
     const channels = batchChannels;
@@ -233,14 +254,12 @@ export async function handleWebSocketTranscribeUpgrade(req, socket, head, option
     totalSeconds += seconds;
 
     if (pcm.length > MAX_BATCH_BYTES) {
-      inFlight = false;
       sendError("The audio batch is too large.", { fatal: true, code: 1009 });
       return;
     }
 
     const data = pcmToWav(pcm, sampleRate, channels).toString("base64");
     if (data.length > 28_000_000) {
-      inFlight = false;
       sendError("The audio batch exceeds the transcription limit.", { fatal: true, code: 1009 });
       return;
     }
@@ -254,7 +273,6 @@ export async function handleWebSocketTranscribeUpgrade(req, socket, head, option
       ]);
       const text = normalizeTranscript(result);
       if (text) transcript = `${transcript} ${text}`.trim();
-      failures = 0;
       sendText({
         type: "transcript",
         partial: true,
@@ -265,22 +283,14 @@ export async function handleWebSocketTranscribeUpgrade(req, socket, head, option
         text: transcript,
       });
     } catch (error) {
-      failures++;
-      if (failures >= 3) {
-        sendError("Live transcription failed repeatedly. Reconnect to try again.", { fatal: true, code: 1011 });
-      } else {
-        sendError(error?.message || "Transcription failed; continuing to buffer audio.");
-      }
-    } finally {
-      inFlight = false;
-      if (!closed && batchSecondsActual >= batchSeconds) {
-        flushBatch().catch(() => {});
-      }
+      // The submitted batch has not been transcribed. Do not report a final
+      // success or silently continue after losing it.
+      sendError(error?.message || "Live transcription failed; reconnect to try again.", { fatal: true, code: 1011 });
     }
   }
 
   socket.on("data", (chunk) => {
-    if (closed) return;
+    if (closed || stopping) return;
     if (buffer.length + chunk.length > MAX_BUFFER_BYTES + maxFrameBytes) {
       sendError("The WebSocket buffer exceeded its limit.", { fatal: true, code: 1009 });
       return;
@@ -355,8 +365,10 @@ export async function handleWebSocketTranscribeUpgrade(req, socket, head, option
         // Text is accepted only as an explicit end-of-stream marker. This
         // flushes buffered audio before the client closes the socket.
         if (payload.toString("utf8").trim() === "stop") {
+          stopping = true;
           flushBatch()
             .then(() => {
+              if (closed) return;
               sendText({ type: "transcript", partial: false, final: true, text: transcript });
               closed = true;
               try {
@@ -364,7 +376,10 @@ export async function handleWebSocketTranscribeUpgrade(req, socket, head, option
               } catch {}
               socket.end();
             })
-            .catch(() => {});
+            .catch(() => {
+              sendError("Could not finish live transcription.", { fatal: true, code: 1011 });
+            });
+          return;
         }
         continue;
       }
@@ -398,8 +413,16 @@ export async function handleWebSocketTranscribeUpgrade(req, socket, head, option
         return;
       }
 
-      // Acknowledge every frame with the transcript accumulated so far. The
-      // actual provider request runs asynchronously on the batch threshold.
+      if (sessionSampleRate && (sessionSampleRate !== sampleRate || sessionChannels !== channels)) {
+        sendError("Audio format changed; reconnect to continue transcription.", { fatal: true, code: 1008 });
+        return;
+      }
+      sessionSampleRate = sampleRate;
+      sessionChannels = channels;
+
+      if (!appendBatch(payload, sampleRate, channels, seq)) return;
+
+      // Acknowledge only audio that passed session and buffer limits.
       sendText({
         type: "transcript",
         partial: true,
@@ -411,7 +434,6 @@ export async function handleWebSocketTranscribeUpgrade(req, socket, head, option
         text: transcript,
       });
 
-      appendBatch(payload, sampleRate, channels, seq);
     }
   });
 

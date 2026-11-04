@@ -3,11 +3,6 @@ build-native/
 node_modules/
 dist/
 release/*
-!release/LensDesk.zip
-!release/LensDeskApp.zip
-!release/checksums.json
-!release/stealth/
-!release/stealth/*.zip
 .data/
 *.tsbuildinfo
 test-results/

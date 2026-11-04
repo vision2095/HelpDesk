@@ -16,7 +16,6 @@ export default defineConfig({
       "/install.ps1": process.env.LENSDESK_DEV_API_URL || "http://127.0.0.1:4318",
       "/lensdesk-install.ps1": process.env.LENSDESK_DEV_API_URL || "http://127.0.0.1:4318",
       "/hintlens-install.ps1": process.env.LENSDESK_DEV_API_URL || "http://127.0.0.1:4318",
-      "/install-stealth.ps1": process.env.LENSDESK_DEV_API_URL || "http://127.0.0.1:4318",
       "/download": process.env.LENSDESK_DEV_API_URL || "http://127.0.0.1:4318",
     },
   },
