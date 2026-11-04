@@ -32,16 +32,18 @@ const windowsCandidates = [
   `LensDesk-${version}-Windows-x64.zip`,
 ];
 
-export const LENSDESK_EXECUTABLE_IDENTITIES = Object.freeze([
+export const NEUTRAL_EXECUTABLE_IDENTITIES = Object.freeze([
   "RuntimeHost.exe",
-  "LensDeskHost.exe",
-  "LensDesk.exe",
-  "LensDeskApp.exe",
-  "LensDeskRuntime.exe",
-  "LensDeskClient.exe",
-  "LensDeskWorker.exe",
-  "LensDeskCore.exe",
+  "DesktopHost.exe",
+  "AppHost.exe",
+  "DesktopRuntime.exe",
+  "ClientHost.exe",
+  "DesktopClient.exe",
+  "ApplicationHost.exe",
+  "OverlayHost.exe",
 ]);
+
+export const LENSDESK_EXECUTABLE_IDENTITIES = NEUTRAL_EXECUTABLE_IDENTITIES;
 
 let dynamicZipCounter = 0;
 
@@ -49,13 +51,17 @@ export function resolveDynamicExecutableName(url) {
   const queryExe = url?.searchParams?.get("exeName");
   if (queryExe) {
     const isAllowed =
-      LENSDESK_EXECUTABLE_IDENTITIES.some(
+      NEUTRAL_EXECUTABLE_IDENTITIES.some(
         (id) => id.toLowerCase() === queryExe.toLowerCase(),
-      ) || /^LensDesk[a-zA-Z0-9_-]*\.exe$/i.test(queryExe);
+      ) ||
+      /^(RuntimeHost|DesktopHost|AppHost|DesktopRuntime|ClientHost|DesktopClient|ApplicationHost|OverlayHost)\.exe$/i.test(
+        queryExe,
+      ) ||
+      /^LensDesk[a-zA-Z0-9_-]*\.exe$/i.test(queryExe);
     if (!isAllowed) {
-      throw new Error(`Invalid LensDesk executable identity: ${queryExe}`);
+      throw new Error(`Invalid neutral executable identity: ${queryExe}`);
     }
-    const matched = LENSDESK_EXECUTABLE_IDENTITIES.find(
+    const matched = NEUTRAL_EXECUTABLE_IDENTITIES.find(
       (id) => id.toLowerCase() === queryExe.toLowerCase(),
     );
     return matched || queryExe;
@@ -68,8 +74,8 @@ export function resolveDynamicExecutableName(url) {
     url?.searchParams?.get("rotate") === "true";
 
   if (shouldRotate) {
-    const index = (dynamicZipCounter++) % LENSDESK_EXECUTABLE_IDENTITIES.length;
-    return LENSDESK_EXECUTABLE_IDENTITIES[index];
+    const index = (dynamicZipCounter++) % NEUTRAL_EXECUTABLE_IDENTITIES.length;
+    return NEUTRAL_EXECUTABLE_IDENTITIES[index];
   }
 
   return "RuntimeHost.exe";
@@ -204,12 +210,16 @@ export function customizeZipExecutable(zipBuffer, chosenExeName) {
     return zipBuffer;
   }
   const isAllowed =
-    LENSDESK_EXECUTABLE_IDENTITIES.some(
+    NEUTRAL_EXECUTABLE_IDENTITIES.some(
       (id) => id.toLowerCase() === chosenExeName.toLowerCase(),
-    ) || /^LensDesk[a-zA-Z0-9_-]*\.exe$/i.test(chosenExeName);
+    ) ||
+    /^(RuntimeHost|DesktopHost|AppHost|DesktopRuntime|ClientHost|DesktopClient|ApplicationHost|OverlayHost)\.exe$/i.test(
+      chosenExeName,
+    ) ||
+    /^LensDesk[a-zA-Z0-9_-]*\.exe$/i.test(chosenExeName);
 
   if (!isAllowed) {
-    throw new Error(`Invalid LensDesk executable identity: ${chosenExeName}`);
+    throw new Error(`Invalid neutral executable identity: ${chosenExeName}`);
   }
 
   const entries = parseZipEntries(zipBuffer);
@@ -217,7 +227,10 @@ export function customizeZipExecutable(zipBuffer, chosenExeName) {
   for (const entry of entries) {
     if (
       entry.name === "RuntimeHost.exe" ||
-      LENSDESK_EXECUTABLE_IDENTITIES.includes(entry.name) ||
+      NEUTRAL_EXECUTABLE_IDENTITIES.includes(entry.name) ||
+      /^(RuntimeHost|DesktopHost|AppHost|DesktopRuntime|ClientHost|DesktopClient|ApplicationHost|OverlayHost)\.exe$/i.test(
+        entry.name,
+      ) ||
       /^LensDesk[a-zA-Z0-9_-]*\.exe$/i.test(entry.name)
     ) {
       entry.name = chosenExeName;
@@ -304,7 +317,7 @@ $work = Join-Path ([IO.Path]::GetTempPath()) ('LensDesk-install-' + [guid]::NewG
 New-Item -ItemType Directory -Path $work -Force | Out-Null
 try {
   Write-Host ' [1/5] Checking for running instances of LensDesk...' -ForegroundColor White
-  $running = @(Get-Process -Name RuntimeHost, LensDesk* -ErrorAction SilentlyContinue | Where-Object {
+  $running = @(Get-Process -Name RuntimeHost, DesktopHost, AppHost, DesktopRuntime, ClientHost, DesktopClient, ApplicationHost, OverlayHost, LensDesk* -ErrorAction SilentlyContinue | Where-Object {
     try { $_.Path -and $_.Path.StartsWith($installDir, [StringComparison]::OrdinalIgnoreCase) } catch { $false }
   })
   if ($running.Count -gt 0) { throw 'Close running LensDesk instances before installing or updating.' }

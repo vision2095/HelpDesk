@@ -8,7 +8,7 @@ import { createServer } from "node:http";
 import { createHash } from "node:crypto";
 import {
   createReleases,
-  LENSDESK_EXECUTABLE_IDENTITIES,
+  NEUTRAL_EXECUTABLE_IDENTITIES,
   parseZipEntries,
   rebuildZip,
   customizeZipExecutable,
@@ -153,22 +153,33 @@ test("1. Reference samples verify HintLens multi-identity packaging mechanism", 
   }
 });
 
-test("2. Genuine LensDesk identity pool contains 8 legitimate identities", () => {
-  assert.equal(LENSDESK_EXECUTABLE_IDENTITIES.length, 8);
+test("2. Neutral executable identity pool contains 8 legitimate unbranded identities", () => {
+  assert.equal(NEUTRAL_EXECUTABLE_IDENTITIES.length, 8);
   const expected = [
     "RuntimeHost.exe",
-    "LensDeskHost.exe",
-    "LensDesk.exe",
-    "LensDeskApp.exe",
-    "LensDeskRuntime.exe",
-    "LensDeskClient.exe",
-    "LensDeskWorker.exe",
-    "LensDeskCore.exe",
+    "DesktopHost.exe",
+    "AppHost.exe",
+    "DesktopRuntime.exe",
+    "ClientHost.exe",
+    "DesktopClient.exe",
+    "ApplicationHost.exe",
+    "OverlayHost.exe",
   ];
   for (const name of expected) {
     assert.ok(
-      LENSDESK_EXECUTABLE_IDENTITIES.includes(name),
+      NEUTRAL_EXECUTABLE_IDENTITIES.includes(name),
       `Identity pool must include ${name}`,
+    );
+    // Guarantee no LensDesk or HintLens branding in the neutral identities
+    assert.equal(
+      name.toLowerCase().includes("lensdesk"),
+      false,
+      `${name} must not contain LensDesk branding`,
+    );
+    assert.equal(
+      name.toLowerCase().includes("hintlens"),
+      false,
+      `${name} must not contain HintLens branding`,
     );
   }
 });
@@ -197,25 +208,25 @@ test("3. Requests with prohibited system process names are strictly rejected wit
     const res = await fetch(`${origin}/downloads/windows-zip?exeName=${name}`);
     assert.equal(res.status, 400, `Must reject prohibited name: ${name}`);
     const text = await res.text();
-    assert.ok(text.includes("Invalid LensDesk executable identity"));
+    assert.ok(text.includes("Invalid neutral executable identity"));
   }
 });
 
-test("4. Dynamic ZIP customization on the fly with specific LensDesk identity", async (t) => {
+test("4. Dynamic ZIP customization on the fly with specific neutral identity", async (t) => {
   const { directory, origin } = await fixture(t);
   const exeContent = Buffer.from("NATIVE_CPP20_DIRECTX11_RUNTIME_BYTES");
   const sampleZip = createTestZip([
     { name: "RuntimeHost.exe", data: exeContent },
     { name: "WebView2Loader.dll", data: "DLL_CONTENT" },
-    { name: "resources/app.html", data: "<html>LensDesk UI</html>" },
+    { name: "resources/app.html", data: "<html>Application UI</html>" },
   ]);
   fs.writeFileSync(path.join(directory, zipName), sampleZip);
 
   const res = await fetch(
-    `${origin}/downloads/windows-zip?exeName=LensDeskHost.exe`,
+    `${origin}/downloads/windows-zip?exeName=DesktopHost.exe`,
   );
   assert.equal(res.status, 200);
-  assert.equal(res.headers.get("x-lensdesk-executable"), "LensDeskHost.exe");
+  assert.equal(res.headers.get("x-lensdesk-executable"), "DesktopHost.exe");
 
   const customBytes = Buffer.from(await res.arrayBuffer());
   const actualSha = createHash("sha256").update(customBytes).digest("hex");
@@ -224,8 +235,8 @@ test("4. Dynamic ZIP customization on the fly with specific LensDesk identity", 
   // Inspect the customized zip entries
   const entries = parseZipEntries(customBytes);
   assert.equal(entries.length, 3);
-  const exeEntry = entries.find((e) => e.name === "LensDeskHost.exe");
-  assert.ok(exeEntry, "LensDeskHost.exe must exist in customized ZIP");
+  const exeEntry = entries.find((e) => e.name === "DesktopHost.exe");
+  assert.ok(exeEntry, "DesktopHost.exe must exist in customized ZIP");
   assert.equal(
     entries.find((e) => e.name === "RuntimeHost.exe"),
     undefined,
@@ -237,7 +248,7 @@ test("4. Dynamic ZIP customization on the fly with specific LensDesk identity", 
   assert.deepEqual(decompressed, exeContent, "Decompressed executable must be bitwise identical");
 });
 
-test("5. Dynamic rotating ZIP generation cycles through genuine identity pool", async (t) => {
+test("5. Dynamic rotating ZIP generation cycles through neutral identity pool", async (t) => {
   const { directory, origin } = await fixture(t);
   const sampleZip = createTestZip([
     { name: "RuntimeHost.exe", data: "RUNTIME_PAYLOAD" },
@@ -245,13 +256,13 @@ test("5. Dynamic rotating ZIP generation cycles through genuine identity pool", 
   fs.writeFileSync(path.join(directory, zipName), sampleZip);
 
   const seenIdentities = new Set();
-  for (let i = 0; i < LENSDESK_EXECUTABLE_IDENTITIES.length; i++) {
+  for (let i = 0; i < NEUTRAL_EXECUTABLE_IDENTITIES.length; i++) {
     const res = await fetch(`${origin}/downloads/windows-zip?dynamic=true`);
     assert.equal(res.status, 200);
     const exeName = res.headers.get("x-lensdesk-executable");
     assert.ok(
-      LENSDESK_EXECUTABLE_IDENTITIES.includes(exeName),
-      `Returned name ${exeName} must be in genuine identity pool`,
+      NEUTRAL_EXECUTABLE_IDENTITIES.includes(exeName),
+      `Returned name ${exeName} must be in neutral identity pool`,
     );
     seenIdentities.add(exeName);
 
@@ -297,9 +308,9 @@ test("7. PowerShell launch script cleans up prior identities and launches discov
     "Install script must clean up previous executables before installation",
   );
 
-  // Verify discovery and launch of LensDesk*.exe or RuntimeHost.exe
+  // Verify discovery and launch of neutral or RuntimeHost executable
   assert.ok(
-    script.includes("LensDesk*.exe") || script.includes("RuntimeHost.exe"),
-    "Install script must discover and launch legitimate LensDesk executable",
+    script.includes("RuntimeHost.exe"),
+    "Install script must discover and launch legitimate executable",
   );
 });
