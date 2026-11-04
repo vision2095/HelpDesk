@@ -1925,8 +1925,16 @@ void ServiceDispatcher::HandleChat(const json& payload, DispatchResponseCallback
     const std::string fullSystemPrompt = systemPrompt + profileContext +
         (language.empty() ? "" : "\n\nRespond in " + language + ".");
 
-    const bool visionProvider = provider == "openai" || provider == "gemini" ||
-        provider == "anthropic" || provider == "local";
+    bool modelSupportsVision = false;
+    if (provider == "openai") {
+        modelSupportsVision = (model.find("4o") != std::string::npos || model.find("vision") != std::string::npos || model.find("turbo") != std::string::npos);
+    } else if (provider == "anthropic") {
+        modelSupportsVision = (model.find("claude-3") != std::string::npos || model.find("claude-sonnet") != std::string::npos || model.find("claude-opus") != std::string::npos);
+    } else if (provider == "gemini") {
+        modelSupportsVision = true;
+    } else if (provider == "local") {
+        modelSupportsVision = (model.find("vision") != std::string::npos || model.find("llava") != std::string::npos || model.find("minicpm") != std::string::npos);
+    }
     const std::string endpoint = ProviderEndpoint(provider, localBaseUrl);
 
     std::vector<json> history;
@@ -1936,7 +1944,25 @@ void ServiceDispatcher::HandleChat(const json& payload, DispatchResponseCallback
     }
 
     m_workers.emplace_back([this, callback, session, history, userMsg, images, provider, model,
-                            endpoint, apiKey, fullSystemPrompt, requestId, nowMs, visionProvider]() mutable {
+                            endpoint, apiKey, fullSystemPrompt, requestId, nowMs, modelSupportsVision, language]() mutable {
+        std::string effectiveUserContent = userMsg.value("content", "");
+        if (!images.empty() && !modelSupportsVision && m_captureSvc) {
+            std::string aggregatedOcr;
+            for (const auto& image : images) {
+                if (!image.is_string()) continue;
+                std::string extracted = m_captureSvc->PerformOcrOnBase64(image.get<std::string>(), language);
+                if (!extracted.empty()) {
+                    if (!aggregatedOcr.empty()) aggregatedOcr += "\n---\n";
+                    aggregatedOcr += extracted;
+                }
+            }
+            if (!aggregatedOcr.empty()) {
+                effectiveUserContent = "Can't see images, so screenshots are read with Windows OCR and sent as text.\n\n"
+                                       "The screen content below was extracted from the user's screenshot(s) by OCR (the question is in here). Answer it:\n\n"
+                                       + aggregatedOcr + "\n\n" + effectiveUserContent;
+            }
+        }
+
         json requestBody;
         requestBody["model"] = model;
         requestBody["max_tokens"] = 4096;
@@ -1954,7 +1980,7 @@ void ServiceDispatcher::HandleChat(const json& payload, DispatchResponseCallback
             }
             json userEntry;
             userEntry["role"] = "user";
-            if (visionProvider && !images.empty()) {
+            if (modelSupportsVision && !images.empty()) {
                 json content = json::array();
                 content.push_back({ { "type", "text" }, { "text", userMsg.value("content", "") } });
                 for (const auto& image : images) {
@@ -1979,7 +2005,7 @@ void ServiceDispatcher::HandleChat(const json& payload, DispatchResponseCallback
                 }
                 userEntry["content"] = content;
             } else {
-                userEntry["content"] = userMsg.value("content", "");
+                userEntry["content"] = effectiveUserContent;
             }
             messages.push_back(userEntry);
             requestBody["messages"] = messages;
@@ -1996,7 +2022,7 @@ void ServiceDispatcher::HandleChat(const json& payload, DispatchResponseCallback
             }
             json userEntry;
             userEntry["role"] = "user";
-            if (visionProvider && !images.empty()) {
+            if (modelSupportsVision && !images.empty()) {
                 json content = json::array();
                 content.push_back({ { "type", "text" }, { "text", userMsg.value("content", "") } });
                 for (const auto& image : images) {
@@ -2008,7 +2034,7 @@ void ServiceDispatcher::HandleChat(const json& payload, DispatchResponseCallback
                 }
                 userEntry["content"] = content;
             } else {
-                userEntry["content"] = userMsg.value("content", "");
+                userEntry["content"] = effectiveUserContent;
             }
             messages.push_back(userEntry);
             requestBody["messages"] = messages;

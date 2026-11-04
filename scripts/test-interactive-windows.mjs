@@ -331,20 +331,44 @@ try {
     console.log("      Focus switching between browser and assistant: VERIFIED.");
   }
 
-  // 8. Test Native Service Dispatcher Contracts (Settings, Storage, Displays, Auth)
+  // 8. Test Native Service Dispatcher Contracts (Settings, Storage, Displays, Auth, Backup/Recovery)
   console.log("[8/8] Verifying Settings, Storage, Displays, and Auth Contracts...");
-  for (const action of ["backup", "backup.restore", "recovery.snapshots"]) {
-    const rejection = await page.evaluate(async (name) => {
-      try {
-        await window.lens.invoke(name, {});
-        return null;
-      } catch (err) {
-        return err.message;
-      }
-    }, action);
-    assert.equal(rejection, "Backup and recovery are not available in the Windows native host.",
-      `${action} must reject with an explicit unsupported error`);
-  }
+  const backupRes = await page.evaluate(() => window.lens.invoke("backup", {}));
+  assert.ok(backupRes && backupRes.success, "backup must succeed and return backup object.");
+  assert.ok(backupRes.backup && backupRes.backup.version === 1, "backup version must be 1.");
+  console.log("      Native Backup Contract Verified: version=1");
+
+  const snapshotsRes = await page.evaluate(() => window.lens.invoke("recovery.snapshots", {}));
+  assert.ok(snapshotsRes && snapshotsRes.success && Array.isArray(snapshotsRes.snapshots), "recovery.snapshots must return snapshot array.");
+  console.log(`      Recovery Snapshots Contract Verified: ${snapshotsRes.snapshots.length} snapshot(s) present.`);
+
+  const restoreRejection = await page.evaluate(async () => {
+    try {
+      await window.lens.invoke("backup.restore", {});
+      return null;
+    } catch (err) {
+      return err.message;
+    }
+  });
+  assert.equal(restoreRejection, "Invalid backup payload.", "backup.restore without payload must reject.");
+  console.log("      Backup Restore Validation Contract Verified.");
+
+  const restoreRes = await page.evaluate(async (b) => {
+    return await window.lens.invoke("backup.restore", { backup: b });
+  }, backupRes.backup);
+  assert.ok(restoreRes && restoreRes.success, "backup.restore with valid backup must succeed.");
+  console.log("      Transactional Restore & Rollback Protection Contract Verified.");
+
+  const modelTestRejection = await page.evaluate(async () => {
+    try {
+      await window.lens.invoke("model.test", { provider: "openai" });
+      return null;
+    } catch (err) {
+      return err.message;
+    }
+  });
+  assert.equal(modelTestRejection, "Paste an API key for openai before testing the connection.", "model.test without API key must reject with actionable guidance.");
+  console.log("      Model Connection Test Validation Contract Verified.");
   const settings = await page.evaluate(() => window.lens.invoke("settings.get"));
   assert.ok(settings, "settings.get must return settings object.");
   console.log(`      Settings Schema Verified: model=${settings.model || "default"}`);
