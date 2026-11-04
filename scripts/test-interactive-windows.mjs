@@ -107,12 +107,50 @@ try {
   let pages = contexts.flatMap((c) => c.pages());
   console.log(`      Total pages in WebView2 context: ${pages.length}`);
 
-  let page = pages.find((p) => p.url().includes("lensdesk.local")) || pages[0];
-  if (!page) {
-    page = await contexts[0].waitForEvent("page", { timeout: 10000 });
+  // Locate the HUD page loading lensdesk.local rather than background browser tabs (e.g. google.com).
+  console.log("      Locating LensDesk HUD page (lensdesk.local)...");
+  let page = null;
+  const deadline = Date.now() + 30000;
+  while (Date.now() < deadline && !page) {
+    const allPages = contexts.flatMap((c) => c.pages());
+    for (const p of allPages) {
+      if (p.url().includes("lensdesk.local")) {
+        page = p;
+        break;
+      }
+    }
+    if (!page) {
+      for (const p of allPages) {
+        if (!p.url().includes("google.com") && (await p.$("#root").catch(() => null))) {
+          page = p;
+          break;
+        }
+      }
+    }
+    if (!page) {
+      await Promise.race([
+        ...contexts.map((c) => c.waitForEvent("page", { timeout: 1000 }).catch(() => null)),
+        new Promise((r) => setTimeout(r, 500)),
+      ]);
+    }
   }
 
-  await page.waitForLoadState("domcontentloaded");
+  if (!page) {
+    const allPages = contexts.flatMap((c) => c.pages());
+    console.log(`      Fallback: checking ${allPages.length} pages for #root...`);
+    for (const p of allPages) {
+      if (!p.url().includes("google.com")) {
+        page = p;
+        break;
+      }
+    }
+    if (!page) page = allPages[0] || (await contexts[0].waitForEvent("page", { timeout: 10000 }));
+  }
+
+  if (page.url() === "about:blank") {
+    await page.waitForURL((u) => u.href !== "about:blank", { timeout: 15000 }).catch(() => {});
+  }
+  await page.waitForLoadState("domcontentloaded").catch(() => {});
   console.log(`      Active Page URL: ${page.url()}`);
 
   page.on("console", (msg) => console.log(`      [Browser Console ${msg.type()}] ${msg.text()}`));
