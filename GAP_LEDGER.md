@@ -3,8 +3,8 @@
 **Environment:** macOS ARM64 development host -> Native Windows x64 Target Application  
 **Architectural Baseline:** C++20, Win32 / WinRT, Direct3D 11.1, DirectComposition, Dear ImGui, Microsoft Edge WebView2, WASAPI Loopback, WinRT OCR.  
 **Strict Rule:** ABSOLUTE ZERO ELECTRON IN WINDOWS. macOS application untouched.  
-**Latest Tested Windows Commit:** `3c700ef`  
-**Latest Successful Windows CI Run:** [41813464308](https://github.com/VivekGitNinja/LensDesk2.0/actions/runs/41813464308) (Job ID `126518346874`, Duration: 11m25s)
+**Latest Tested Windows Commit:** `f89bd60`  
+**Latest Successful Windows CI Run:** [41817889344](https://github.com/VivekGitNinja/LensDesk2.0/actions/runs/41817889344) (Job ID `126533238114`, Duration: 13m34s)
 
 ---
 
@@ -47,13 +47,13 @@
 
 ---
 
-## 3. Fresh Verified Production Windows Release Artifacts (CI Run 41813464308)
+## 3. Fresh Verified Production Windows Release Artifacts (CI Run 41817889344)
 
 | Release Artifact | File Path | File Size | SHA-256 Checksum |
 |---|---|---|---|
-| **Windows NSIS Installer** | `LensDesk-2.0.0-Setup.exe` | 1,579,767 bytes | `5fd37579b66f779c7e9369cf499ea27d79ed35b981a73fa60c571d783a2ac2a2` |
-| **Standalone Portable Archive** | `LensDesk-2.0.0-Windows-x64.zip` | 1,559,423 bytes | `f9bad496a40412c7e048fe6b2a3862e18b218ded5cec8ff0c48424627cf5732f` |
-| **Native Production Executable** | `RuntimeHost.exe` | 1,850,880 bytes | `4541374a0cbb4dedcac51f16c12664c2eb168fd26aab15528c7eb4ad9d25f5c5` |
+| **Windows NSIS Installer** | `LensDesk-2.0.0-Setup.exe` | 1,579,777 bytes | `f7c251e5c11bb2c9c4c63b1d7881ebb2f9c96423054db1944c2f5455ab99c73a` |
+| **Standalone Portable Archive** | `LensDesk-2.0.0-Windows-x64.zip` | 1,559,451 bytes | `58296b6602e6844512c96f489be5e7f9ada102a8607da4cfc1abd1312aa17281` |
+| **Native Production Executable** | `RuntimeHost.exe` | 1,850,880 bytes | `8fee83308d32666148c7e71ea65f354b82f44eec06a09281eb470a86e5cf2b4d` |
 | **Microsoft Edge WebView2 SDK** | `WebView2Loader.dll` | 194,912 bytes | `d3fce90bdeecb08596e377dea6a316354dd8949e32ff09b89d51be00c14e21b6` |
 
 ---
