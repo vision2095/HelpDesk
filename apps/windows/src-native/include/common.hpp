@@ -36,6 +36,7 @@
 #include <map>
 #include <unordered_map>
 #include <optional>
+#include <stdexcept>
 
 #include "../third_party/webview2/include/WebView2.h"
 #include "../third_party/webview2/include/WebView2EnvironmentOptions.h"
@@ -50,7 +51,11 @@ using Microsoft::WRL::ComPtr;
 constexpr const wchar_t* APP_NAME = L"";
 constexpr const wchar_t* APP_VERSION = L"2.0.0";
 constexpr const wchar_t* WINDOW_CLASS_NAME = L"LensDesk_Overlay_Host_Class";
+#ifdef LENSDESK_ENABLE_TEST_AUTH
+constexpr const wchar_t* SINGLE_INSTANCE_MUTEX = L"Local\\LensDesk_TestFixture_SingleInstance_Mutex";
+#else
 constexpr const wchar_t* SINGLE_INSTANCE_MUTEX = L"Local\\LensDesk_SingleInstance_Mutex";
+#endif
 
 // Custom window messages
 constexpr UINT WM_LENSDESK_TRAY = WM_USER + 101;
@@ -89,6 +94,19 @@ inline std::filesystem::path GetExecutableDirectory() {
 }
 
 inline std::filesystem::path GetAppDataDirectory() {
+#ifdef LENSDESK_ENABLE_TEST_AUTH
+    // Fixture builds must never fall back to a real user's LensDesk data.
+    DWORD size = GetEnvironmentVariableW(L"LENSDESK_FIXTURE_DATA_DIR", nullptr, 0);
+    if (size == 0) throw std::runtime_error("Fixture data directory is required");
+    std::wstring value(size, L'\0');
+    DWORD written = GetEnvironmentVariableW(L"LENSDESK_FIXTURE_DATA_DIR", value.data(), size);
+    if (written == 0 || written >= size) throw std::runtime_error("Invalid fixture data directory");
+    value.resize(written);
+    std::filesystem::path dir(value);
+    if (!dir.is_absolute()) throw std::runtime_error("Fixture data directory must be absolute");
+    std::filesystem::create_directories(dir);
+    return dir;
+#else
     wchar_t path[MAX_PATH];
     if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_APPDATA, nullptr, 0, path))) {
         std::filesystem::path dir = std::filesystem::path(path) / L"LensDesk";
@@ -96,6 +114,7 @@ inline std::filesystem::path GetAppDataDirectory() {
         return dir;
     }
     return GetExecutableDirectory();
+#endif
 }
 
 // Base64 helper

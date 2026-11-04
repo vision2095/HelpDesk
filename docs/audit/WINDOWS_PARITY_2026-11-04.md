@@ -38,3 +38,16 @@ Coverage of the requested 68 features, 23 subsystems, and 14 verification areas 
 Local validation after these changes: `npm test` passed 280 tests in each repository; `npm run build` passed in each. The difference reflects the unsynchronized compliance cleanup. These results are macOS-hosted and are not Windows-native acceptance evidence.
 
 **FIXED BUT UNVERIFIED (cross-platform release routes):** The prior macOS `/install.sh` implementation and identified macOS download routes and headers were restored in both release-service copies. The update URL change is scoped to Windows. Focused local route tests passed and independent static review found no remaining substantive regression in that scope; no macOS installer was executed. Missing Windows-like downloads intentionally return 404 instead of falling back to a macOS artifact.
+
+
+## Subsequent native gap review
+
+Historical Windows CI runs used fixture authentication and a canned no-key AI response; their GUI steps do not establish real authentication or real provider streaming. The current fixture changes compile the bypass only into a separately named test host with a separate temporary data directory; release binaries default to excluding it and CI checks for its marker. Independent source review passed, but the current commit has not yet been built or run on Windows.
+
+Additional source fixes under review: process WebSocket upgrade-head frames without waiting for a later data event; avoid GDI `GetDIBits` on a selected bitmap; route the native `browser.toggle` action to the UI's existing browser shortcut; and route direct cloud actions (`cloud.pull`, `cloud.push`) through the cloud client.
+
+**FIXED BUT UNVERIFIED (W-09 Native Backup & Recovery):** Native transactional backup and recovery has been implemented in `StorageManager` (`CreateBackup`, `RestoreBackup`, `GetSnapshots`, `CreateSnapshot`, `RestoreSnapshot`) and integrated with `ServiceDispatcher` for both root and nested Windows codebases. Workspace backups validate schema version 1, capture pre-restore recovery snapshots for rollback protection, write target files atomically via temporary files, prune older snapshots to maintain a strict 10-snapshot limit, and isolate snapshot storage per authenticated account directory. Node test `tests/native-storage-backup.test.mjs` verifies the architecture, method contracts, schema validation, and snapshot lifecycle.
+
+**FIXED BUT UNVERIFIED (W-10 Live Model Connection Test):** Replaced placeholder unsupported error for `model.test` in `ServiceDispatcher` with live connection testing via direct provider WinHTTP request (`HttpPostJson` to OpenAI, Anthropic, Gemini, Groq, DeepSeek, or local Ollama endpoints) for BYOK configurations, and authenticated cloud dispatch (`CloudRequest("model.test")`) for hosted accounts. Missing credentials return actionable guidance.
+
+Local validation after these changes: `npm test` passed 286 tests in each repository; `npm run build` passed in each; `npm run test:reference` passed on macOS. Fresh Windows CI execution remains required to verify native MSVC compilation and runtime behavior.

@@ -40,7 +40,7 @@ jobs:
 
       - name: Configure CMake Native Host (MSVC C++20)
         run: |
-          cmake -S src-native -B build-native -A x64 -DCMAKE_BUILD_TYPE=Release
+          cmake -S src-native -B build-native -A x64 -DCMAKE_BUILD_TYPE=Release -DLENSDESK_ENABLE_TEST_AUTH=OFF
 
       - name: Compile RuntimeHost.exe (C++20 MSVC)
         run: |
@@ -48,7 +48,7 @@ jobs:
 
       - name: Configure Nested Windows Workspace Host (W-08)
         run: |
-          cmake -S apps/windows/src-native -B build-native-apps -A x64 -DCMAKE_BUILD_TYPE=Release
+          cmake -S apps/windows/src-native -B build-native-apps -A x64 -DCMAKE_BUILD_TYPE=Release -DLENSDESK_ENABLE_TEST_AUTH=OFF
 
       - name: Compile Nested Windows Workspace Host (W-08)
         run: |
@@ -67,7 +67,13 @@ jobs:
         run: |
           pwsh scripts/test-windows-runtime.ps1 -BinaryPath build-native/bin/Release/RuntimeHost.exe
 
-      - name: Execute Real Interactive Windows GUI & WebView2 CDP Verification Test
+      - name: Build isolated GUI fixture host (never packaged)
+        run: |
+          cmake -S src-native -B build-native-test -A x64 -DCMAKE_BUILD_TYPE=Release -DLENSDESK_ENABLE_TEST_AUTH=ON
+          cmake --build build-native-test --config Release --target RuntimeHost
+          node scripts/check-windows-auth-fixture.mjs build-native/bin/Release/RuntimeHost.exe build-native-apps/bin/Release/RuntimeHost.exe build-native-test/bin/Release/RuntimeHostTest.exe
+
+      - name: Execute Windows GUI fixture test (not real login or AI)
         run: |
           node scripts/test-interactive-windows.mjs
 

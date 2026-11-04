@@ -5,8 +5,10 @@
 import { chromium } from "playwright-core";
 import { spawn } from "node:child_process";
 import http from "node:http";
+import net from "node:net";
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import assert from "node:assert/strict";
 
 const EVIDENCE_DIR = path.resolve("release/interactive-evidence");
@@ -37,10 +39,8 @@ console.log("  LensDesk 2.0 Real Interactive Windows GUI & E2E Verification");
 console.log("=================================================================");
 
 // 1. Resolve RuntimeHost.exe binary
-const candidatePaths = [
-  path.resolve("build-native/bin/Release/RuntimeHost.exe"),
-  path.resolve("release/RuntimeHost.exe"),
-];
+// This script uses fixture authentication and must target the isolated test build.
+const candidatePaths = [path.resolve("build-native-test/bin/Release/RuntimeHostTest.exe")];
 let binaryPath = candidatePaths.find((p) => fs.existsSync(p));
 if (!binaryPath) {
   console.error("ERROR: RuntimeHost.exe not found.");
@@ -48,16 +48,29 @@ if (!binaryPath) {
 }
 console.log(`[1/8] Target Binary: ${binaryPath}`);
 
-// 2. Launch RuntimeHost with CDP Remote Debugging enabled on port 9222
-console.log("[2/8] Launching RuntimeHost.exe with WEBVIEW2_REMOTE_DEBUGGING_PORT=9222...");
+// Select a free loopback port instead of attaching to an existing debug session.
+// WebView2 opens the port after launch, so a small allocation race remains.
+const cdpPort = await new Promise((resolve, reject) => {
+  const server = net.createServer();
+  server.once("error", reject);
+  server.listen(0, "127.0.0.1", () => {
+    const port = server.address().port;
+    server.close((err) => err ? reject(err) : resolve(port));
+  });
+});
+const cdpUrl = `http://127.0.0.1:${cdpPort}`;
+console.log(`[2/8] Launching isolated fixture host with CDP port ${cdpPort}...`);
+const fixtureDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "lensdesk-gui-fixture-"));
 const hostEnv = {
   ...process.env,
-  WEBVIEW2_REMOTE_DEBUGGING_PORT: "9222",
+  WEBVIEW2_REMOTE_DEBUGGING_PORT: String(cdpPort),
   CI: "true",
+  LENSDESK_TEST_AUTH: "1",
+  LENSDESK_FIXTURE_DATA_DIR: fixtureDataDir,
 };
 
 const workDir = path.dirname(binaryPath);
-const hostProc = spawn(binaryPath, ["--remote-debugging-port=9222"], {
+const hostProc = spawn(binaryPath, [`--remote-debugging-port=${cdpPort}`], {
   cwd: workDir,
   env: hostEnv,
   stdio: ["ignore", "pipe", "pipe"],
@@ -73,11 +86,12 @@ hostProc.on("exit", (code) => {
 });
 
 // Wait up to 30 seconds for WebView2 DevTools endpoint to become active
-console.log("      Waiting for WebView2 DevTools endpoint at http://127.0.0.1:9222/json/version...");
-const cdpReady = await waitForHttp("http://127.0.0.1:9222/json/version", 30000);
-if (!cdpReady) {
-  console.error("ERROR: WebView2 DevTools endpoint did not respond on port 9222 within 30s.");
+console.log(`      Waiting for fixture WebView2 DevTools endpoint at ${cdpUrl}/json/version...`);
+const cdpReady = await waitForHttp(`${cdpUrl}/json/version`, 30000);
+if (!cdpReady || hostExited) {
+  console.error("ERROR: Fixture host exited or WebView2 DevTools endpoint did not respond within 30s.");
   if (!hostExited) hostProc.kill("SIGTERM");
+  // Preserve the isolated directory if the process has not yet exited.
   process.exit(1);
 }
 console.log("      WebView2 DevTools CDP Endpoint is ONLINE.");
@@ -86,7 +100,7 @@ let browser;
 try {
   // 3. Connect Playwright over CDP to the running native process
   console.log("[3/8] Connecting Playwright over CDP to native host...");
-  browser = await chromium.connectOverCDP("http://127.0.0.1:9222");
+  browser = await chromium.connectOverCDP(cdpUrl);
   const contexts = browser.contexts();
   assert.ok(contexts.length > 0, "At least one browser context expected.");
 
@@ -117,23 +131,25 @@ try {
     })
     .catch(() => null);
 
+  assert.ok(hasGate, "Login gate must be present before fixture authentication.");
   if (hasGate) {
-    console.log("      [Login Gate Verified] Login screen is shown first. Application cannot be accessed without login.");
+    console.log("      [Login Gate Verified] Login screen is shown. This test uses fixture authentication.");
     const gateScreenshot = path.join(EVIDENCE_DIR, "00-login-gate-verified.png");
     await page.screenshot({ path: gateScreenshot }).catch(() => {});
     console.log(`      Login Gate Verified. Screenshot saved: ${gateScreenshot}`);
 
     // Authenticate via test credentials to unlock workshop and test downstream features
     console.log("      Authenticating test session via gate.login...");
-    await page.evaluate(async () => {
+    const fixtureLogin = await page.evaluate(async () => {
       if (window.lens && window.lens.invoke) {
-        await window.lens.invoke("gate.login", {
+        return await window.lens.invoke("gate.login", {
           email: "test@lensdesk.local",
           password: "TestPassword123!",
           test: true,
         });
       }
     });
+    assert.ok(fixtureLogin, "Fixture login must return a session view.");
   }
 
   // Wait for React components to mount
@@ -163,7 +179,7 @@ try {
   console.log(`      UI Loaded Verified. Screenshot saved: ${initialScreenshot}`);
 
   // 5. Test Interactive Assistant Textarea & Actual Value (User Requirement 3)
-  console.log("[5/8] Testing Assistant Textarea Click, Real Typing & Focus...");
+  console.log("[5/8] Testing Assistant Textarea Click, Input & Focus...");
   const textareaSelector = ".composer-textarea, textarea";
   const textarea = page.locator(textareaSelector).first();
   await textarea.waitFor({ state: "visible", timeout: 15000 });
@@ -191,10 +207,10 @@ try {
 
   const typedScreenshot = path.join(EVIDENCE_DIR, "02-textarea-typed.png");
   await page.screenshot({ path: typedScreenshot });
-  console.log(`      Real Keystroke Typing Verified. Screenshot: ${typedScreenshot}`);
+  console.log(`      Textarea value verified. Screenshot: ${typedScreenshot}`);
 
   // 6. Test Assistant AI Response & Message Streaming (User Requirement 6)
-  console.log("[6/8] Submitting Prompt and Verifying Streaming AI Response in DOM...");
+  console.log("[6/8] Submitting Prompt and Verifying No-Key Fallback in DOM...");
   await textarea.press("Enter");
 
   // Verify User Bubble appears in DOM (with send button retry fallback)
@@ -237,7 +253,17 @@ try {
 
   const responseScreenshot = path.join(EVIDENCE_DIR, "03-assistant-streamed.png");
   await page.screenshot({ path: responseScreenshot });
-  console.log(`      AI Response Streaming Verified. Screenshot: ${responseScreenshot}`);
+  console.log(`      Fixture fallback response rendered; real AI streaming is not verified. Screenshot: ${responseScreenshot}`);
+
+  // Invoke the native RPC and verify React changes views in both directions.
+  // This does not exercise the operating system's global hotkey registration.
+  const browserToggle = await page.evaluate(() => window.lens.invoke("browser.toggle"));
+  assert.equal(browserToggle?.dispatched, true, "Browser toggle must dispatch");
+  await page.locator(".browser-page").waitFor({ state: "visible", timeout: 10000 });
+  const assistantToggle = await page.evaluate(() => window.lens.invoke("browser.toggle"));
+  assert.equal(assistantToggle?.dispatched, true, "Return toggle must dispatch");
+  await textarea.waitFor({ state: "visible", timeout: 10000 });
+  console.log("      Browser RPC view toggle verified (not a physical hotkey test).");
 
   // 7. Test Embedded WebView2 Browser & Tab Switching (User Requirement 4)
   console.log("[7/8] Testing Embedded Browser Creation & Focus Switching...");
@@ -248,6 +274,10 @@ try {
     return null;
   });
 
+  assert.ok(browserState && browserState.tabId, "Browser creation must return a new tab ID.");
+  assert.equal(browserState.activeTabId, browserState.tabId, "Created browser tab must become active.");
+  assert.ok(Array.isArray(browserState.tabs) && browserState.tabs.some((tab) => tab.id === browserState.activeTabId),
+    "Browser creation must include the active tab in its returned tabs.");
   if (browserState) {
     console.log(`      Browser tabs created. Active Tab ID: ${browserState.activeTabId}`);
     assert.ok(browserState.tabs && browserState.tabs.length > 0, "Browser tab must be created.");
@@ -261,12 +291,22 @@ try {
     );
     assert.ok(isFocusReturned, "Focus must successfully return to assistant textarea.");
     console.log("      Focus switching between browser and assistant: VERIFIED.");
-  } else {
-    console.log("      window.lens.invoke('browser.create') evaluated successfully.");
   }
 
   // 8. Test Native Service Dispatcher Contracts (Settings, Storage, Displays, Auth)
   console.log("[8/8] Verifying Settings, Storage, Displays, and Auth Contracts...");
+  for (const action of ["backup", "backup.restore", "recovery.snapshots"]) {
+    const rejection = await page.evaluate(async (name) => {
+      try {
+        await window.lens.invoke(name, {});
+        return null;
+      } catch (err) {
+        return err.message;
+      }
+    }, action);
+    assert.equal(rejection, "Backup and recovery are not available in the Windows native host.",
+      `${action} must reject with an explicit unsupported error`);
+  }
   const settings = await page.evaluate(() => window.lens.invoke("settings.get"));
   assert.ok(settings, "settings.get must return settings object.");
   console.log(`      Settings Schema Verified: model=${settings.model || "default"}`);
@@ -311,7 +351,7 @@ try {
   console.log(`      Contracts Verified. Screenshot: ${finalScreenshot}`);
 
   console.log("=================================================================");
-  console.log("  REAL INTERACTIVE WINDOWS E2E TEST: ALL 8 PHASES PASSED");
+  console.log("  WINDOWS GUI FIXTURE TEST: ALL 8 PHASES PASSED");
   console.log("=================================================================");
 } finally {
   if (browser) {
@@ -324,5 +364,9 @@ try {
     if (!hostExited) {
       hostProc.kill("SIGKILL");
     }
+  }
+  // WebView2 subprocesses can outlive the host; cleanup is best effort.
+  try { fs.rmSync(fixtureDataDir, { recursive: true, force: true }); } catch (err) {
+    console.warn(`Could not remove isolated fixture data ${fixtureDataDir}: ${err.message}`);
   }
 }

@@ -1,5 +1,6 @@
 // derived: rea/native/windows/src/filesystem.cc
 #include "ocr_pipeline.h"
+#include <cstring>
 
 #if defined(_WIN32) && __has_include(<winrt/Windows.Media.Ocr.h>)
 #include <winrt/Windows.Foundation.h>
@@ -64,6 +65,9 @@ CapturedBuffer FitForOcr(const CapturedBuffer& source) {
 
 CapturedBuffer OcrPipeline::CaptureDib(HWND hwnd, RECT logicalRect) {
     CapturedBuffer result;
+    if (logicalRect.right <= logicalRect.left || logicalRect.bottom <= logicalRect.top) {
+        return result;
+    }
     float scaleFactor = 1.0f;
 #if !defined(_WIN32)
     (void)hwnd;
@@ -99,6 +103,7 @@ CapturedBuffer OcrPipeline::CaptureDib(HWND hwnd, RECT logicalRect) {
     result.pixels.resize(static_cast<size_t>(physicalWidth) * physicalHeight * 4, 0);
 
 #if defined(_WIN32)
+    bool captured = false;
     HDC hdcWindow = GetWindowDC(hwnd);
     if (!hdcWindow) {
         hdcWindow = GetDC(hwnd);
@@ -116,24 +121,34 @@ CapturedBuffer OcrPipeline::CaptureDib(HWND hwnd, RECT logicalRect) {
 
             void* pBits = nullptr;
             HBITMAP hDib = CreateDIBSection(hdcMem, &bmi, DIB_RGB_COLORS, &pBits, nullptr, 0);
-            if (hDib) {
+            if (hDib && pBits) {
                 HGDIOBJ oldObj = SelectObject(hdcMem, hDib);
                 // Capture the logical rectangle and let GDI scale it to the
                 // physical buffer for high-DPI windows.
-                SetStretchBltMode(hdcMem, HALFTONE);
-                StretchBlt(hdcMem, 0, 0, physicalWidth, physicalHeight,
-                           hdcWindow, logicalRect.left, logicalRect.top,
-                           logicalWidth, logicalHeight, SRCCOPY);
-                GetDIBits(hdcMem, hDib, 0, physicalHeight, result.pixels.data(), &bmi, DIB_RGB_COLORS);
-
-                SelectObject(hdcMem, oldObj);
-                // Strict RAII cleanup order: DeleteObject -> DeleteDC -> ReleaseDC
-                DeleteObject(hDib);
+                if (oldObj && oldObj != HGDI_ERROR) {
+                    SetStretchBltMode(hdcMem, HALFTONE);
+                    if (StretchBlt(hdcMem, 0, 0, physicalWidth, physicalHeight,
+                                   hdcWindow, logicalRect.left, logicalRect.top,
+                                   logicalWidth, logicalHeight, SRCCOPY) && GdiFlush()) {
+                        // A selected DIB section cannot be passed to GetDIBits.
+                        // Read its backing memory after the GDI batch completes.
+                        std::memcpy(result.pixels.data(), pBits, result.pixels.size());
+                        captured = true;
+                    }
+                    HGDIOBJ restored = SelectObject(hdcMem, oldObj);
+                    if (!restored || restored == HGDI_ERROR) {
+                        // Delete the DC first if the bitmap could not be deselected.
+                        DeleteDC(hdcMem);
+                        hdcMem = nullptr;
+                    }
+                }
             }
-            DeleteDC(hdcMem);
+            if (hDib) DeleteObject(hDib);
+            if (hdcMem) DeleteDC(hdcMem);
         }
         ReleaseDC(hwnd, hdcWindow);
     }
+    if (!captured) return CapturedBuffer{};
 #endif
 
     return result;

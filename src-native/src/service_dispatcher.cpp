@@ -380,7 +380,9 @@ void ServiceDispatcher::Initialize(
             } else if (action == "quit") {
                 if (m_hwnd) PostMessage(m_hwnd, WM_CLOSE, 0, 0);
             } else {
-                BroadcastEvent("lens:shortcut", { { "action", action } });
+                // React handles the browser shortcut as "browser".
+                const std::string uiAction = action == "browser.toggle" ? "browser" : action;
+                BroadcastEvent("lens:shortcut", { { "action", uiAction } });
             }
         });
     }
@@ -892,6 +894,10 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
         }
 
         if (action == "desktop.wipeAllData") {
+#ifdef LENSDESK_ENABLE_TEST_AUTH
+            callback("Data wipe is disabled in the fixture host.", true);
+            return;
+#else
             // Remove only LensDesk-owned local state. Never terminate unrelated
             // WebView2 processes and never delete another application's data.
 #ifdef _WIN32
@@ -912,6 +918,7 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
             PostQuitMessage(0);
 #endif
             return;
+#endif
         }
 
         if (action == "desktop.ocr") {
@@ -979,10 +986,14 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
         }
 
         if (action == "browser.toggle") {
-            if (m_browserMgr) {
-                // Toggle browser view state
+            if (!m_webHost || !m_webHost->IsReady()) {
+                callback("Browser view is not ready.", true);
+                return;
             }
-            callback({ { "toggled", true } }, false);
+            // React owns the current view; dispatch the same shortcut it uses
+            // for the in-browser toggle. The reply confirms dispatch only.
+            BroadcastEvent("lens:shortcut", { { "action", "browser" } });
+            callback({ { "dispatched", true } }, false);
             return;
         }
 
@@ -1126,7 +1137,86 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
         }
 
         if (action == "model.test") {
-            callback(json{{"ok", true}}, false);
+            const std::string prov = payload.value("provider", "");
+            const std::string mod = payload.value("model", "");
+            const std::string localUrl = payload.value("localBaseUrl", "");
+
+            if (prov.empty()) {
+                callback("Provider is required for model test.", true);
+                return;
+            }
+
+            std::string apiKey;
+            if (prov != "local" && m_storageMgr) {
+                apiKey = m_storageMgr->GetApiKey(prov);
+            }
+
+            if (prov != "local" && apiKey.empty()) {
+                bool hasCloud = false;
+                {
+                    std::lock_guard<std::mutex> cloudLock(m_cloudMutex);
+                    hasCloud = m_cloud.HasSession();
+                }
+                if (hasCloud) {
+                    m_workers.emplace_back([this, payload, callback]() {
+                        try {
+                            json res;
+                            {
+                                std::lock_guard<std::mutex> cloudLock(m_cloudMutex);
+                                res = m_cloud.CloudRequest("model.test", payload);
+                            }
+                            PostToUi([callback, res]() { callback(res, false); });
+                        } catch (const std::exception& e) {
+                            const std::string err = e.what();
+                            PostToUi([callback, err]() { callback(err, true); });
+                        }
+                    });
+                    return;
+                }
+                callback("Add a provider key or sign in with an active LensDesk plan before testing a model.", true);
+                return;
+            }
+
+            m_workers.emplace_back([this, prov, mod, localUrl, apiKey, callback]() {
+                const std::string endpoint = ProviderEndpoint(prov, localUrl);
+                json requestBody;
+                requestBody["model"] = mod;
+                requestBody["max_tokens"] = 16;
+
+                if (prov == "anthropic") {
+                    requestBody["system"] = "Reply with one word: OK";
+                    json messages = json::array({
+                        { { "role", "user" }, { "content", "Ping" } }
+                    });
+                    requestBody["messages"] = messages;
+                    const std::string headers = "x-api-key: " + apiKey + "\r\nanthropic-version: 2023-06-01\r\n";
+                    HttpReply reply = HttpPostJson(endpoint, requestBody, "", headers, 15000);
+                    if (reply.networkError || reply.status < 200 || reply.status >= 300) {
+                        std::string msg = reply.error.empty() ? "Model test connection failed." : reply.error;
+                        PostToUi([callback, msg]() { callback(msg, true); });
+                        return;
+                    }
+                    std::string text = ExtractAssistantText(prov, reply.body);
+                    PostToUi([callback, prov, mod, text]() {
+                        callback(json{ { "ok", true }, { "provider", prov }, { "model", mod }, { "preview", text } }, false);
+                    });
+                } else {
+                    json messages = json::array({
+                        { { "role", "user" }, { "content", "Ping" } }
+                    });
+                    requestBody["messages"] = messages;
+                    HttpReply reply = HttpPostJson(endpoint, requestBody, apiKey, "", 15000);
+                    if (reply.networkError || reply.status < 200 || reply.status >= 300) {
+                        std::string msg = reply.error.empty() ? "Model test connection failed." : reply.error;
+                        PostToUi([callback, msg]() { callback(msg, true); });
+                        return;
+                    }
+                    std::string text = ExtractAssistantText(prov, reply.body);
+                    PostToUi([callback, prov, mod, text]() {
+                        callback(json{ { "ok", true }, { "provider", prov }, { "model", mod }, { "preview", text } }, false);
+                    });
+                }
+            });
             return;
         }
 
@@ -1150,18 +1240,65 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
             return;
         }
 
-        if (action == "recovery.snapshots") {
-            callback(json{{"snapshots", json::array()}}, false);
+        if (action == "backup") {
+            json b = m_storageMgr ? m_storageMgr->CreateBackup() : json::object();
+            callback(b, false);
             return;
         }
 
-        if (action == "backup" || action == "backup.restore") {
-            callback(json{{"ok", true}}, false);
+        if (action == "backup.restore") {
+            if (!m_storageMgr) {
+                callback("Storage manager is unavailable.", true);
+                return;
+            }
+            std::string err;
+            if (!m_storageMgr->RestoreBackup(payload, err)) {
+                callback(err.empty() ? "Failed to restore backup." : err, true);
+                return;
+            }
+            callback(BuildFullState(), false);
+            return;
+        }
+
+        if (action == "recovery.snapshots") {
+            json snaps = m_storageMgr ? m_storageMgr->GetSnapshots() : json::array();
+            callback(snaps, false);
+            return;
+        }
+
+        if (action == "recovery.restore") {
+            if (!m_storageMgr) {
+                callback("Storage manager is unavailable.", true);
+                return;
+            }
+            const std::string snapId = payload.value("id", "");
+            if (snapId.empty()) {
+                callback("Snapshot ID is required for recovery restore.", true);
+                return;
+            }
+            std::string err;
+            if (!m_storageMgr->RestoreSnapshot(snapId, err)) {
+                callback(err.empty() ? "Failed to restore recovery snapshot." : err, true);
+                return;
+            }
+            callback(BuildFullState(), false);
             return;
         }
 
         if (action == "cloud.pull" || action == "cloud.push") {
-            callback(json{{"ok", true}}, false);
+            m_workers.emplace_back([this, action, payload, callback]() {
+                try {
+                    json result;
+                    {
+                        std::lock_guard<std::mutex> cloudLock(m_cloudMutex);
+                        result = m_cloud.CloudRequest(action, payload);
+                    }
+                    PostToUi([callback, result]() { callback(result, false); });
+                } catch (const std::exception& e) {
+                    const std::string error = e.what();
+                    PostToUi([callback, error]() { callback(error, true); });
+                }
+            });
             return;
         }
 
@@ -1528,16 +1665,19 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
         if (action == "cloud.request") {
             std::string subAction = payload.value("action", "");
             json subPayload = payload.value("payload", json::object());
-            try {
-                json res;
-                {
-                    std::lock_guard<std::mutex> cloudLock(m_cloudMutex);
-                    res = m_cloud.CloudRequest(subAction, subPayload);
+            m_workers.emplace_back([this, subAction, subPayload, callback]() {
+                try {
+                    json res;
+                    {
+                        std::lock_guard<std::mutex> cloudLock(m_cloudMutex);
+                        res = m_cloud.CloudRequest(subAction, subPayload);
+                    }
+                    PostToUi([callback, res]() { callback(res, false); });
+                } catch (const std::exception& e) {
+                    const std::string error = e.what();
+                    PostToUi([callback, error]() { callback(error, true); });
                 }
-                callback(res, false);
-            } catch (const std::exception& e) {
-                callback(errorResult(e.what()), true);
-            }
+            });
             return;
         }
 

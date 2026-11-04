@@ -702,9 +702,9 @@ json CloudClient::Login(const json& payload) {
     if (!body.contains("os")) body["os"] = "Windows";
     if (!body.contains("appVersion")) body["appVersion"] = "2.0.0";
 
-    const char* isCi = std::getenv("CI");
+#ifdef LENSDESK_ENABLE_TEST_AUTH
     const char* testAuth = std::getenv("LENSDESK_TEST_AUTH");
-    if ((isCi || testAuth) && (body.value("email", "") == "test@lensdesk.local" || body.value("test", false))) {
+    if (testAuth && std::string(testAuth) == "1" && body.value("test", false)) {
         json testData;
         testData["serverTimeMs"] = NowMs();
         testData["user"] = { { "id", "test-user-id" }, { "email", "test@lensdesk.local" }, { "name", "Test User" } };
@@ -727,6 +727,7 @@ json CloudClient::Login(const json& payload) {
         Save();
         return GetGateView();
     }
+#endif
 
     HttpResult result = Request("desktop.login", body, 15000);
     const std::string defaultServer = "https://helpdesk-h44x.onrender.com";

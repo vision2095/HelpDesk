@@ -48,6 +48,13 @@ public:
     // Workspaces
     json GetWorkspaces();
 
+    // Backup & Recovery (Transactional, Rollback-protected, Account-Scoped)
+    json CreateBackup();
+    bool RestoreBackup(const json& backup, std::string& error);
+    json GetSnapshots();
+    bool CreateSnapshot(const std::string& reason, std::string& outSnapshotId);
+    bool RestoreSnapshot(const std::string& snapshotId, std::string& error);
+
 private:
     bool ReadJsonFile(const std::filesystem::path& path, json& outJson);
     bool WriteJsonFileAtomic(const std::filesystem::path& path, const json& inJson);
@@ -57,6 +64,7 @@ private:
     std::filesystem::path m_profilesPath;
     std::filesystem::path m_sessionsPath;
     std::filesystem::path m_keysPath;
+    std::filesystem::path m_snapshotsDir;
 
     std::string m_currentAccountId;
     std::string m_currentAccountEmail;

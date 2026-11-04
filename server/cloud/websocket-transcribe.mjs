@@ -289,7 +289,7 @@ export async function handleWebSocketTranscribeUpgrade(req, socket, head, option
     }
   }
 
-  socket.on("data", (chunk) => {
+  function processData(chunk) {
     if (closed || stopping) return;
     if (buffer.length + chunk.length > MAX_BUFFER_BYTES + maxFrameBytes) {
       sendError("The WebSocket buffer exceeded its limit.", { fatal: true, code: 1009 });
@@ -435,7 +435,9 @@ export async function handleWebSocketTranscribeUpgrade(req, socket, head, option
       });
 
     }
-  });
+  }
+
+  socket.on("data", processData);
 
   socket.on("error", () => {
     closed = true;
@@ -445,4 +447,8 @@ export async function handleWebSocketTranscribeUpgrade(req, socket, head, option
   socket.on("close", () => {
     closed = true;
   });
+
+  // Node passes bytes read beyond the HTTP headers separately from later
+  // socket data. They may contain a complete frame with no subsequent data.
+  if (buffer.length) processData(Buffer.alloc(0));
 }

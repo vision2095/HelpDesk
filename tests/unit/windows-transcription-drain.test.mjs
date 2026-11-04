@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { once } from "node:events";
+import { EventEmitter } from "node:events";
 import { handleWebSocketTranscribeUpgrade } from "../../server/cloud/websocket-transcribe.mjs";
 
 function deferred() {
@@ -58,6 +59,26 @@ function watchMessages(socket) {
     },
   };
 }
+
+test("processes a stop frame already present in the upgrade head", async () => {
+  class Socket extends EventEmitter {
+    writable = true;
+    destroyed = false;
+    writes = [];
+    write(data) { this.writes.push(data); }
+    end() { this.writable = false; }
+  }
+  const socket = new Socket();
+  const stop = Buffer.from([0x81, 0x84, 1, 2, 3, 4, 0x72, 0x76, 0x6c, 0x74]);
+  await handleWebSocketTranscribeUpgrade({ url: "/ws/transcribe", headers: { "sec-websocket-key": "test" } }, socket, stop, {
+    authenticate: async () => ({ user: { id: "test-user" } }),
+    transcribe: async () => { throw new Error("unexpected audio"); },
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  const frames = socket.writes.filter(Buffer.isBuffer);
+  assert.ok(frames.some((frame) => frame.toString("utf8").includes('"final":true')));
+  assert.equal(socket.writable, false);
+});
 
 test("stop waits for in-flight and buffered audio before final transcript", async (t) => {
   const first = deferred();

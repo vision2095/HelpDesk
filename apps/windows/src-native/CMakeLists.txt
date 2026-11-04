@@ -65,8 +65,17 @@ set(SOURCES
     resources/app.manifest
 )
 
+# This option is for an isolated CI fixture only. Release builds default to OFF.
+option(LENSDESK_ENABLE_TEST_AUTH "Build an explicitly named test host with fixture authentication" OFF)
+
 # Executable target
 add_executable(RuntimeHost WIN32 ${SOURCES})
+if(LENSDESK_ENABLE_TEST_AUTH)
+    target_compile_definitions(RuntimeHost PRIVATE LENSDESK_ENABLE_TEST_AUTH=1)
+    set(LENSDESK_HOST_OUTPUT_NAME "RuntimeHostTest")
+else()
+    set(LENSDESK_HOST_OUTPUT_NAME "RuntimeHost")
+endif()
 
 # Windows system libraries
 target_link_libraries(RuntimeHost PRIVATE
@@ -96,7 +105,7 @@ target_link_libraries(RuntimeHost PRIVATE
 
 # Set output name
 set_target_properties(RuntimeHost PROPERTIES
-    OUTPUT_NAME "RuntimeHost"
+    OUTPUT_NAME "${LENSDESK_HOST_OUTPUT_NAME}"
     VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
 )
 

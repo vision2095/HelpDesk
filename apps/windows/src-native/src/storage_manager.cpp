@@ -1,5 +1,8 @@
 #include "../include/storage_manager.hpp"
 #include <fstream>
+#include <chrono>
+#include <algorithm>
+#include <vector>
 
 namespace LensDesk {
 
@@ -12,6 +15,9 @@ bool StorageManager::Initialize() {
     m_profilesPath = m_appDataDir / L"profiles.json";
     m_sessionsPath = m_appDataDir / L"sessions.json";
     m_keysPath = m_appDataDir / L"keys.json";
+    m_snapshotsDir = m_appDataDir / L"snapshots";
+    std::error_code ecSnap;
+    std::filesystem::create_directories(m_snapshotsDir, ecSnap);
 
     // Ensure default files exist if first launch
     std::lock_guard<std::mutex> lock(m_mutex);
@@ -115,11 +121,16 @@ bool StorageManager::SetCurrentAccount(const std::string& userId, const std::str
         m_profilesPath = userDir / L"profiles.json";
         m_sessionsPath = userDir / L"sessions.json";
         m_keysPath = userDir / L"keys.json";
+        m_snapshotsDir = userDir / L"snapshots";
+        std::filesystem::create_directories(m_snapshotsDir, ec);
     } else {
         m_prefsPath = m_appDataDir / L"preferences.json";
         m_profilesPath = m_appDataDir / L"profiles.json";
         m_sessionsPath = m_appDataDir / L"sessions.json";
         m_keysPath = m_appDataDir / L"keys.json";
+        m_snapshotsDir = m_appDataDir / L"snapshots";
+        std::error_code ecDir;
+        std::filesystem::create_directories(m_snapshotsDir, ecDir);
     }
 
     if (!std::filesystem::exists(m_prefsPath)) {
@@ -488,6 +499,244 @@ bool StorageManager::ClearAllData() {
     std::error_code ec;
     std::filesystem::remove_all(m_appDataDir, ec);
     return !ec;
+}
+
+json StorageManager::CreateBackup() {
+    json backup;
+    backup["version"] = 1;
+    backup["settings"] = GetPreferences();
+    backup["profiles"] = GetProfiles();
+    backup["sessions"] = GetSessions();
+    return backup;
+}
+
+bool StorageManager::CreateSnapshot(const std::string& reason, std::string& outSnapshotId) {
+    try {
+        std::error_code ec;
+        std::filesystem::create_directories(m_snapshotsDir, ec);
+
+        const int64_t nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
+        const std::string id = "snap_" + std::to_string(nowMs);
+        const std::string nowIso = GetIsoTimestamp();
+
+        json snap = {
+            { "id", id },
+            { "createdAt", nowIso },
+            { "reason", reason },
+            { "settings", GetPreferences() },
+            { "profiles", GetProfiles() },
+            { "sessions", GetSessions() }
+        };
+
+        std::filesystem::path snapPath = m_snapshotsDir / Utf8ToWide(id + ".json");
+        if (!WriteJsonFileAtomic(snapPath, snap)) {
+            return false;
+        }
+        outSnapshotId = id;
+
+        // Bounded retention: keep at most 10 recovery snapshots
+        std::vector<std::pair<std::filesystem::file_time_type, std::filesystem::path>> files;
+        for (const auto& entry : std::filesystem::directory_iterator(m_snapshotsDir, ec)) {
+            if (entry.is_regular_file() && entry.path().extension() == L".json") {
+                files.emplace_back(entry.last_write_time(), entry.path());
+            }
+        }
+        if (files.size() > 10) {
+            std::sort(files.begin(), files.end(), [](const auto& a, const auto& b) {
+                return a.first > b.first;
+            });
+            for (size_t i = 10; i < files.size(); ++i) {
+                std::filesystem::remove(files[i].second, ec);
+            }
+        }
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
+json StorageManager::GetSnapshots() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    json result = json::array();
+    try {
+        std::error_code ec;
+        if (!std::filesystem::exists(m_snapshotsDir)) return result;
+
+        struct SnapItem {
+            std::string id;
+            std::string createdAt;
+            std::filesystem::file_time_type mtime;
+        };
+        std::vector<SnapItem> items;
+
+        for (const auto& entry : std::filesystem::directory_iterator(m_snapshotsDir, ec)) {
+            if (entry.is_regular_file() && entry.path().extension() == L".json") {
+                json snap;
+                if (ReadJsonFile(entry.path(), snap) && snap.is_object() && snap.contains("id")) {
+                    items.push_back({
+                        snap.value("id", ""),
+                        snap.value("createdAt", ""),
+                        entry.last_write_time()
+                    });
+                }
+            }
+        }
+
+        std::sort(items.begin(), items.end(), [](const auto& a, const auto& b) {
+            if (!a.createdAt.empty() && !b.createdAt.empty()) {
+                return a.createdAt > b.createdAt;
+            }
+            return a.mtime > b.mtime;
+        });
+
+        for (const auto& item : items) {
+            result.push_back({
+                { "id", item.id },
+                { "createdAt", item.createdAt }
+            });
+        }
+    } catch (...) {}
+    return result;
+}
+
+bool StorageManager::RestoreBackup(const json& backup, std::string& error) {
+    if (!backup.is_object()) {
+        error = "Backup data must be a JSON object.";
+        return false;
+    }
+    if (backup.value("version", 0) != 1) {
+        error = "Unsupported backup version. Expected version 1.";
+        return false;
+    }
+    if (!backup.contains("sessions") || !backup["sessions"].is_array()) {
+        error = "Backup missing sessions array.";
+        return false;
+    }
+    if (!backup.contains("profiles") || !backup["profiles"].is_array()) {
+        error = "Backup missing profiles array.";
+        return false;
+    }
+    if (!backup.contains("settings") || !backup["settings"].is_object()) {
+        error = "Backup missing settings object.";
+        return false;
+    }
+
+    // 1. Transactional safety: capture pre-restore recovery snapshot
+    std::string preSnapshotId;
+    if (!CreateSnapshot("Automatic snapshot before backup restore", preSnapshotId)) {
+        error = "Failed to create pre-restore recovery snapshot.";
+        return false;
+    }
+
+    std::lock_guard<std::mutex> lock(m_mutex);
+    try {
+        // 2. Prepare atomic temporary writes for all target files
+        std::filesystem::path tmpPrefs = m_prefsPath; tmpPrefs += L".restore.tmp";
+        std::filesystem::path tmpProfiles = m_profilesPath; tmpProfiles += L".restore.tmp";
+        std::filesystem::path tmpSessions = m_sessionsPath; tmpSessions += L".restore.tmp";
+
+        bool ok = true;
+        {
+            std::ofstream f(tmpPrefs);
+            if (f.is_open()) f << backup["settings"].dump(2);
+            else ok = false;
+        }
+        {
+            std::ofstream f(tmpProfiles);
+            if (f.is_open()) f << backup["profiles"].dump(2);
+            else ok = false;
+        }
+        {
+            std::ofstream f(tmpSessions);
+            if (f.is_open()) f << backup["sessions"].dump(2);
+            else ok = false;
+        }
+
+        if (!ok) {
+            std::error_code ec;
+            std::filesystem::remove(tmpPrefs, ec);
+            std::filesystem::remove(tmpProfiles, ec);
+            std::filesystem::remove(tmpSessions, ec);
+            error = "Failed to write temporary restore files.";
+            return false;
+        }
+
+        // 3. Atomically rename into place
+        std::filesystem::rename(tmpPrefs, m_prefsPath);
+        std::filesystem::rename(tmpProfiles, m_profilesPath);
+        std::filesystem::rename(tmpSessions, m_sessionsPath);
+
+        return true;
+    } catch (const std::exception& e) {
+        // Rollback protection
+        error = std::string("Restore failed: ") + e.what();
+        std::string rollbackErr;
+        RestoreSnapshot(preSnapshotId, rollbackErr);
+        return false;
+    }
+}
+
+bool StorageManager::RestoreSnapshot(const std::string& snapshotId, std::string& error) {
+    if (snapshotId.empty()) {
+        error = "Snapshot ID cannot be empty.";
+        return false;
+    }
+
+    std::filesystem::path snapPath;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        snapPath = m_snapshotsDir / Utf8ToWide(snapshotId + ".json");
+    }
+
+    if (!std::filesystem::exists(snapPath)) {
+        error = "Recovery snapshot not found.";
+        return false;
+    }
+
+    json snap;
+    if (!ReadJsonFile(snapPath, snap) || !snap.is_object()) {
+        error = "Recovery snapshot file is corrupt or invalid.";
+        return false;
+    }
+
+    if (!snap.contains("settings") || !snap.contains("profiles") || !snap.contains("sessions")) {
+        error = "Recovery snapshot missing required workspace data.";
+        return false;
+    }
+
+    // Capture safety snapshot of current state before replacing
+    std::string safetySnapId;
+    CreateSnapshot("Pre-snapshot restore safety snapshot", safetySnapId);
+
+    std::lock_guard<std::mutex> lock(m_mutex);
+    try {
+        std::filesystem::path tmpPrefs = m_prefsPath; tmpPrefs += L".restore.tmp";
+        std::filesystem::path tmpProfiles = m_profilesPath; tmpProfiles += L".restore.tmp";
+        std::filesystem::path tmpSessions = m_sessionsPath; tmpSessions += L".restore.tmp";
+
+        {
+            std::ofstream f(tmpPrefs);
+            if (f.is_open()) f << snap["settings"].dump(2);
+        }
+        {
+            std::ofstream f(tmpProfiles);
+            if (f.is_open()) f << snap["profiles"].dump(2);
+        }
+        {
+            std::ofstream f(tmpSessions);
+            if (f.is_open()) f << snap["sessions"].dump(2);
+        }
+
+        std::filesystem::rename(tmpPrefs, m_prefsPath);
+        std::filesystem::rename(tmpProfiles, m_profilesPath);
+        std::filesystem::rename(tmpSessions, m_sessionsPath);
+
+        return true;
+    } catch (const std::exception& e) {
+        error = std::string("Failed to restore snapshot: ") + e.what();
+        return false;
+    }
 }
 
 } // namespace LensDesk
