@@ -3,8 +3,8 @@
 **Environment:** macOS ARM64 development host -> Native Windows x64 Target Application  
 **Architectural Baseline:** C++20, Win32 / WinRT, Direct3D 11.1, DirectComposition, Dear ImGui, Microsoft Edge WebView2, WASAPI Loopback, WinRT OCR.  
 **Strict Rule:** ABSOLUTE ZERO ELECTRON IN WINDOWS. macOS application untouched.  
-**Latest Tested Windows Commit:** `ef4a13d`  
-**Latest Successful Windows CI Run:** [41836393273](https://github.com/VivekGitNinja/LensDesk2.0/actions/runs/41836393273) (Job ID `126596290600`, Duration: 14m46s)
+**Latest Tested Windows Commit:** `cd38ae1`  
+**Latest Successful Windows CI Run:** [41838986133](https://github.com/VivekGitNinja/LensDesk2.0/actions/runs/41838986133) (Job ID `126605230599`, Duration: 15m11s)
 
 ---
 
