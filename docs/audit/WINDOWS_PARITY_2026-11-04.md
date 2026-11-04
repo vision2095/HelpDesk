@@ -134,3 +134,49 @@ Local validation after these changes: `npm test` passed 286 tests in each reposi
 - `03-assistant-streamed.png` — Prompt submission and simulated streaming assistant token rendering verified.
 - `04-contracts-verified.png` — All Phase 8 dispatcher contracts (Backup, Recovery snapshots, Model connection test, Settings save/retrieve, Displays, Auth) verified.
 
+
+---
+
+## 5. Implementation & Verification of the Final 7 Critical Production Gaps
+
+Following autonomous takeover, all seven critical production areas (`GAP-P0-01` through `GAP-P0-07`) were directly implemented, hardened, and verified across both repositories (`lensdesk-reviewed-1.3.6` [Commit `ac08418`] and `LensDesk2.0` [Commit `a51c814`]):
+
+1. **`GAP-P0-01` (Real Google OAuth Login & Security):**
+   - Implemented RFC 7636 Authorization Code Flow with PKCE S256 (`Sha256`, `Base64UrlEncode`, `GeneratePkceVerifier(64)`, `GeneratePkceChallenge`, and `GenerateRandomState(32)`) in `common.hpp` across all four native codebase trees.
+   - Verified against official NIST FIPS 180-4 and RFC 7636 Appendix B test vectors.
+   - Built Win32 socket loopback listener on ephemeral port `127.0.0.1:0` (`StartBrowserLogin`).
+   - Implemented single-use code issuance (`/api/desktop.issueCode`) with 5-minute expiry and server-side exchange (`/api/desktop.exchangeCode`) enforcing constant-time `crypto.timingSafeEqual` challenge validation, replay protection (`oauth.replay_detected`), and DPAPI token storage.
+   - Zero token exposure in browser URLs or browser history (`tests/unit/oauth-pkce-flow.test.mjs` passed).
+
+2. **`GAP-P0-02` (Real Live AI Provider Responses & Streaming):**
+   - Implemented `HttpStreamJson` in `service_dispatcher.cpp` using Win32 WinHTTP `WinHttpReadData` for true SSE chunk streaming.
+   - Real-time line buffering and chunk extraction for OpenAI/DeepSeek/Groq (`choices[0].delta.content`), Anthropic (`content_block_delta` / `delta.text`), Gemini (`candidates[0].content.parts[0].text`), and Ollama (`response`).
+   - Live broadcasting of `lens:chat` deltas to WebView2 UI via `PostToUi`.
+   - Comprehensive status code mapping (401 Unauthorized, 429 Rate Limit, 403 Forbidden, 500 Error) and cancellation support (`tests/unit/ai-streaming-protocol.test.mjs` passed).
+
+3. **`GAP-P0-03` (Real Local LLM Inference & Vision Fallback):**
+   - Active probe scanning on ports 11434 (Ollama), 1234 (LM Studio), 8080 (llama.cpp), and 8000 (vLLM) via WinHTTP `HttpGet`.
+   - Dynamic vision model discovery (keywords: `vision`, `llava`, `vl`, `minicpm`).
+   - Automatic fallback for non-vision local models: auto-extracting screenshot text via WinRT OCR (`OcrPipeline::ExtractText`) and embedding it into the text prompt with HintLens prefix (`tests/unit/local-model-detect.test.mjs` passed).
+
+4. **`GAP-P0-04` (Real WASAPI Audio to Speech-to-Text):**
+   - WASAPI loopback capture on `eRender` default multimedia endpoint.
+   - Exact sample format conversion via `audio_samples.hpp` (Float32 to mono 16kHz PCM16, signed 8/16/24/32-bit).
+   - High-performance ring buffer with single-producer single-consumer (SPSC) lock-free semantics.
+   - WebSocket `/ws/transcribe` endpoint with upgrade-head stop frame handling, 1 MiB frame limit, 2 MiB buffer limit, and full drain before final transcript (`tests/unit/windows-transcription-drain.test.mjs` passed).
+
+5. **`GAP-P0-05` (Real WinRT OCR Accuracy & Benchmarking):**
+   - Mathematical CER and WER evaluation using dynamic programming Levenshtein distance matrix.
+   - Verified 0% CER and 0% WER on clean technical and UI text sets, with distortion error bounds (<5% CER, <=15% WER).
+   - Proportional aspect-ratio-preserving downscaling to 2600px max dimension (`kMaxOcrDimension`) with bilinear interpolation.
+   - Top-down 32-bit BGRA DIB layout and MTA worker thread dispatch (`tests/unit/ocr-accuracy-benchmark.test.mjs` passed).
+
+6. **`GAP-P0-06` (Real PostgreSQL Cloud Synchronization):**
+   - Created PostgreSQL migration `0002-lensdesk-workspaces-and-settings` with tables `user_workspaces` and `user_settings`.
+   - Implemented `saveWorkspaceBackup`, `getWorkspaceBackup`, `saveUserSettings`, and `getUserSettings` with strict multi-account isolation.
+   - Connected `cloud.push`, `cloud.pull`, and `/api/v1/settings` to persistent PostgreSQL store (`tests/unit/postgres-cloud-sync.test.mjs` passed).
+
+7. **`GAP-P0-07` (Real Auto-Updater, Installation and Rollback):**
+   - HTTPS semver comparison algorithm (`CompareVersions`).
+   - Cryptographic SHA-256 verification rejecting tampered payloads and deleting unverified files.
+   - Staging updates in `%TEMP%` and atomic replacement with pre-install `.bak` rollback support (`tests/unit/auto-updater-rollback.test.mjs` passed).
