@@ -2,7 +2,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { getDatabasePool, transaction } from "../server/cloud/postgres-db.mjs";
 import { createPostgresStore } from "../server/cloud/postgres-store.mjs";
-import { runPostgresMigrations } from "../server/cloud/postgres-migrations.mjs";
+import { runPostgresMigrations, importFromSqlite } from "../server/cloud/postgres-migrations.mjs";
+import { createAccounts } from "../server/cloud/auth.mjs";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 // Use DATABASE_URL if set (e.g. in CI with a real Postgres service), else localhost default.
 const pool = getDatabasePool(process.env.DATABASE_URL || "postgres://localhost:5432/lensdesk");
@@ -499,15 +503,23 @@ pgTest("17. Windows and macOS compatibility", async () => {
   assert.ok(await store.verifyDesktopAccess(mac.accessToken));
 });
 
-pgTest("18. Existing functionality regression", async () => {
-  // Verify existing users imported from SQLite exist in PostgreSQL
-  const vivek = await pool.query("SELECT * FROM users WHERE email = 'vivek@gmail.com'");
-  assert.equal(vivek.rows.length, 1);
-  assert.equal(vivek.rows[0].verified, true);
-
-  const mukul = await pool.query("SELECT * FROM users WHERE email = 'mukul@gmail.com'");
-  assert.equal(mukul.rows.length, 1);
-  assert.equal(mukul.rows[0].verified, true);
+pgTest("18. SQLite account import preserves a verified account", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "lensdesk-account-import-"));
+  const accounts = createAccounts(directory);
+  try {
+    const email = `import-${Date.now()}-${Math.random().toString(16).slice(2)}@example.test`;
+    const { user } = await accounts.register({
+      email, password: "Password123!", name: "Import fixture", verified: true,
+    });
+    await importFromSqlite(pool, directory);
+    const result = await pool.query("SELECT id, email, verified FROM users WHERE id = $1", [user.id]);
+    assert.equal(result.rows.length, 1);
+    assert.equal(result.rows[0].email, email);
+    assert.equal(result.rows[0].verified, true);
+  } finally {
+    accounts.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 pgTest("19. Backend load and database connection limits", async () => {

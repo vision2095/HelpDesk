@@ -10,11 +10,25 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin/Release")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/bin/Debug")
 
+# This option builds RuntimeHost with UIAccess=true accessibility manifest for signed elevation integration
+option(LENSDESK_BUILD_UIACCESS "Build RuntimeHost with UIAccess=true accessibility manifest" OFF)
+
+if(LENSDESK_BUILD_UIACCESS)
+    set(APP_MANIFEST_FILE "${CMAKE_CURRENT_SOURCE_DIR}/resources/app-accessibility.manifest")
+    add_compile_definitions(LENSDESK_UIACCESS_BUILD=1)
+else()
+    set(APP_MANIFEST_FILE "${CMAKE_CURRENT_SOURCE_DIR}/resources/app.manifest")
+endif()
+
 if(MSVC)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     add_compile_options(/W3 /WX- /wd4100 /permissive- /Zc:preprocessor /utf-8 /EHsc)
     add_compile_definitions(UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS)
-    add_link_options(/MANIFESTUAC:NO)
+    if(LENSDESK_BUILD_UIACCESS)
+        add_link_options(/MANIFESTUAC:level='asInvoker' /MANIFESTUAC:uiAccess='true')
+    else()
+        add_link_options(/MANIFESTUAC:NO)
+    endif()
 endif()
 
 # Include directories
@@ -58,7 +72,7 @@ set(SOURCES
     third_party/imgui/imgui_impl_win32.cpp
     third_party/imgui/imgui_impl_dx11.cpp
     resources/app.rc
-    resources/app.manifest
+    ${APP_MANIFEST_FILE}
 )
 
 # This option is for an isolated CI fixture only. Release builds default to OFF.
@@ -74,7 +88,7 @@ else()
 endif()
 
 # Windows system libraries
-target_link_libraries(RuntimeHost PRIVATE
+set(LENSDESK_SYSTEM_LIBRARIES
     user32
     gdi32
     d3d11
@@ -105,6 +119,7 @@ set_target_properties(RuntimeHost PROPERTIES
     OUTPUT_NAME "${LENSDESK_HOST_OUTPUT_NAME}"
     VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
 )
+target_link_libraries(RuntimeHost PRIVATE ${LENSDESK_SYSTEM_LIBRARIES})
 
 # Post-build copy of WebView2Loader.dll and frontend dist
 add_custom_command(TARGET RuntimeHost POST_BUILD
@@ -115,4 +130,30 @@ add_custom_command(TARGET RuntimeHost POST_BUILD
         "${CMAKE_CURRENT_SOURCE_DIR}/../dist"
         "$<TARGET_FILE_DIR:RuntimeHost>/dist"
     COMMENT "Copying WebView2 runtime DLL and built web assets to target output directory"
+)
+
+# Dedicated Signed Accessibility target (uiAccess="true")
+set(SOURCES_UIACCESS ${SOURCES})
+list(REMOVE_ITEM SOURCES_UIACCESS "${APP_MANIFEST_FILE}")
+list(APPEND SOURCES_UIACCESS "${CMAKE_CURRENT_SOURCE_DIR}/resources/app-accessibility.manifest")
+
+add_executable(RuntimeHostAccessibility WIN32 ${SOURCES_UIACCESS})
+set_target_properties(RuntimeHostAccessibility PROPERTIES
+    OUTPUT_NAME "RuntimeHostAccessibility"
+    VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+)
+target_compile_definitions(RuntimeHostAccessibility PRIVATE LENSDESK_UIACCESS_BUILD=1)
+target_link_libraries(RuntimeHostAccessibility PRIVATE ${LENSDESK_SYSTEM_LIBRARIES})
+if(MSVC)
+    target_link_options(RuntimeHostAccessibility PRIVATE /MANIFESTUAC:level='asInvoker' /MANIFESTUAC:uiAccess='true')
+endif()
+
+add_custom_command(TARGET RuntimeHostAccessibility POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/webview2/lib/x64/WebView2Loader.dll"
+        "$<TARGET_FILE_DIR:RuntimeHostAccessibility>/WebView2Loader.dll"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/../dist"
+        "$<TARGET_FILE_DIR:RuntimeHostAccessibility>/dist"
+    COMMENT "Copying WebView2 runtime DLL and built web assets to accessibility target output directory"
 )

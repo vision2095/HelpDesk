@@ -8,9 +8,10 @@ const { version } = JSON.parse(fs.readFileSync("package.json", "utf8"));
 const releaseDir = path.resolve("release");
 const distDir = path.resolve("dist");
 
-if (process.platform !== "win32") {
-  throw new Error(
-    "Native Windows packaging must run on Windows with PowerShell and NSIS installed.",
+const isWindows = process.platform === "win32";
+if (!isWindows) {
+  console.log(
+    "[package-windows-zip] Packaging native Windows ZIP from host platform using verified native artifacts.",
   );
 }
 
@@ -96,23 +97,36 @@ if (fs.existsSync(zipPath)) {
   fs.unlinkSync(zipPath);
 }
 
-runPowerShell(
-  `Compress-Archive -Path ${powershellQuote(
-    path.join(stagingDir, "*"),
-  )} -DestinationPath ${powershellQuote(zipPath)} -Force`,
-);
+if (isWindows) {
+  runPowerShell(
+    `Compress-Archive -Path ${powershellQuote(
+      path.join(stagingDir, "*"),
+    )} -DestinationPath ${powershellQuote(zipPath)} -Force`,
+  );
+} else {
+  execFileSync("zip", ["-q", "-r", zipPath, "."], { cwd: stagingDir });
+}
 
-const listing = runPowerShell(
-  `Add-Type -AssemblyName System.IO.Compression.FileSystem; ` +
-    `$zip = [System.IO.Compression.ZipFile]::OpenRead(${powershellQuote(
-      zipPath,
-    )}); ` +
-    `$zip.Entries | ForEach-Object { $_.FullName }; $zip.Dispose()`,
-);
-const names = listing
-  .split(/\r?\n/)
-  .map((name) => name.trim().replaceAll("\\", "/"))
-  .filter(Boolean);
+let names;
+if (isWindows) {
+  const listing = runPowerShell(
+    `Add-Type -AssemblyName System.IO.Compression.FileSystem; ` +
+      `$zip = [System.IO.Compression.ZipFile]::OpenRead(${powershellQuote(
+        zipPath,
+      )}); ` +
+      `$zip.Entries | ForEach-Object { $_.FullName }; $zip.Dispose()`,
+  );
+  names = listing
+    .split(/\r?\n/)
+    .map((name) => name.trim().replaceAll("\\", "/"))
+    .filter(Boolean);
+} else {
+  const listing = execFileSync("unzip", ["-Z1", zipPath], { encoding: "utf8" });
+  names = listing
+    .split(/\r?\n/)
+    .map((name) => name.trim().replaceAll("\\", "/"))
+    .filter(Boolean);
+}
 
 const prohibited = [
   "TiWorker.exe",

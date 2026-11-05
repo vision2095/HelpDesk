@@ -609,6 +609,65 @@ void ServiceDispatcher::Initialize(
         }
     }
 
+    // Connect ImGuiOverlay
+    if (m_imguiOverlay) {
+        m_imguiOverlay->SetServiceDispatcher(this);
+        m_imguiOverlay->SetStorageManager(m_storageMgr);
+        m_imguiOverlay->SetBrowserTabsManager(m_browserMgr);
+        m_imguiOverlay->GetState().isProcessElevated = InputManager::IsCurrentProcessElevated();
+        m_imguiOverlay->GetState().hasUiAccess = InputManager::HasUiAccess();
+        m_imguiOverlay->SetActionCallback([this](const std::string& action) {
+            if (action == "action.snip") {
+                Dispatch("desktop.capture", json::object(), [this](const json& res, bool isError) {
+                    if (!isError && res.contains("image")) {
+                        std::string img = res["image"].get<std::string>();
+                        Dispatch("desktop.ocr", { { "image", img } }, [this](const json& ocrRes, bool ocrErr) {
+                            if (!ocrErr && ocrRes.contains("text")) {
+                                std::string text = ocrRes["text"].get<std::string>();
+                                if (m_imguiOverlay && !text.empty()) {
+                                    m_imguiOverlay->AppendChatMessage("user", "[Screen Snipped & OCR Extracted]\n" + text);
+                                }
+                            }
+                        });
+                    }
+                });
+            } else if (action == "action.chat") {
+                if (m_imguiOverlay) m_imguiOverlay->ToggleChat();
+            } else if (action == "action.interview") {
+                if (m_imguiOverlay) m_imguiOverlay->ToggleInterview();
+            } else if (action == "action.start_interview") {
+                Dispatch("audio.startLoopback", json::object(), [](const json&, bool) {});
+            } else if (action == "action.stop_interview") {
+                Dispatch("audio.stopLoopback", json::object(), [](const json&, bool) {});
+            } else if (action == "action.browser") {
+                if (m_imguiOverlay) m_imguiOverlay->ToggleBrowser();
+            } else if (action == "action.settings") {
+                if (m_imguiOverlay) m_imguiOverlay->ToggleSettings();
+            } else if (action == "install.webview2") {
+                if (m_webHost) m_webHost->InstallRuntime();
+            } else if (action == "action.autotype") {
+                if (m_inputMgr && m_imguiOverlay) {
+                    const auto& msgs = m_imguiOverlay->GetState().chatMessages;
+                    for (auto it = msgs.rbegin(); it != msgs.rend(); ++it) {
+                        if (it->role == "assistant") {
+                            m_inputMgr->AutoType(it->text);
+                            break;
+                        }
+                    }
+                }
+            } else if (action.rfind("opacity:", 0) == 0) {
+                try {
+                    float op = std::stof(action.substr(8));
+                    if (m_winMgr) m_winMgr->SetOpacity(op);
+                } catch (...) {}
+            } else if (action == "shield:on") {
+                if (m_winMgr) m_winMgr->SetCaptureProtection(true);
+            } else if (action == "shield:off") {
+                if (m_winMgr) m_winMgr->SetCaptureProtection(false);
+            }
+        });
+    }
+
     // Connect hotkeys to actions
     if (m_inputMgr) {
         m_inputMgr->SetHotkeyCallback([this](const std::string& action) {
@@ -639,6 +698,19 @@ void ServiceDispatcher::Initialize(
             } else if (action == "stopTyping") {
                 if (m_inputMgr) m_inputMgr->StopAutoType();
                 BroadcastEvent("lens:shortcut", { { "action", "stopTyping" } });
+            } else if (action == "typing:elevated_target") {
+                if (m_imguiOverlay) {
+                    m_imguiOverlay->SetTypingStatus("Blocked: Target application is running as Administrator (UIPI restricted). Run LensDesk with matching elevation or install with UIAccess.");
+                }
+                BroadcastEvent("lens:shortcut", {
+                    { "action", "typing:elevated_target" },
+                    { "error", "Target application is running as Administrator (UIPI restricted)." }
+                });
+            } else if (action == "typing:error") {
+                if (m_imguiOverlay) {
+                    m_imguiOverlay->SetTypingStatus("Error: Keystroke injection failed.");
+                }
+                BroadcastEvent("lens:shortcut", { { "action", "typing:error" } });
             } else if (action == "quit") {
                 if (m_hwnd) PostMessage(m_hwnd, WM_CLOSE, 0, 0);
             } else {
@@ -675,12 +747,137 @@ void ServiceDispatcher::BroadcastEvent(const std::string& eventName, const json&
     if (m_hwnd && m_uiThreadId != 0 && GetCurrentThreadId() != m_uiThreadId) {
         PostToUi([this, eventName, eventData]() {
             if (m_webHost) m_webHost->BroadcastEvent(eventName, eventData);
+            if (m_imguiOverlay) ForwardEventToImgui(eventName, eventData);
         });
         return;
     }
     if (m_webHost) {
         m_webHost->BroadcastEvent(eventName, eventData);
     }
+    if (m_imguiOverlay) {
+        ForwardEventToImgui(eventName, eventData);
+    }
+}
+
+static bool IsInterviewerQuestion(const std::string& text) {
+    if (text.empty()) return false;
+    if (text.find('?') != std::string::npos) return true;
+
+    std::string lower = text;
+    std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+
+    static const std::unordered_set<std::string> fillers = {
+        "ok", "okay", "yes", "yep", "yup", "yeah", "right", "sure", "fine",
+        "good", "great", "nice", "cool", "perfect", "awesome", "excellent",
+        "alright", "correct", "exactly", "indeed", "absolutely", "definitely",
+        "understood", "gotcha", "noted", "fair", "enough", "clear", "makes",
+        "sense", "sounds", "got", "thanks", "thank", "you", "welcome", "see",
+        "well", "and", "then", "now", "really", "very", "just", "umm", "hmm",
+        "mmm", "huh", "aha", "uh-huh", "mm-hmm", "hello", "hey", "bye",
+        "goodbye", "all", "that", "this", "was", "course", "totally", "much",
+        "lets", "move", "moving", "continue", "next", "one", "sec", "second",
+        "moment", "please", "hold", "wait"
+    };
+
+    static const std::vector<std::string> questionStarters = {
+        "what", "why", "how", "when", "where", "who", "which", "whose", "whom",
+        "can you", "could you", "would you", "will you", "should", "explain",
+        "describe", "implement", "write", "tell me", "solve", "difference between",
+        "is it", "are they", "do you", "did you", "have you", "has it"
+    };
+
+    for (const auto& qs : questionStarters) {
+        if (lower.find(qs) != std::string::npos) {
+            return true;
+        }
+    }
+
+    std::istringstream iss(lower);
+    std::string word;
+    int substantiveCount = 0;
+    while (iss >> word) {
+        word.erase(std::remove_if(word.begin(), word.end(), ::ispunct), word.end());
+        if (!word.empty() && fillers.find(word) == fillers.end()) {
+            substantiveCount++;
+        }
+    }
+
+    return substantiveCount >= 4;
+}
+
+void ServiceDispatcher::ForwardEventToImgui(const std::string& eventName, const json& eventData) {
+    if (!m_imguiOverlay) return;
+    try {
+        if (eventName == "lens:chat") {
+            std::string type = eventData.value("type", "");
+            if (type == "delta") {
+                std::string delta = eventData.value("text", "");
+                auto& state = m_imguiOverlay->GetState();
+                state.streamingAnswer += delta;
+                state.isGeneratingAnswer = true;
+            } else if (type == "done") {
+                std::string full = eventData.value("fullText", "");
+                auto& state = m_imguiOverlay->GetState();
+                if (full.empty() && !state.streamingAnswer.empty()) {
+                    full = state.streamingAnswer;
+                }
+                if (!full.empty()) {
+                    m_imguiOverlay->AppendChatMessage("assistant", full);
+                }
+                state.streamingAnswer.clear();
+                state.isGeneratingAnswer = false;
+            } else if (type == "error") {
+                std::string err = eventData.value("error", "Error generating response");
+                m_imguiOverlay->AppendChatMessage("error", err);
+                auto& state = m_imguiOverlay->GetState();
+                state.streamingAnswer.clear();
+                state.isGeneratingAnswer = false;
+            }
+        } else if (eventName == "lens:transcription") {
+            std::string text = eventData.value("text", "");
+            if (!text.empty()) {
+                m_imguiOverlay->AppendInterviewTranscript(text);
+                auto& state = m_imguiOverlay->GetState();
+                if (state.autoAnswer && !state.isGeneratingAnswer) {
+                    if (IsInterviewerQuestion(text)) {
+                        m_imguiOverlay->SetStatusMessage("Question detected - asking AI...");
+                        Dispatch("chat", { { "prompt", text } }, [](const json&, bool) {});
+                    } else {
+                        m_imguiOverlay->SetStatusMessage("Listening - (no question yet)");
+                    }
+                }
+            }
+        } else if (eventName == "lens:gate") {
+            bool valid = eventData.value("licenseValid", false) || eventData.value("authenticated", false);
+            auto& state = m_imguiOverlay->GetState();
+            state.authValid = valid;
+            state.isAuthenticated = valid;
+            if (valid) {
+                state.showAuthGate = false;
+            }
+        } else if (eventName == "lens:preferences") {
+            if (eventData.contains("lightTextColor") && eventData["lightTextColor"].is_string()) {
+                m_imguiOverlay->SetLightTextColor(eventData["lightTextColor"].get<std::string>());
+            }
+            if (eventData.contains("darkTextColor") && eventData["darkTextColor"].is_string()) {
+                m_imguiOverlay->SetDarkTextColor(eventData["darkTextColor"].get<std::string>());
+            }
+            if (eventData.contains("theme") && eventData["theme"].is_string()) {
+                m_imguiOverlay->SetTheme(eventData["theme"].get<std::string>());
+            }
+            if (eventData.contains("browser") && eventData["browser"].is_object()) {
+                const auto& b = eventData["browser"];
+                if (b.contains("searchEngine") && b["searchEngine"].is_string()) {
+                    m_imguiOverlay->SetSearchEngine(b["searchEngine"].get<std::string>());
+                }
+                if (b.contains("zoom") && b["zoom"].is_number()) {
+                    m_imguiOverlay->SetBrowserZoom(b["zoom"].get<float>());
+                }
+            }
+        } else if (eventName == "webview2:missing") {
+            m_imguiOverlay->SetWebView2Available(false);
+        }
+    } catch (...) {}
 }
 
 void ServiceDispatcher::PostToUi(std::function<void()> work) {
@@ -855,6 +1052,37 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
             }
             if (m_inputMgr && payload.contains("shortcuts") && payload["shortcuts"].is_object()) {
                 m_inputMgr->UpdateShortcuts(payload["shortcuts"]);
+            }
+
+            if (m_imguiOverlay) {
+                if (payload.contains("lightTextColor") && payload["lightTextColor"].is_string()) {
+                    m_imguiOverlay->SetLightTextColor(payload["lightTextColor"].get<std::string>());
+                }
+                if (payload.contains("darkTextColor") && payload["darkTextColor"].is_string()) {
+                    m_imguiOverlay->SetDarkTextColor(payload["darkTextColor"].get<std::string>());
+                }
+                if (payload.contains("theme") && payload["theme"].is_string()) {
+                    m_imguiOverlay->SetTheme(payload["theme"].get<std::string>());
+                }
+            }
+
+            if (payload.contains("browser") && payload["browser"].is_object()) {
+                const auto& b = payload["browser"];
+                if (b.contains("searchEngine") && b["searchEngine"].is_string()) {
+                    std::string eng = b["searchEngine"].get<std::string>();
+                    if (m_browserMgr) m_browserMgr->SetSearchEngine(eng);
+                    if (m_imguiOverlay) m_imguiOverlay->SetSearchEngine(eng);
+                }
+                if (b.contains("zoom") && b["zoom"].is_number()) {
+                    float z = b["zoom"].get<float>();
+                    if (m_browserMgr) {
+                        m_browserMgr->SetDefaultZoom(z);
+                        if (!m_browserMgr->GetActiveTabId().empty()) {
+                            m_browserMgr->SetZoom(m_browserMgr->GetActiveTabId(), z);
+                        }
+                    }
+                    if (m_imguiOverlay) m_imguiOverlay->SetBrowserZoom(z);
+                }
             }
 
             BroadcastEvent("lens:preferences", currentPrefs);
@@ -1082,7 +1310,7 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
             return;
         }
 
-        if (action == "desktop.capture") {
+        if (action == "desktop.capture" || action == "capture.screen") {
             std::string dataUrl;
             if (payload.contains("rect")) {
                 CaptureRect cr{
@@ -1292,6 +1520,8 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
 
         if (action == "desktop.diagnostics") {
             json diag = m_focusMgr ? m_focusMgr->GetDiagnosticsJson() : json::object();
+            diag["isElevated"] = InputManager::IsCurrentProcessElevated();
+            diag["hasUiAccess"] = InputManager::HasUiAccess();
             callback(diag, false);
             return;
         }
@@ -1303,7 +1533,9 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
                 { "platform", "win32" },
                 { "arch", "x64" },
                 { "runtime", "Native C++20 Win32 + DirectComposition + WebView2" },
-                { "electron", false }
+                { "electron", false },
+                { "elevated", InputManager::IsCurrentProcessElevated() },
+                { "uiAccess", InputManager::HasUiAccess() }
             };
             callback(info, false);
             return;
@@ -1352,6 +1584,54 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
             PostQuitMessage(0);
             callback(json{{"restarting", true}}, false);
             return;
+        }
+
+        if (action == "desktop.requestElevation") {
+            if (InputManager::IsCurrentProcessElevated()) {
+                callback(json{
+                    {"ok", true},
+                    {"elevated", true},
+                    {"alreadyElevated", true},
+                    {"restarting", false}
+                }, false);
+                return;
+            }
+#ifdef _WIN32
+            std::wstring exe = GetExecutablePath();
+            SHELLEXECUTEINFOW sei = { sizeof(sei) };
+            sei.cbSize = sizeof(sei);
+            sei.lpVerb = L"runas";
+            sei.lpFile = exe.c_str();
+            sei.nShow = SW_SHOWNORMAL;
+            sei.fMask = SEE_MASK_NOASYNC;
+            if (ShellExecuteExW(&sei)) {
+                if (m_winMgr) m_winMgr->Shutdown();
+                PostQuitMessage(0);
+                callback(json{
+                    {"ok", true},
+                    {"elevated", true},
+                    {"restarting", true}
+                }, false);
+                return;
+            } else {
+                DWORD err = GetLastError();
+                callback(json{
+                    {"ok", false},
+                    {"elevated", false},
+                    {"restarting", false},
+                    {"error", "Elevation declined or failed"},
+                    {"code", static_cast<int>(err)}
+                }, true);
+                return;
+            }
+#else
+            callback(json{
+                {"ok", false},
+                {"elevated", false},
+                {"error", "Elevation only supported on Windows"}
+            }, true);
+            return;
+#endif
         }
 
         if (action == "desktop.updater.check") {
@@ -1781,13 +2061,59 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
             return;
         }
 
-        if (action == "browser.zoom") {
+        if (action == "browser.zoom" || action == "browser.setZoom") {
             std::string tabId = resolveTabId(payload);
-            float zoom = payload.value("factor", 1.0f);
+            float zoom = payload.value("factor", payload.value("zoom", 1.0f));
             if (m_browserMgr) {
                 m_browserMgr->SetZoom(tabId, zoom);
+                m_browserMgr->SetDefaultZoom(zoom);
+            }
+            if (m_storageMgr) {
+                m_storageMgr->SetBrowserZoom(zoom);
+            }
+            if (m_imguiOverlay) {
+                m_imguiOverlay->SetBrowserZoom(zoom);
             }
             callback(browserSnapshot(), false);
+            return;
+        }
+
+        if (action == "browser.searchEngine" || action == "browser.setSearchEngine") {
+            std::string engine = payload.value("engine", payload.value("searchEngine", "google"));
+            if (m_browserMgr) {
+                m_browserMgr->SetSearchEngine(engine);
+            }
+            if (m_storageMgr) {
+                m_storageMgr->SetSearchEngine(engine);
+            }
+            if (m_imguiOverlay) {
+                m_imguiOverlay->SetSearchEngine(engine);
+            }
+            callback(browserSnapshot(), false);
+            return;
+        }
+
+        if (action == "appearance.setTextColor") {
+            std::string mode = payload.value("mode", "light");
+            std::string color = payload.value("color", "");
+            bool ok = false;
+            if (m_storageMgr && !color.empty()) {
+                if (mode == "light") {
+                    ok = m_storageMgr->SetLightTextColor(color);
+                    if (ok && m_imguiOverlay) m_imguiOverlay->SetLightTextColor(color);
+                } else {
+                    ok = m_storageMgr->SetDarkTextColor(color);
+                    if (ok && m_imguiOverlay) m_imguiOverlay->SetDarkTextColor(color);
+                }
+            }
+            callback(json{ { "ok", ok }, { "mode", mode }, { "color", color } }, !ok);
+            return;
+        }
+
+        if (action == "appearance.resetColors") {
+            bool ok = m_storageMgr ? m_storageMgr->ResetColors() : true;
+            if (m_imguiOverlay) m_imguiOverlay->ResetColors();
+            callback(json{ { "ok", ok }, { "lightTextColor", "#24384c" }, { "darkTextColor", "#e2eaf5" } }, false);
             return;
         }
 
@@ -1820,7 +2146,7 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
         // --- 7. Gate & Authentication ---
         // Desktop access is decided only by the hosted LensDesk service.
         // There is no local "active" fallback.
-        if (action == "gate.browserLogin") {
+        if (action == "gate.browserLogin" || action == "desktop.login") {
             StartBrowserLogin(callback);
             return;
         }
@@ -2024,7 +2350,7 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
         }
 
         // --- 8. AI & Chat ---
-        if (action == "chat") {
+        if (action == "chat" || action == "chat.send") {
             HandleChat(payload, callback);
             return;
         }
@@ -2196,7 +2522,7 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
             return;
         }
 
-        if (action == "chat.cancel") {
+        if (action == "chat.cancel" || action == "chat.stop") {
             callback({ { "cancelled", true } }, false);
             return;
         }

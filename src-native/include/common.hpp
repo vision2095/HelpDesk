@@ -67,6 +67,20 @@ constexpr const wchar_t* SINGLE_INSTANCE_MUTEX = L"Local\\LensDesk_SingleInstanc
 constexpr UINT WM_LENSDESK_TRAY = WM_USER + 101;
 constexpr UINT WM_LENSDESK_IPC_DISPATCH = WM_USER + 102;
 constexpr UINT WM_LENSDESK_HOTKEY_TRIGGERED = WM_USER + 103;
+constexpr const wchar_t* WM_LENSDESK_ACTIVATE_NAME = L"LensDesk_SingleInstance_Activate_Message";
+
+// Color validation utility (GAP 08)
+inline bool IsValidHexColor(std::string_view hex) {
+    if (hex.empty() || hex[0] != '#') return false;
+    if (hex.length() != 7 && hex.length() != 4) return false;
+    for (size_t i = 1; i < hex.length(); ++i) {
+        char c = hex[i];
+        if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) {
+            return false;
+        }
+    }
+    return true;
+}
 
 // Windows capture affinity constant (Windows 10 2004+)
 #ifndef WDA_EXCLUDEFROMCAPTURE

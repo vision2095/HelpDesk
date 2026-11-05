@@ -70,6 +70,8 @@ export function createCloudServer({
   production = false,
   trustProxy = false,
   enablePostgres = Boolean(production || process.env.ENABLE_POSTGRES === "1"),
+  postgresStore = null,
+  postgresStoreFactory = createPostgresStore,
 } = {}) {
   let effectivePublicUrl = publicUrl;
   if (
@@ -119,18 +121,20 @@ export function createCloudServer({
   });
   const desktopSessions = createDesktopSessions({ db: accounts.db, clock, audit });
   let pgPool = null;
-  let pgStore = null;
-  if (enablePostgres) {
+  let pgStore = postgresStore;
+  if (enablePostgres && !pgStore) {
     try {
       pgPool = getDatabasePool();
-      pgStore = createPostgresStore({ pool: pgPool, clock, plans });
+      pgStore = postgresStoreFactory({ pool: pgPool, clock, plans });
       runPostgresMigrations(pgPool).catch(() => {});
       importFromSqlite(pgPool, directory)
         .then(() => syncFromPostgresToSqlite(pgPool, directory).catch(() => {}))
         .catch(() => {
           syncFromPostgresToSqlite(pgPool, directory).catch(() => {});
         });
-    } catch {}
+    } catch {
+      pgStore = null;
+    }
   }
   const payments = createPayments({
     db: accounts.db,
@@ -998,12 +1002,21 @@ export function createCloudServer({
         const raw = Buffer.concat(chunks);
         const payload = JSON.parse(raw.toString() || "{}");
         const settingsData = payload.settings && typeof payload.settings === "object" ? payload.settings : payload;
-        if (pgStore) {
-          try {
-            await pgStore.saveUserSettings(authUser.id, settingsData);
-          } catch {}
+        if (enablePostgres && !pgStore) {
+          const error = new Error("Cloud storage is unavailable; settings were not changed.");
+          error.code = "CLOUD_UNAVAILABLE";
+          throw error;
         }
         const result = await callUser(authUser.id, "settings.save", settingsData);
+        if (pgStore) {
+          try {
+            await pgStore.saveUserSettings(authUser.id, result.settings);
+          } catch {
+            const error = new Error("Settings were saved locally, but cloud synchronization failed. The cloud copy may be stale; reconciliation is required.");
+            error.code = "CLOUD_PARTIAL_COMMIT";
+            throw error;
+          }
+        }
         json(res, 200, {
           ok: true,
           settings: result.settings,
@@ -2193,12 +2206,22 @@ export function createCloudServer({
         return;
       }
       if (action === "cloud.push") {
-        if (pgStore) {
-          try {
-            await pgStore.saveWorkspaceBackup(user.id, payload);
-          } catch {}
+        if (enablePostgres && !pgStore) {
+          const error = new Error("Cloud storage is unavailable; the workspace was not changed.");
+          error.code = "CLOUD_UNAVAILABLE";
+          throw error;
         }
         await callUser(user.id, "backup.restore", payload);
+        if (pgStore) {
+          const backup = await callUser(user.id, "backup");
+          try {
+            await pgStore.saveWorkspaceBackup(user.id, backup);
+          } catch {
+            const error = new Error("The workspace was saved locally, but cloud synchronization failed. The cloud copy may be stale; reconciliation is required.");
+            error.code = "CLOUD_PARTIAL_COMMIT";
+            throw error;
+          }
+        }
         json(res, 200, { ok: true });
         return;
       }
@@ -2650,6 +2673,8 @@ export function createCloudServer({
       const invalid = error.name === "ZodError";
       const statusMap = {
         CONFLICT: 409,
+        CLOUD_PARTIAL_COMMIT: 503,
+        CLOUD_UNAVAILABLE: 503,
         BUSY: 429,
         DESKTOP_SESSION_REUSED: 401,
         DESKTOP_SESSION_REVOKED: 401,

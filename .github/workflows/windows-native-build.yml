@@ -42,9 +42,10 @@ jobs:
         run: |
           cmake -S src-native -B build-native -A x64 -DCMAKE_BUILD_TYPE=Release -DLENSDESK_ENABLE_TEST_AUTH=OFF
 
-      - name: Compile RuntimeHost.exe (C++20 MSVC)
+      - name: Compile RuntimeHost.exe & RuntimeHostAccessibility.exe (C++20 MSVC)
         run: |
           cmake --build build-native --config Release --verbose --target RuntimeHost
+          cmake --build build-native --config Release --verbose --target RuntimeHostAccessibility
 
       - name: Configure Nested Windows Workspace Host (W-08)
         run: |
@@ -66,6 +67,11 @@ jobs:
         shell: pwsh
         run: |
           pwsh scripts/test-windows-runtime.ps1 -BinaryPath build-native/bin/Release/RuntimeHost.exe
+
+      - name: Execute Signed Accessibility Integration & UIAccess Verification
+        shell: pwsh
+        run: |
+          pwsh scripts/sign-accessibility-binary.ps1 -BinaryPath build-native/bin/Release/RuntimeHostAccessibility.exe -CreateTestCert
 
       - name: Build isolated GUI fixture host (never packaged)
         run: |
@@ -132,6 +138,7 @@ jobs:
           name: LensDesk-2.0.0-Windows-x64-Native
           path: |
             build-native/bin/Release/RuntimeHost.exe
+            build-native/bin/Release/RuntimeHostAccessibility.exe
             src-native/third_party/webview2/lib/x64/WebView2Loader.dll
             release/LensDesk-2.0.0-Windows-x64.zip
             release/LensDesk.zip

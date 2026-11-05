@@ -120,7 +120,7 @@ bool WebView2Host::Initialize(
     std::filesystem::create_directories(userDataDir);
 
     auto options = Make<CoreWebView2EnvironmentOptions>();
-    std::wstring browserArgs = L"--enable-features=msWebView2BrowserHitTransparent --disable-background-timer-throttling --disable-features=msSmartScreenProtection";
+    std::wstring browserArgs = L"--enable-features=msWebView2BrowserHitTransparent --disable-background-timer-throttling";
 
     // Remote debugging port support for automated interactive E2E testing
     wchar_t portBuf[32]{};
@@ -146,8 +146,12 @@ bool WebView2Host::Initialize(
         Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
             [this, hwnd, hudVisual, onReady](HRESULT hr, ICoreWebView2Environment* env) -> HRESULT {
                 if (FAILED(hr) || !env) {
+                    m_runtimeAvailable = false;
+                    if (m_dispatcher) {
+                        m_dispatcher->BroadcastEvent("webview2:missing", json{ { "available", false } });
+                    }
                     if (!IsHeadlessOrCI()) {
-                        std::wstring msg = L"LensDesk 2.0 requires the Microsoft Edge WebView2 Runtime to display its user interface.\n\n"
+                        std::wstring msg = L"LensDesk 2.0 requires the Microsoft Edge WebView2 Runtime to display its embedded browser.\n\n"
                                            L"Would you like to download and install the WebView2 Runtime from Microsoft now?";
                         int choice = MessageBoxW(hwnd, msg.c_str(), L"LensDesk 2.0 - Prerequisite Required", MB_ICONQUESTION | MB_YESNO | MB_DEFBUTTON1);
                         if (choice == IDYES) {
@@ -156,6 +160,7 @@ bool WebView2Host::Initialize(
                     }
                     return hr;
                 }
+                m_runtimeAvailable = true;
                 m_environment = env;
 
                 ComPtr<ICoreWebView2Environment3> env3;
@@ -206,44 +211,50 @@ bool WebView2Host::Initialize(
                             RECT rc{};
                             GetClientRect(m_hwnd, &rc);
                             m_controller->put_Bounds(rc);
-                            m_controller->put_IsVisible(TRUE);
 
-                            // 5. Virtual host mapping to dist folder
-                            ComPtr<ICoreWebView2_3> webView3;
-                            if (SUCCEEDED(m_webView.As(&webView3))) {
-                                webView3->SetVirtualHostNameToFolderMapping(
-                                    L"lensdesk.local",
-                                    m_distPath.c_str(),
-                                    COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW
-                                );
-                            }
+                            if (!m_distPath.empty() && std::filesystem::exists(m_distPath)) {
+                                m_controller->put_IsVisible(TRUE);
 
-                            // 6. Inject the window.lens bridge
-                            InjectLensDeskBridge();
+                                // 5. Virtual host mapping to dist folder
+                                ComPtr<ICoreWebView2_3> webView3;
+                                if (SUCCEEDED(m_webView.As(&webView3))) {
+                                    webView3->SetVirtualHostNameToFolderMapping(
+                                        L"lensdesk.local",
+                                        m_distPath.c_str(),
+                                        COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW
+                                    );
+                                }
 
-                            // 7. Setup WebMessage handling
-                            SetupWebMessageHandling();
+                                // 6. Inject the window.lens bridge
+                                InjectLensDeskBridge();
 
-                            // 8. Setup focus and accelerator handling
-                            SetupFocusAndAcceleratorHandling();
+                                // 7. Setup WebMessage handling
+                                SetupWebMessageHandling();
 
-                            // 9. Focus the HUD once its document is ready so
-                            // real Windows key messages reach the sign-in
-                            // form and the assistant composer immediately.
-                            m_webView->add_NavigationCompleted(
-                                Callback<ICoreWebView2NavigationCompletedEventHandler>(
-                                    [this](ICoreWebView2* sender, ICoreWebView2NavigationCompletedEventArgs* args) -> HRESULT {
-                                        if (!m_initialFocusDone && m_controller && GetForegroundWindow() == m_hwnd) {
-                                            m_initialFocusDone = true;
-                                            m_controller->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
+                                // 8. Setup focus and accelerator handling
+                                SetupFocusAndAcceleratorHandling();
+
+                                // 9. Focus the HUD once its document is ready so
+                                // real Windows key messages reach the sign-in
+                                // form and the assistant composer immediately.
+                                m_webView->add_NavigationCompleted(
+                                    Callback<ICoreWebView2NavigationCompletedEventHandler>(
+                                        [this](ICoreWebView2* sender, ICoreWebView2NavigationCompletedEventArgs* args) -> HRESULT {
+                                            if (!m_initialFocusDone && m_controller && GetForegroundWindow() == m_hwnd) {
+                                                m_initialFocusDone = true;
+                                                m_controller->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
+                                            }
+                                            return S_OK;
                                         }
-                                        return S_OK;
-                                    }
-                                ).Get(), nullptr
-                            );
+                                    ).Get(), nullptr
+                                );
 
-                            // 10. Navigate to React 19 app
-                            m_webView->Navigate(L"https://lensdesk.local/index.html");
+                                // 10. Navigate to React 19 app
+                                m_webView->Navigate(L"https://lensdesk.local/index.html");
+                            } else {
+                                LogInfo("Web assets ('dist' directory) absent or omitted; WebView2 HUD disabled, pure Dear ImGui native HUD active.");
+                                m_controller->put_IsVisible(FALSE);
+                            }
 
                             m_isReady = true;
 
@@ -585,6 +596,10 @@ void WebView2Host::BroadcastEvent(const std::string& eventName, const json& even
     msg["event"] = eventName;
     msg["data"] = eventData;
     PostWebMessage(msg);
+}
+
+bool WebView2Host::InstallRuntime() {
+    return EnsureWebView2Runtime(m_hwnd);
 }
 
 } // namespace LensDesk

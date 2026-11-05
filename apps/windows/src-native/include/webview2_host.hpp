@@ -31,6 +31,8 @@ public:
 
     bool IsReady() const { return m_isReady; }
     bool HasFocus() const { return m_hasFocus; }
+    bool IsRuntimeAvailable() const { return m_runtimeAvailable; }
+    bool InstallRuntime();
     ICoreWebView2* GetWebView() const { return m_webView.Get(); }
     ICoreWebView2Controller* GetController() const { return m_controller.Get(); }
     ICoreWebView2CompositionController* GetCompositionController() const { return m_compositionController.Get(); }
@@ -59,6 +61,7 @@ private:
     bool m_isReady = false;
     bool m_hasFocus = false;
     bool m_initialFocusDone = false;
+    bool m_runtimeAvailable = true;
 
     EventRegistrationToken m_webMessageToken{};
     EventRegistrationToken m_gotFocusToken{};

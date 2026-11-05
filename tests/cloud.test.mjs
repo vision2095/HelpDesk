@@ -234,6 +234,92 @@ test("cloud sync validates backups and retains previous workspace before restore
     1,
   );
 });
+test("cloud writes fail closed when configured PostgreSQL cannot initialize", async (t) => {
+  const f = await fixture(t, {
+    enablePostgres: true,
+    postgresStoreFactory() { throw new Error("PostgreSQL initialization failed"); },
+  });
+  const user = await f.register();
+  const state = (await f.call("state", {}, user.token)).body;
+  const backup = { version: 1, sessions: [makeSession()], profiles: state.profiles, settings: state.settings };
+  const push = await f.call("cloud.push", backup, user.token);
+  assert.equal(push.status, 503);
+  assert.equal(push.body.code, "CLOUD_UNAVAILABLE");
+  assert.equal((await f.call("backup", {}, user.token)).body.sessions.length, 0);
+  const response = await fetch(f.url + "/api/v1/settings", {
+    method: "PUT",
+    headers: { Authorization: "Bearer " + user.token, "Content-Type": "application/json" },
+    body: JSON.stringify({ settings: { ...state.settings, language: "Hindi" } }),
+  });
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).code, "CLOUD_UNAVAILABLE");
+  assert.equal((await f.call("state", {}, user.token)).body.settings.language, state.settings.language);
+});
+test("cloud mirror failures report partial commits and reject invalid backups before PostgreSQL", async (t) => {
+  const saved = { workspace: null, settings: null };
+  let failWorkspace = false;
+  let failSettings = false;
+  const postgresStore = {
+    async register() {},
+    async getWorkspaceBackup() { return saved.workspace ? { backup: saved.workspace } : null; },
+    async saveWorkspaceBackup(_userId, backup) {
+      if (failWorkspace) throw new Error("database unavailable");
+      saved.workspace = structuredClone(backup);
+    },
+    async getUserSettings() { return saved.settings; },
+    async saveUserSettings(_userId, settings) {
+      if (failSettings) throw new Error("database unavailable");
+      saved.settings = structuredClone(settings);
+    },
+  };
+  const f = await fixture(t, { postgresStore });
+  const user = await f.register();
+  const state = (await f.call("state", {}, user.token)).body;
+  const backup = { version: 1, sessions: [makeSession()], profiles: state.profiles, settings: state.settings };
+  assert.equal((await f.call("cloud.push", backup, user.token)).status, 200);
+  const previous = structuredClone(saved.workspace);
+  assert.equal((await f.call("cloud.push", { version: 5, sessions: [] }, user.token)).status, 400);
+  assert.deepEqual(saved.workspace, previous);
+
+  failWorkspace = true;
+  const nextBackup = { ...backup, sessions: [makeSession()] };
+  const failed = await f.call("cloud.push", nextBackup, user.token);
+  assert.equal(failed.status, 503);
+  assert.equal(failed.body.code, "CLOUD_PARTIAL_COMMIT");
+  assert.match(failed.body.error, /saved locally/);
+  assert.deepEqual(saved.workspace, previous);
+  assert.equal((await f.call("backup", {}, user.token)).body.sessions[0].id, nextBackup.sessions[0].id);
+  failWorkspace = false;
+  assert.equal((await f.call("cloud.push", nextBackup, user.token)).status, 200);
+  assert.equal(saved.workspace.sessions[0].id, nextBackup.sessions[0].id);
+
+  const putSettings = async (settings) => {
+    const response = await fetch(f.url + "/api/v1/settings", {
+      method: "PUT",
+      headers: { Authorization: "Bearer " + user.token, "Content-Type": "application/json" },
+      body: JSON.stringify({ settings }),
+    });
+    return { status: response.status, body: await response.json() };
+  };
+  const fresh = (await f.call("state", {}, user.token)).body.settings;
+  assert.equal((await putSettings({ ...fresh, opacity: 8 })).status, 200);
+  assert.equal(saved.settings.opacity, 1);
+  const priorSettings = structuredClone(saved.settings);
+  const invalid = await putSettings({ ...priorSettings, theme: "invalid" });
+  assert.equal(invalid.status, 400);
+  assert.deepEqual(saved.settings, priorSettings);
+  failSettings = true;
+  const failure = await putSettings({ ...priorSettings, language: "Hindi" });
+  assert.equal(failure.status, 503);
+  assert.equal(failure.body.code, "CLOUD_PARTIAL_COMMIT");
+  assert.match(failure.body.error, /saved locally/);
+  assert.deepEqual(saved.settings, priorSettings);
+  const localSettings = (await f.call("state", {}, user.token)).body.settings;
+  assert.equal(localSettings.language, "Hindi");
+  failSettings = false;
+  assert.equal((await putSettings(localSettings)).status, 200);
+  assert.equal(saved.settings.language, "Hindi");
+});
 test("Stripe checkout parameters, signed webhook activation, replay protection, and portal ownership", async (t) => {
   const sdk = new Stripe("sk_test_example");
   let checkout, portal;

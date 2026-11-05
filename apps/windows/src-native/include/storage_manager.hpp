@@ -21,6 +21,21 @@ public:
     bool ClearAllData();
     bool ClearAll() { return ClearAllData(); }
 
+    // Theme Color Controls (GAP 08)
+    std::string GetLightTextColor();
+    bool SetLightTextColor(const std::string& color);
+    std::string GetDarkTextColor();
+    bool SetDarkTextColor(const std::string& color);
+    bool ResetColors();
+
+    // Browser Controls (GAP 07)
+    std::string GetSearchEngine();
+    bool SetSearchEngine(const std::string& engine);
+    float GetBrowserZoom();
+    bool SetBrowserZoom(float zoom);
+    std::string GetBrowserHomePage();
+    bool SetBrowserHomePage(const std::string& homePage);
+
     // Account-bound data scoping
     bool SetCurrentAccount(const std::string& userId, const std::string& email = "");
     std::string GetCurrentAccountId() const { return m_currentAccountId; }

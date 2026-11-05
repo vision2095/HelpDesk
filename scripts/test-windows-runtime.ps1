@@ -83,6 +83,55 @@ public class Win32 {
     public const uint WM_KEYUP = 0x0101;
     public const uint WM_CHAR = 0x0102;
     public const uint SMTO_ABORTIFHUNG = 0x0002;
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool OpenProcessToken(IntPtr ProcessHandle, uint DesiredAccess, out IntPtr TokenHandle);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GetTokenInformation(IntPtr TokenHandle, int TokenInformationClass, IntPtr TokenInformation, uint TokenInformationLength, out uint ReturnLength);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    public static extern IntPtr GetSidSubAuthority(IntPtr pSid, uint nSubAuthority);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    public static extern IntPtr GetSidSubAuthorityCount(IntPtr pSid);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool CloseHandle(IntPtr hObject);
+
+    public static string GetProcessIntegrityLevel(IntPtr hProcess) {
+        IntPtr hToken;
+        if (!OpenProcessToken(hProcess, 0x0008 /* TOKEN_QUERY */, out hToken)) {
+            return "Unknown";
+        }
+        try {
+            uint length;
+            GetTokenInformation(hToken, 25 /* TokenIntegrityLevel */, IntPtr.Zero, 0, out length);
+            if (length == 0) return "Unknown";
+            IntPtr pTil = Marshal.AllocHGlobal((int)length);
+            try {
+                if (GetTokenInformation(hToken, 25, pTil, length, out length)) {
+                    IntPtr pSid = Marshal.ReadIntPtr(pTil);
+                    IntPtr pSubAuthorityCount = GetSidSubAuthorityCount(pSid);
+                    int count = Marshal.ReadByte(pSubAuthorityCount);
+                    IntPtr pSubAuthority = GetSidSubAuthority(pSid, (uint)(count - 1));
+                    int rid = Marshal.ReadInt32(pSubAuthority);
+                    if (rid < 0x2000) return "Low";
+                    if (rid < 0x3000) return "Medium";
+                    if (rid < 0x4000) return "High";
+                    return "System";
+                }
+            } finally {
+                Marshal.FreeHGlobal(pTil);
+            }
+        } finally {
+            CloseHandle(hToken);
+        }
+        return "Unknown";
+    }
 }
 
 public class WindowFinder {
@@ -159,6 +208,15 @@ try {
         Write-Warning "Working set memory ($wsMB MB) higher than typical native baseline (< 100 MB)."
     } else {
         Write-Host "      Memory Footprint verified within lightweight native baseline (< 100 MB)."
+    }
+
+    # Query Process Token Integrity Level (UIPI isolation check)
+    $integrityLevel = [Win32]::GetProcessIntegrityLevel($proc.Handle)
+    Write-Host "      Process Token Integrity Level: $integrityLevel"
+    if ($integrityLevel -eq "High" -or $integrityLevel -eq "System") {
+        Write-Host "      Execution Environment: ELEVATED (Full UIPI bypass active)" -ForegroundColor Green
+    } else {
+        Write-Host "      Execution Environment: STANDARD USER (Medium Integrity, UIPI boundary enforced for elevated targets)" -ForegroundColor Cyan
     }
 
     # 5. Locate Win32 Window by Class or Process

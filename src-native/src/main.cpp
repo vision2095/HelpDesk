@@ -55,20 +55,27 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     s_logFile.open(logPath, std::ios::out | std::ios::trunc);
     LogInfo("LensDesk 2.0 Native Windows Host starting...");
 
-    // 1. Single Instance Guard
+    // 1. Single Instance Guard (GAP 09: uniquely namespaced, crash-tolerant, session-isolated)
+    const UINT wmActivateMsg = RegisterWindowMessageW(WM_LENSDESK_ACTIVATE_NAME);
     HANDLE hMutex = CreateMutexW(nullptr, TRUE, SINGLE_INSTANCE_MUTEX);
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
-        HWND existingHwnd = FindWindowW(WINDOW_CLASS_NAME, nullptr);
-        if (existingHwnd) {
-            LogInfo("Existing instance detected via named mutex. Bringing to foreground.");
-            ShowWindow(existingHwnd, SW_RESTORE);
-            ShowWindow(existingHwnd, SW_SHOW);
-            SetForegroundWindow(existingHwnd);
-            SetWindowPos(existingHwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
-            if (hMutex) CloseHandle(hMutex);
-            return 0;
+        DWORD waitRes = WaitForSingleObject(hMutex, 0);
+        if (waitRes == WAIT_ABANDONED) {
+            LogInfo("Previous instance abandoned single-instance mutex (crashed). Acquired ownership cleanly.");
+        } else {
+            HWND existingHwnd = FindWindowW(WINDOW_CLASS_NAME, nullptr);
+            if (existingHwnd) {
+                LogInfo("Existing instance detected via named mutex. Sending activation message and bringing to foreground.");
+                PostMessageW(existingHwnd, wmActivateMsg, 0, 0);
+                ShowWindow(existingHwnd, SW_RESTORE);
+                ShowWindow(existingHwnd, SW_SHOW);
+                SetForegroundWindow(existingHwnd);
+                SetWindowPos(existingHwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+                if (hMutex) CloseHandle(hMutex);
+                return 0;
+            }
+            LogInfo("Single instance mutex detected but no window found. Previous instance ungracefully closed; proceeding.");
         }
-        LogInfo("Single instance mutex detected but no window found. Previous instance ungracefully closed; proceeding.");
     }
 
     // 2. Initialize COM
@@ -151,16 +158,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
         distPath = exeDir.parent_path().parent_path().parent_path() / L"dist";
     }
     if (!std::filesystem::exists(distPath)) {
-        LogError("Web assets ('dist' directory) could not be located.");
-        if (!IsHeadlessOrCI()) {
-            MessageBoxW(
-                hwnd,
-                L"LensDesk 2.0 Web Assets ('dist' directory) could not be located.\n\n"
-                L"Please verify that the application was installed correctly.",
-                L"LensDesk - Missing Assets",
-                MB_ICONWARNING | MB_OK
-            );
-        }
+        LogInfo("Web assets ('dist' directory) not found; running pure Dear ImGui native HUD.");
     } else {
         LogInfo("Web assets located at: " + distPath.string());
     }
@@ -197,9 +195,21 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
 
     // 14. Connect Window Message Router
     winMgr.SetMessageCallback(
-        [&focusMgr, &d3dRenderer, &webHost, &browserMgr, &inputMgr, &dispatcher, &winMgr](
+        [&focusMgr, &d3dRenderer, &webHost, &browserMgr, &inputMgr, &dispatcher, &winMgr, wmActivateMsg](
             HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, bool& handled
         ) -> LRESULT {
+            // GAP 09: Single-instance activation message
+            if (msg == wmActivateMsg) {
+                LogInfo("Received single-instance activation message from secondary launch. Restoring overlay.");
+                winMgr.SetVisible(true);
+                ShowWindow(hWnd, SW_RESTORE);
+                ShowWindow(hWnd, SW_SHOW);
+                SetForegroundWindow(hWnd);
+                SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+                handled = true;
+                return 0;
+            }
+
             // Marshal background work (cloud/chat) back onto the UI thread.
             if (msg == WM_LENSDESK_IPC_DISPATCH) {
                 handled = true;
@@ -269,6 +279,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     captureSvc.Shutdown();
 
     CoUninitialize();
+    ReleaseMutex(hMutex);
     CloseHandle(hMutex);
     return static_cast<int>(msg.wParam);
 }

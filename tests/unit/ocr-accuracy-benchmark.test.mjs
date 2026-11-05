@@ -60,7 +60,7 @@ test("GAP-P0-05: CER and WER calculation metrics validation", () => {
   assert.equal(calculateWer(empty, empty), 0);
 });
 
-test("GAP-P0-05: Ground truth OCR benchmark across technical and UI text sets", () => {
+test("GAP-P0-05: synthetic CER and WER arithmetic on text pairs (no OCR)", () => {
   const groundTruthSamples = [
     {
       name: "Code snippet",

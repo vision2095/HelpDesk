@@ -162,6 +162,8 @@ json StorageManager::GetDefaultPreferences() {
         { "restrictedNetwork", false },
         { "localOcr", true },
         { "saveHistory", true },
+        { "saveScreenshotsToDisk", true },
+        { "saveAnswerHistory", true },
         { "cloudHistory", true },
         { "cloudScreenshotSync", true },
         { "provider", "openai" },
@@ -271,6 +273,89 @@ json StorageManager::GetPreferences() {
 bool StorageManager::SavePreferences(const json& prefs) {
     std::lock_guard<std::mutex> lock(m_mutex);
     return WriteJsonFileAtomic(m_prefsPath, prefs);
+}
+
+std::string StorageManager::GetLightTextColor() {
+    json prefs = GetPreferences();
+    return prefs.value("lightTextColor", "#24384c");
+}
+
+bool StorageManager::SetLightTextColor(const std::string& color) {
+    if (!IsValidHexColor(color)) return false;
+    json prefs = GetPreferences();
+    prefs["lightTextColor"] = color;
+    return SavePreferences(prefs);
+}
+
+std::string StorageManager::GetDarkTextColor() {
+    json prefs = GetPreferences();
+    return prefs.value("darkTextColor", "#e2eaf5");
+}
+
+bool StorageManager::SetDarkTextColor(const std::string& color) {
+    if (!IsValidHexColor(color)) return false;
+    json prefs = GetPreferences();
+    prefs["darkTextColor"] = color;
+    return SavePreferences(prefs);
+}
+
+bool StorageManager::ResetColors() {
+    json prefs = GetPreferences();
+    prefs["lightTextColor"] = "#24384c";
+    prefs["darkTextColor"] = "#e2eaf5";
+    return SavePreferences(prefs);
+}
+
+std::string StorageManager::GetSearchEngine() {
+    json prefs = GetPreferences();
+    if (prefs.contains("browser") && prefs["browser"].is_object()) {
+        return prefs["browser"].value("searchEngine", "google");
+    }
+    return "google";
+}
+
+bool StorageManager::SetSearchEngine(const std::string& engine) {
+    json prefs = GetPreferences();
+    if (!prefs.contains("browser") || !prefs["browser"].is_object()) {
+        prefs["browser"] = json::object();
+    }
+    prefs["browser"]["searchEngine"] = engine;
+    return SavePreferences(prefs);
+}
+
+float StorageManager::GetBrowserZoom() {
+    json prefs = GetPreferences();
+    if (prefs.contains("browser") && prefs["browser"].is_object()) {
+        return prefs["browser"].value("zoom", 1.0f);
+    }
+    return 1.0f;
+}
+
+bool StorageManager::SetBrowserZoom(float zoom) {
+    const float clamped = std::max(0.25f, std::min(5.0f, zoom));
+    json prefs = GetPreferences();
+    if (!prefs.contains("browser") || !prefs["browser"].is_object()) {
+        prefs["browser"] = json::object();
+    }
+    prefs["browser"]["zoom"] = clamped;
+    return SavePreferences(prefs);
+}
+
+std::string StorageManager::GetBrowserHomePage() {
+    json prefs = GetPreferences();
+    if (prefs.contains("browser") && prefs["browser"].is_object()) {
+        return prefs["browser"].value("homePage", "https://www.google.com/");
+    }
+    return "https://www.google.com/";
+}
+
+bool StorageManager::SetBrowserHomePage(const std::string& homePage) {
+    json prefs = GetPreferences();
+    if (!prefs.contains("browser") || !prefs["browser"].is_object()) {
+        prefs["browser"] = json::object();
+    }
+    prefs["browser"]["homePage"] = homePage;
+    return SavePreferences(prefs);
 }
 
 json StorageManager::GetProfiles() {

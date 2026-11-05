@@ -36,6 +36,7 @@ public:
     void Dispatch(const std::string& action, const json& payload, DispatchResponseCallback callback);
 
     void BroadcastEvent(const std::string& eventName, const json& eventData);
+    void ForwardEventToImgui(const std::string& eventName, const json& eventData);
     void ProcessPendingUi();
     void Shutdown();
 

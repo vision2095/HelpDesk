@@ -68,6 +68,10 @@ public:
     float GetDpiScale() const { return m_dpiScale; }
 
     void SetZoom(const std::string& id, float factor);
+    void SetSearchEngine(const std::string& engine) { m_searchEngine = engine; }
+    std::string GetSearchEngine() const { return m_searchEngine; }
+    void SetDefaultZoom(float factor) { m_defaultZoom = std::max(0.25f, std::min(5.0f, factor)); }
+    float GetDefaultZoom() const { return m_defaultZoom; }
     void ClearData();
     bool PasteBundle(const json& images, const std::string& note);
 
@@ -118,6 +122,9 @@ private:
     int m_tabSequence = 0;
     int m_downloadSequence = 0;
     std::vector<BrowserDownload> m_downloads;
+
+    std::string m_searchEngine = "google";
+    float m_defaultZoom = 1.0f;
 
     EventRegistrationToken m_gotFocusToken{};
     EventRegistrationToken m_lostFocusToken{};

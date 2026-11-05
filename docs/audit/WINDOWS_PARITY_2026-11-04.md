@@ -167,7 +167,7 @@ Following autonomous takeover, all seven critical production areas (`GAP-P0-01` 
 
 5. **`GAP-P0-05` (Real WinRT OCR Accuracy & Benchmarking):**
    - Mathematical CER and WER evaluation using dynamic programming Levenshtein distance matrix.
-   - Verified 0% CER and 0% WER on clean technical and UI text sets, with distortion error bounds (<5% CER, <=15% WER).
+   - Synthetic text-pair tests exercise CER and WER arithmetic; they do not run OCR or establish OCR accuracy. Windows image fixtures and actual OCR output remain necessary.
    - Proportional aspect-ratio-preserving downscaling to 2600px max dimension (`kMaxOcrDimension`) with bilinear interpolation.
    - Top-down 32-bit BGRA DIB layout and MTA worker thread dispatch (`tests/unit/ocr-accuracy-benchmark.test.mjs` passed).
 

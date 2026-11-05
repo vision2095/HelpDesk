@@ -247,6 +247,17 @@ void InputManager::AutoTypeWorker(std::wstring wideText, int delayMs) {
         return;
     }
 
+    // UIPI / Elevation compatibility check
+    bool targetElevated = IsWindowElevated(targetHwnd);
+    bool currentElevated = IsCurrentProcessElevated();
+    bool uiAccess = HasUiAccess();
+
+    if (targetElevated && !currentElevated && !uiAccess) {
+        if (m_hotkeyCallback) {
+            m_hotkeyCallback("typing:elevated_target");
+        }
+    }
+
     // 4. Wait for user to release any modifier keys (Shift, Ctrl, Alt, Win)
     for (int wait = 0; wait < 250 && !m_stopAutoTyping; ++wait) {
         if (!IsAnyModifierDown()) break;
@@ -318,7 +329,12 @@ void InputManager::AutoTypeWorker(std::wstring wideText, int delayMs) {
             appendKey(VK_RIGHT, 0, false);
         }
         if (SendInput(inputCount, inputs, sizeof(INPUT)) != inputCount) {
-            if (m_hotkeyCallback) m_hotkeyCallback("typing:error");
+            DWORD err = GetLastError();
+            if (err == ERROR_ACCESS_DENIED || (targetElevated && !currentElevated && !uiAccess)) {
+                if (m_hotkeyCallback) m_hotkeyCallback("typing:elevated_target");
+            } else {
+                if (m_hotkeyCallback) m_hotkeyCallback("typing:error");
+            }
             break;
         }
 
@@ -404,6 +420,57 @@ void InputManager::UninstallMouseHook() {
         UnhookWindowsHookEx(s_globalMouseHook);
         s_globalMouseHook = nullptr;
     }
+}
+
+bool InputManager::IsCurrentProcessElevated() {
+    HANDLE hToken = nullptr;
+    bool isElevated = false;
+    if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) {
+        TOKEN_ELEVATION elevation{};
+        DWORD cbSize = sizeof(TOKEN_ELEVATION);
+        if (GetTokenInformation(hToken, TokenElevation, &elevation, sizeof(elevation), &cbSize)) {
+            isElevated = (elevation.TokenIsElevated != 0);
+        }
+        CloseHandle(hToken);
+    }
+    return isElevated;
+}
+
+bool InputManager::HasUiAccess() {
+    HANDLE hToken = nullptr;
+    DWORD uiAccess = 0;
+    DWORD cbSize = sizeof(uiAccess);
+    if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) {
+        GetTokenInformation(hToken, TokenUIAccess, &uiAccess, sizeof(uiAccess), &cbSize);
+        CloseHandle(hToken);
+    }
+    return uiAccess != 0;
+}
+
+bool InputManager::IsWindowElevated(HWND targetHwnd) {
+    if (!targetHwnd || !IsWindow(targetHwnd)) return false;
+    DWORD pid = 0;
+    GetWindowThreadProcessId(targetHwnd, &pid);
+    if (pid == 0 || pid == GetCurrentProcessId()) return false;
+
+    HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!hProcess) {
+        // If OpenProcess fails with access denied, the target process is elevated or protected relative to us
+        if (GetLastError() == ERROR_ACCESS_DENIED) return true;
+        return false;
+    }
+    HANDLE hToken = nullptr;
+    bool isElevated = false;
+    if (OpenProcessToken(hProcess, TOKEN_QUERY, &hToken)) {
+        TOKEN_ELEVATION elevation{};
+        DWORD cbSize = sizeof(TOKEN_ELEVATION);
+        if (GetTokenInformation(hToken, TokenElevation, &elevation, sizeof(elevation), &cbSize)) {
+            isElevated = (elevation.TokenIsElevated != 0);
+        }
+        CloseHandle(hToken);
+    }
+    CloseHandle(hProcess);
+    return isElevated;
 }
 
 } // namespace LensDesk

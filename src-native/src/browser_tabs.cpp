@@ -34,7 +34,7 @@ std::string UrlEncode(std::string_view value) {
     return out;
 }
 
-std::string NormalizeUrl(const std::string& raw) {
+std::string NormalizeUrl(const std::string& raw, const std::string& engine = "google") {
     std::string value = Trim(raw);
     if (value.empty()) return "";
     std::string lower = value;
@@ -49,6 +49,14 @@ std::string NormalizeUrl(const std::string& raw) {
     const bool looksLikeHost = !hasSpace &&
         (value.find('.') != std::string::npos || lower.rfind("localhost", 0) == 0);
     if (looksLikeHost) return "https://" + value;
+
+    std::string engineLower = engine;
+    std::transform(engineLower.begin(), engineLower.end(), engineLower.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (engineLower == "duckduckgo") {
+        return "https://duckduckgo.com/?q=" + UrlEncode(value);
+    } else if (engineLower == "bing") {
+        return "https://www.bing.com/search?q=" + UrlEncode(value);
+    }
     return "https://www.google.com/search?q=" + UrlEncode(value);
 }
 
@@ -505,14 +513,18 @@ std::string BrowserTabsManager::CreateTab(const std::string& initialUrl) {
         std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
     BrowserTab tab;
     tab.id = id;
-    tab.url = initialUrl.empty() ? "about:blank" : NormalizeUrl(initialUrl);
+    tab.url = initialUrl.empty() ? "about:blank" : NormalizeUrl(initialUrl, m_searchEngine);
     tab.title = "New Tab";
+    tab.zoomLevel = m_defaultZoom;
     m_tabs[id] = tab;
     m_tabOrder.push_back(id);
     m_activeTabId = id;
 
     if (m_ready && m_webView) {
         m_webView->Navigate(Utf8ToWide(tab.url).c_str());
+        if (m_controller) {
+            m_controller->put_ZoomFactor(static_cast<double>(tab.zoomLevel));
+        }
     }
     NotifyStateChanged();
     return id;
@@ -560,7 +572,7 @@ bool BrowserTabsManager::SelectTab(const std::string& id) {
 bool BrowserTabsManager::Navigate(const std::string& id, const std::string& url) {
     auto it = m_tabs.find(id);
     if (it == m_tabs.end()) return false;
-    const std::string normalized = NormalizeUrl(url);
+    const std::string normalized = NormalizeUrl(url, m_searchEngine);
     if (normalized.empty()) return false;
     it->second.url = normalized;
     it->second.error.clear();
@@ -609,7 +621,7 @@ bool BrowserTabsManager::Stop(const std::string& id) {
 }
 
 bool BrowserTabsManager::Home(const std::string& homeUrl) {
-    const std::string url = homeUrl.empty() ? "https://www.google.com" : NormalizeUrl(homeUrl);
+    const std::string url = homeUrl.empty() ? "https://www.google.com" : NormalizeUrl(homeUrl, m_searchEngine);
     if (m_activeTabId.empty()) {
         CreateTab(url);
         return true;
@@ -798,6 +810,8 @@ json BrowserTabsManager::GetStateSnapshot() const {
     j["tabs"] = tabsArray;
     j["activeId"] = m_activeTabId.empty() ? json(nullptr) : json(m_activeTabId);
     j["activeTabId"] = m_activeTabId;
+    j["searchEngine"] = m_searchEngine;
+    j["defaultZoom"] = m_defaultZoom;
     j["downloads"] = downloads;
     j["layout"] = {
         { "x", m_layout.x },

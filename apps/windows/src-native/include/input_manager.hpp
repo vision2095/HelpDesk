@@ -38,6 +38,11 @@ public:
     bool IsAutoTyping() const { return m_isAutoTyping; }
     bool IsAutoTypingPaused() const { return m_isTypingPaused; }
 
+    // Normal / Elevated application compatibility checks (UIPI boundary inspection)
+    static bool IsCurrentProcessElevated();
+    static bool HasUiAccess();
+    static bool IsWindowElevated(HWND targetHwnd);
+
     using HotkeyCallback = std::function<void(const std::string& action)>;
     void SetHotkeyCallback(HotkeyCallback cb) { m_hotkeyCallback = cb; }
 
