@@ -43,8 +43,8 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
 
     int screenW = mi.rcWork.right - mi.rcWork.left;
     int screenH = mi.rcWork.bottom - mi.rcWork.top;
-    int initW = std::min(1040, screenW - 100);
-    int initH = std::min(740, screenH - 100);
+    int initW = std::min(1240, std::max(960, screenW - 140));
+    int initH = std::min(840, std::max(680, screenH - 120));
     int initX = mi.rcWork.left + (screenW - initW) / 2;
     int initY = mi.rcWork.top + (screenH - initH) / 2;
 
@@ -234,14 +234,6 @@ void WindowManager::SetCaptureProtection(bool enable) {
 
 void WindowManager::SetOpacity(float opacity) {
     m_opacity = std::max(0.1f, std::min(1.0f, opacity));
-    if (m_hwnd) {
-        LONG_PTR exStyle = GetWindowLongPtrW(m_hwnd, GWL_EXSTYLE);
-        if (!(exStyle & WS_EX_LAYERED)) {
-            SetWindowLongPtrW(m_hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
-        }
-        BYTE alpha = static_cast<BYTE>(m_opacity * 255.0f);
-        SetLayeredWindowAttributes(m_hwnd, 0, alpha, LWA_ALPHA);
-    }
     if (m_opacityCallback) {
         m_opacityCallback(m_opacity);
     }
@@ -348,6 +340,38 @@ LRESULT WindowManager::HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
     }
 
     switch (msg) {
+        case WM_GETMINMAXINFO: {
+            auto* mmi = reinterpret_cast<MINMAXINFO*>(lParam);
+            if (mmi) {
+                mmi->ptMinTrackSize.x = 480;
+                mmi->ptMinTrackSize.y = 320;
+            }
+            return 0;
+        }
+
+        case WM_NCHITTEST: {
+            POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+            RECT rc{};
+            GetWindowRect(hwnd, &rc);
+
+            const int border = 8;
+            bool left   = (pt.x >= rc.left && pt.x < rc.left + border);
+            bool right  = (pt.x >= rc.right - border && pt.x < rc.right);
+            bool top    = (pt.y >= rc.top && pt.y < rc.top + border);
+            bool bottom = (pt.y >= rc.bottom - border && pt.y < rc.bottom);
+
+            if (top && left)     return HTTOPLEFT;
+            if (top && right)    return HTTOPRIGHT;
+            if (bottom && left)  return HTBOTTOMLEFT;
+            if (bottom && right) return HTBOTTOMRIGHT;
+            if (left)            return HTLEFT;
+            if (right)           return HTRIGHT;
+            if (top)             return HTTOP;
+            if (bottom)          return HTBOTTOM;
+
+            break;
+        }
+
         case WM_WINDOWPOSCHANGING: {
             if (m_alwaysOnTop && m_isVisible) {
                 auto* pwp = reinterpret_cast<WINDOWPOS*>(lParam);

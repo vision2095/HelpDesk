@@ -675,7 +675,10 @@ void ServiceDispatcher::Initialize(
             } else if (action.rfind("opacity:", 0) == 0) {
                 try {
                     float op = std::stof(action.substr(8));
+                    op = std::max(0.1f, std::min(1.0f, op));
                     if (m_winMgr) m_winMgr->SetOpacity(op);
+                    if (m_imguiOverlay) m_imguiOverlay->GetState().opacity = op;
+                    BroadcastEvent("lens:opacity-changed", op);
                 } catch (...) {}
             } else if (action == "shield:on") {
                 if (m_winMgr) m_winMgr->SetCaptureProtection(true);
@@ -1067,7 +1070,11 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
                     m_winMgr->SetAlwaysOnTop(payload["alwaysOnTop"].get<bool>());
                 }
                 if (payload.contains("opacity")) {
-                    m_winMgr->SetOpacity(payload["opacity"].get<float>());
+                    float op = payload["opacity"].is_number() ? payload["opacity"].get<float>() : 1.0f;
+                    op = std::max(0.1f, std::min(1.0f, op));
+                    m_winMgr->SetOpacity(op);
+                    if (m_imguiOverlay) m_imguiOverlay->GetState().opacity = op;
+                    BroadcastEvent("lens:opacity-changed", op);
                 }
                 if (payload.contains("captureProtection")) {
                     bool cap = payload["captureProtection"].get<bool>();
@@ -1155,7 +1162,11 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
                     m_winMgr->SetAlwaysOnTop(payload["alwaysOnTop"].get<bool>());
                 }
                 if (payload.contains("opacity")) {
-                    m_winMgr->SetOpacity(payload["opacity"].get<float>());
+                    float op = payload["opacity"].is_number() ? payload["opacity"].get<float>() : 1.0f;
+                    op = std::max(0.1f, std::min(1.0f, op));
+                    m_winMgr->SetOpacity(op);
+                    if (m_imguiOverlay) m_imguiOverlay->GetState().opacity = op;
+                    BroadcastEvent("lens:opacity-changed", op);
                 }
                 if (payload.contains("captureProtection")) {
                     bool cap = payload["captureProtection"].get<bool>();
@@ -1186,9 +1197,23 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
         }
 
         if (action == "desktop.opacity") {
-            float op = payload.value("opacity", 1.0f);
+            float op = 1.0f;
+            if (payload.is_number()) {
+                op = payload.get<float>();
+            } else if (payload.contains("opacity") && payload["opacity"].is_number()) {
+                op = payload["opacity"].get<float>();
+            }
+            op = std::max(0.1f, std::min(1.0f, op));
             if (m_winMgr) {
                 m_winMgr->SetOpacity(op);
+            }
+            if (m_imguiOverlay) {
+                m_imguiOverlay->GetState().opacity = op;
+            }
+            if (m_storageMgr) {
+                json prefs = m_storageMgr->GetPreferences();
+                prefs["opacity"] = op;
+                m_storageMgr->SavePreferences(prefs);
             }
             BroadcastEvent("lens:opacity-changed", op);
             callback(json{{"ok", true}, {"opacity", op}}, false);
@@ -1307,7 +1332,45 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
 
         if (action == "desktop.focusWindow") {
             SetForegroundWindow(m_winMgr->GetHwnd());
+            SetFocus(m_winMgr->GetHwnd());
             callback({ { "success", true } }, false);
+            return;
+        }
+
+        if (action == "desktop.startDrag" || action == "desktop.dragWindow") {
+            if (m_winMgr && m_winMgr->GetHwnd()) {
+                HWND hwnd = m_winMgr->GetHwnd();
+                ReleaseCapture();
+                SendMessageW(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
+                callback(json{{"ok", true}}, false);
+                return;
+            }
+            callback(json{{"ok", false}}, true);
+            return;
+        }
+
+        if (action == "desktop.setBounds" || action == "desktop.resizeWindow") {
+            if (m_winMgr) {
+                WindowBounds cur = m_winMgr->GetBounds();
+                int x = payload.value("x", cur.x);
+                int y = payload.value("y", cur.y);
+                int w = payload.value("width", cur.width);
+                int h = payload.value("height", cur.height);
+                m_winMgr->SetBounds({ x, y, w, h });
+                callback(json{{"ok", true}, {"bounds", {{"x", x}, {"y", y}, {"width", w}, {"height", h}}}}, false);
+                return;
+            }
+            callback(json{{"ok", false}}, true);
+            return;
+        }
+
+        if (action == "desktop.getBounds") {
+            if (m_winMgr) {
+                WindowBounds cur = m_winMgr->GetBounds();
+                callback(json{{"x", cur.x}, {"y", cur.y}, {"width", cur.width}, {"height", cur.height}}, false);
+                return;
+            }
+            callback(json{{"ok", false}}, true);
             return;
         }
 

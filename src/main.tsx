@@ -532,6 +532,7 @@ function App() {
   function saveSettingsPatch(patch: Partial<Settings>) {
     if (patch.opacity !== undefined) {
       patch.opacity = Math.max(0.1, Math.min(1, patch.opacity));
+      window.lens?.invoke?.("desktop.opacity", { opacity: patch.opacity })?.catch?.(() => {});
     }
     if (patch.theme) {
       applyTheme(patch.theme, document, stateRef.current?.settings);
@@ -1074,6 +1075,14 @@ function App() {
     );
     const offOpacity = window.lens?.onOpacityChanged?.((op: number) => {
       setSettingsDraft((old) => (old ? { ...old, opacity: op } : old));
+      setState((old) =>
+        old
+          ? {
+              ...old,
+              settings: { ...old.settings, opacity: op },
+            }
+          : null,
+      );
     });
     return () => {
       unsub?.();

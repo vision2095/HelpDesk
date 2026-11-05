@@ -234,6 +234,23 @@ bool WebView2Host::Initialize(
                                 // 8. Setup focus and accelerator handling
                                 SetupFocusAndAcceleratorHandling();
 
+                                ComPtr<ICoreWebView2Settings> settings;
+                                if (SUCCEEDED(m_webView->get_Settings(&settings)) && settings) {
+                                    ComPtr<ICoreWebView2Settings9> settings9;
+                                    if (SUCCEEDED(settings.As(&settings9)) && settings9) {
+                                        settings9->put_IsNonClientRegionSupportEnabled(TRUE);
+                                    }
+                                }
+
+                                // 8b. Enable native non-client draggable regions for -webkit-app-region: drag
+                                ComPtr<ICoreWebView2Settings> settings;
+                                if (SUCCEEDED(m_webView->get_Settings(&settings)) && settings) {
+                                    ComPtr<ICoreWebView2Settings9> settings9;
+                                    if (SUCCEEDED(settings.As(&settings9)) && settings9) {
+                                        settings9->put_IsNonClientRegionSupportEnabled(TRUE);
+                                    }
+                                }
+
                                 // 9. Focus the HUD once its document is ready so
                                 // real Windows key messages reach the sign-in
                                 // form and the assistant composer immediately.
@@ -262,6 +279,14 @@ bool WebView2Host::Initialize(
                                 InjectLensDeskBridge();
                                 SetupWebMessageHandling();
                                 SetupFocusAndAcceleratorHandling();
+
+                                ComPtr<ICoreWebView2Settings> settings;
+                                if (SUCCEEDED(m_webView->get_Settings(&settings)) && settings) {
+                                    ComPtr<ICoreWebView2Settings9> settings9;
+                                    if (SUCCEEDED(settings.As(&settings9)) && settings9) {
+                                        settings9->put_IsNonClientRegionSupportEnabled(TRUE);
+                                    }
+                                }
 
                                 m_webView->add_NavigationCompleted(
                                     Callback<ICoreWebView2NavigationCompletedEventHandler>(

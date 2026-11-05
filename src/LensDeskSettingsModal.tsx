@@ -970,25 +970,39 @@ export function LensDeskSettingsModal({
                     max={100}
                     step={1}
                     value={Math.max(10, Math.round((draft.opacity ?? 0.5) * 100))}
-                    onChange={(event) =>
-                      changeSetting({
-                        opacity: Math.max(
-                          0.1,
-                          Math.min(1, Number(event.target.value) / 100),
-                        ),
-                      })
-                    }
+                    onChange={(event) => {
+                      const newOp = Math.max(0.1, Math.min(1, Number(event.target.value) / 100));
+                      changeSetting({ opacity: newOp });
+                      window.lens?.invoke?.("desktop.opacity", { opacity: newOp })?.catch?.(() => {});
+                    }}
                   />,
                 )}
                 <button
                   type="button"
                   className="reset-inline-btn"
-                  onClick={() => changeSetting({ opacity: 1 })}
+                  onClick={() => {
+                    changeSetting({ opacity: 1 });
+                    window.lens?.invoke?.("desktop.opacity", { opacity: 1.0 })?.catch?.(() => {});
+                  }}
                 >
                   Restore 100% opacity
                 </button>
                 <p className="field-hint">
                   Minimum opacity is 10%. Press Shift+I to increase or Shift+J to decrease.
+                </p>
+                <label className="checkbox-row">
+                  <input
+                    aria-label="Always on top"
+                    type="checkbox"
+                    checked={draft.alwaysOnTop ?? true}
+                    onChange={(event) =>
+                      changeSetting({ alwaysOnTop: event.target.checked })
+                    }
+                  />{" "}
+                  Always keep window on top
+                </label>
+                <p className="field-hint">
+                  Keeps LensDesk floating above other applications.
                 </p>
                 <label className="checkbox-row">
                   <input

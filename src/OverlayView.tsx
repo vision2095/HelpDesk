@@ -956,7 +956,13 @@ export function OverlayView({
       }}
     >
       {/* 1. TOP TITLEBAR */}
-      <header className="lensdesk-titlebar hintlens-titlebar">
+      <header
+        className="lensdesk-titlebar hintlens-titlebar"
+        onMouseDown={(e) => {
+          if ((e.target as HTMLElement).closest("button, input, select, a, textarea")) return;
+          window.lens?.invoke?.("desktop.startDrag")?.catch?.(() => {});
+        }}
+      >
         <div className="titlebar-left">
           <span className="app-title">LensDesk</span>
           {availableUpdate && (

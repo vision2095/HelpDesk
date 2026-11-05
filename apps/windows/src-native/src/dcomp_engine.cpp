@@ -97,13 +97,16 @@ void DCompEngine::SetBrowserVisualVisible(bool visible) {
 
 void DCompEngine::SetOpacity(float opacity) {
 #if defined(_WIN32)
-    if (!m_dcompDevice || !m_rootVisual) return;
+    if (!m_dcompDevice) return;
     opacity = std::max(0.1f, std::min(1.0f, opacity));
     ComPtr<IDCompositionEffectGroup> effectGroup;
     HRESULT hr = m_dcompDevice->CreateEffectGroup(&effectGroup);
     if (SUCCEEDED(hr) && effectGroup) {
         effectGroup->SetOpacity(opacity);
-        m_rootVisual->SetEffect(effectGroup.Get());
+        if (m_rootVisual) m_rootVisual->SetEffect(effectGroup.Get());
+        if (m_hudVisual) m_hudVisual->SetEffect(effectGroup.Get());
+        if (m_browserVisual) m_browserVisual->SetEffect(effectGroup.Get());
+        if (m_d3dVisual) m_d3dVisual->SetEffect(effectGroup.Get());
         Commit();
     }
 #else
