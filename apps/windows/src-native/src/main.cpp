@@ -260,6 +260,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
 
     // 10. Locate Dist Folder for Built React 19 Frontend
     std::filesystem::path distPath = EnsureDistAssetsExtracted(hInstance);
+    if (std::filesystem::exists(distPath / L"index.html")) {
+        imguiOverlay.SetWebSuppressed(true);
+        LogInfo("React 19 web assets active; suppressing duplicate native ImGui windows.");
+    }
 
     // 11. Wire Services & Dispatcher
     dispatcher.Initialize(
@@ -284,9 +288,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
         dcompEngine.GetHudVisual(),
         distPath,
         &dispatcher,
-        [hwnd, &dcompEngine, &browserMgr, &focusMgr](ICoreWebView2Environment* env) {
+        [hwnd, &dcompEngine, &browserMgr, &focusMgr, &imguiOverlay](ICoreWebView2Environment* env) {
             LogInfo("WebView2 environment ready. Initializing browser manager tabs.");
             browserMgr.Initialize(hwnd, env, dcompEngine.GetBrowserVisual(), &dcompEngine, &focusMgr);
+            imguiOverlay.SetWebSuppressed(true);
         }
     );
     LogInfo("WebView2 Host initialization started.");
@@ -308,7 +313,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
                     imguiOverlay.GetState().showAuthGate = false;
                     focusMgr.SetFocusTarget(FocusState::FOCUSED_ASSISTANT, "activate_login_focus");
                 } else {
-                    imguiOverlay.GetState().showChatWindow = true;
+                    if (!webHost.IsReady()) {
+                        imguiOverlay.GetState().showChatWindow = true;
+                    }
                 }
                 handled = true;
                 return 0;

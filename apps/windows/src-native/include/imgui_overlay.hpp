@@ -194,6 +194,8 @@ public:
     void SetTypingStatus(const std::string& status) { m_state.typingStatus = status; }
     void SetCaptureProtection(bool active) { m_state.captureProtectionActive = active; }
     void SetWebView2Available(bool available) { m_state.webView2Available = available; }
+    void SetWebSuppressed(bool suppressed) { m_suppressedByWeb = suppressed; }
+    bool IsWebSuppressed() const { return m_suppressedByWeb; }
 
     using ActionCallback = std::function<void(const std::string& action)>;
     void SetActionCallback(ActionCallback callback) { m_actionCallback = callback; }
@@ -227,6 +229,7 @@ private:
 
     HWND m_hwnd = nullptr;
     bool m_initialized = false;
+    bool m_suppressedByWeb = false;
     OverlayState m_state{};
     ActionCallback m_actionCallback = nullptr;
     ServiceDispatcher* m_dispatcher = nullptr;

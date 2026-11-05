@@ -557,7 +557,8 @@ void ServiceDispatcher::Initialize(
             state.isAuthenticated = true;
             state.userEmail = email;
             state.showAuthGate = false;
-            state.showChatWindow = true;
+            // When web host is active, React 19 is the sole UI. Do not show duplicate ImGui chat window.
+            state.showChatWindow = false;
         }
     } else {
         if (m_imguiOverlay) {
@@ -874,7 +875,9 @@ void ServiceDispatcher::ForwardEventToImgui(const std::string& eventName, const 
             state.isAuthenticated = valid;
             if (valid) {
                 state.showAuthGate = false;
-                state.showChatWindow = true;
+                if (!m_webHost || !m_webHost->IsReady()) {
+                    state.showChatWindow = true;
+                }
             } else {
                 state.showAuthGate = false;
                 state.showChatWindow = false;
@@ -2279,7 +2282,9 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
                     state.isAuthenticated = true;
                     state.userEmail = email;
                     state.showAuthGate = false;
-                    state.showChatWindow = true;
+                    if (!m_webHost || !m_webHost->IsReady()) {
+                        state.showChatWindow = true;
+                    }
                 }
             }
             BroadcastEvent("lens:gate", gate);
@@ -2325,7 +2330,9 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
                     state.isAuthenticated = true;
                     state.userEmail = email;
                     state.showAuthGate = false;
-                    state.showChatWindow = true;
+                    if (!m_webHost || !m_webHost->IsReady()) {
+                        state.showChatWindow = true;
+                    }
                 }
             }
             BroadcastEvent("lens:gate", gate);

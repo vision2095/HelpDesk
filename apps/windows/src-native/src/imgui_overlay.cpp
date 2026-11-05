@@ -494,6 +494,13 @@ void ImGuiOverlay::BeginFrame() {
 void ImGuiOverlay::Render() {
     if (!m_initialized) return;
 
+    // React 19 + WebView2 is the SOLE application UI.
+    // While the React 19 web interface is active, native ImGui windows remain suppressed
+    // to eliminate duplicate overlapping windows and keep the UI clean.
+    if (m_suppressedByWeb) {
+        return;
+    }
+
     // React 19 + WebView2 (FloatingGate.tsx) is the SOLE authentication interface.
     // While unauthenticated, all native workspace windows, action buttons and tools
     // remain locked and unrendered to eliminate duplicate login screens and prevent unauthorized access.
@@ -2073,13 +2080,13 @@ LRESULT ImGuiOverlay::HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
 }
 
 bool ImGuiOverlay::WantCaptureMouse() const {
-    if (!m_initialized) return false;
+    if (!m_initialized || m_suppressedByWeb) return false;
     ImGuiIO& io = ImGui::GetIO();
     return io.WantCaptureMouse || m_state.showRadialMenu;
 }
 
 bool ImGuiOverlay::WantCaptureKeyboard() const {
-    if (!m_initialized) return false;
+    if (!m_initialized || m_suppressedByWeb) return false;
     ImGuiIO& io = ImGui::GetIO();
     return io.WantCaptureKeyboard;
 }
