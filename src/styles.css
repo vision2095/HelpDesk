@@ -4633,17 +4633,20 @@ kbd {
   min-height: 0;
   overflow: hidden;
   position: relative;
-  background: var(--panel);
+  background: transparent !important;
 }
 .floating-browser-container .browser-page {
   height: 100% !important;
   min-height: 0 !important;
   display: flex !important;
   flex-direction: column !important;
+  background: transparent !important;
 }
-.floating-browser-container .browser-viewport {
+.floating-browser-container .browser-viewport,
+.browser-viewport {
   flex: 1 !important;
   min-height: 120px !important;
+  background: transparent !important;
 }
 .floating-browser-container .browser-toolbar {
   padding: 6px 10px !important;

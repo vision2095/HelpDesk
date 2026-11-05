@@ -41,6 +41,9 @@ public:
     json GetUserSettings() const { return m_userSettings; }
     json FetchUserSettings();
     json SyncUserSettings(const json& settings);
+    json FetchCloudState();
+    json GetCloudKeys() const { return m_cloudKeys; }
+    json GetCloudOwnedKeys() const { return m_cloudOwnedKeys; }
 
 private:
     struct HttpResult {
@@ -86,6 +89,8 @@ private:
     json m_entitlement = nullptr;
     json m_takeover = nullptr;
     json m_userSettings = nullptr;
+    json m_cloudKeys = json::object();
+    json m_cloudOwnedKeys = json::object();
     int64_t m_serverTimeMs = 0;
     int64_t m_lastVerifiedAtMs = 0;
 };

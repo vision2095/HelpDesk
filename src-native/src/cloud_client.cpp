@@ -354,6 +354,12 @@ void CloudClient::Load() {
     if (saved.contains("settings") && saved["settings"].is_object()) {
         m_userSettings = saved["settings"];
     }
+    if (saved.contains("cloudKeys") && saved["cloudKeys"].is_object()) {
+        m_cloudKeys = saved["cloudKeys"];
+    }
+    if (saved.contains("cloudOwnedKeys") && saved["cloudOwnedKeys"].is_object()) {
+        m_cloudOwnedKeys = saved["cloudOwnedKeys"];
+    }
     if (!HasSession()) {
         m_token.clear();
         m_refreshToken.clear();
@@ -370,6 +376,8 @@ void CloudClient::Save() {
     saved["user"] = m_user;
     saved["session"] = m_session;
     saved["settings"] = m_userSettings;
+    saved["cloudKeys"] = m_cloudKeys;
+    saved["cloudOwnedKeys"] = m_cloudOwnedKeys;
 
     try {
         std::filesystem::path temp = m_configPath;
@@ -392,6 +400,8 @@ void CloudClient::ClearCredentials() {
     m_entitlement = nullptr;
     m_takeover = nullptr;
     m_userSettings = nullptr;
+    m_cloudKeys = json::object();
+    m_cloudOwnedKeys = json::object();
     m_lastVerifiedAtMs = 0;
     m_serverTimeMs = 0;
 }
@@ -1133,6 +1143,29 @@ json CloudClient::SyncUserSettings(const json& settings) {
 
     try {
         return CloudRequest("settings.save", settings);
+    } catch (...) {}
+
+    return json::object();
+}
+
+json CloudClient::FetchCloudState() {
+    if (!HasSession()) return json::object();
+
+    try {
+        json state = CloudRequest("state", json::object());
+        if (state.is_object()) {
+            if (state.contains("keys") && state["keys"].is_object()) {
+                m_cloudKeys = state["keys"];
+            }
+            if (state.contains("ownedKeys") && state["ownedKeys"].is_object()) {
+                m_cloudOwnedKeys = state["ownedKeys"];
+            }
+            if (state.contains("settings") && state["settings"].is_object()) {
+                m_userSettings = state["settings"];
+            }
+            Save();
+            return state;
+        }
     } catch (...) {}
 
     return json::object();

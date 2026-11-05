@@ -529,7 +529,7 @@ function App() {
           : "Something went wrong. Try again.",
     );
   }
-  function saveSettingsPatch(patch: Partial<Settings>) {
+  async function saveSettingsPatch(patch: Partial<Settings>) {
     if (patch.opacity !== undefined) {
       patch.opacity = Math.max(0.1, Math.min(1, patch.opacity));
       window.lens?.invoke?.("desktop.opacity", { opacity: patch.opacity })?.catch?.(() => {});
@@ -566,10 +566,32 @@ function App() {
           });
         },
       });
-    return settingsWriter.current.write(patch).then(async (next) => {
-      if (window.lens) await api("desktop.appearance");
-      return next;
-    });
+    try {
+      return await settingsWriter.current.write(patch).then(async (next) => {
+        if (window.lens) await api("desktop.appearance").catch(() => {});
+        return next;
+      });
+    } catch (err: any) {
+      if (err?.message?.includes?.("another device")) {
+        // Concurrency conflict from rapid slider or queued edits: reconcile cleanly with latest state
+        const latest = await api<State>("state");
+        const mergedSettings = { ...latest.settings, ...patch };
+        const saved = await api<State>("settings.save", mergedSettings);
+        const merged = {
+          ...saved,
+          sessions: saved.sessions.map((s) => ({
+            ...s,
+            ...drafts.current.get(s.id)?.patch,
+          })),
+        };
+        stateRef.current = merged;
+        setState(merged);
+        setSettingsDraft(saved.settings);
+        if (window.lens) await api("desktop.appearance").catch(() => {});
+        return saved;
+      }
+      throw err;
+    }
   }
 
   async function testCurrentModel(providerOverride?: Provider) {
@@ -1489,6 +1511,12 @@ function App() {
   ) {
     if (chatBusyRef.current) return false;
     const payloadImages = customImages !== undefined ? customImages : images;
+    const effectiveText =
+      text.trim() ||
+      (payloadImages.length > 0
+        ? "Answer the question or problem in this screenshot concisely and directly. State the final answer first."
+        : "");
+    if (!effectiveText && payloadImages.length === 0) return false;
     setQuestion(text);
     chatBusyRef.current = true;
     setBusy(true);
@@ -1505,7 +1533,7 @@ function App() {
       if (mode && s.mode !== mode) s = await saveSession({ ...s, mode });
       const useWeb = options?.webSearch ?? workspaceWebSearch;
       const updated: Session = await chat(
-        { sessionId: s.id, text, images: payloadImages, webSearch: useWeb },
+        { sessionId: s.id, text: effectiveText, images: payloadImages, webSearch: useWeb },
         (event) => {
           if (event.type === "delta")
             setStreamingText((old) => old + (event.text || ""));

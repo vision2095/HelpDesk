@@ -541,6 +541,9 @@ void ServiceDispatcher::Initialize(
     if (m_cloud.HasSession()) {
         std::string userId = m_cloud.GetUserId();
         std::string email = m_cloud.GetUserEmail();
+        try {
+            m_cloud.FetchCloudState();
+        } catch (...) {}
         if (!userId.empty() && m_storageMgr) {
             m_storageMgr->SetCurrentAccount(userId, email);
             json cloudSettings = m_cloud.GetUserSettings();
@@ -1000,6 +1003,38 @@ json ServiceDispatcher::BuildFullState() {
     json ownedKeys = keyStatus;
     for (auto& item : ownedKeys.items()) item.value() = false;
     ownedKeys["local"] = true;
+
+    if (m_cloud.HasSession()) {
+        try {
+            json cloudKeys = m_cloud.GetCloudKeys();
+            if (cloudKeys.is_object()) {
+                for (auto& [k, v] : cloudKeys.items()) {
+                    if (v.is_boolean() && v.get<bool>()) {
+                        keyStatus[k] = true;
+                        ownedKeys[k] = true;
+                    }
+                }
+            }
+            json cloudOwned = m_cloud.GetCloudOwnedKeys();
+            if (cloudOwned.is_object()) {
+                for (auto& [k, v] : cloudOwned.items()) {
+                    if (v.is_boolean() && v.get<bool>()) {
+                        keyStatus[k] = true;
+                        ownedKeys[k] = true;
+                    }
+                }
+            }
+            std::string curProvider = prefs.value("provider", "openai");
+            if (!keyStatus.value(curProvider, false)) {
+                for (auto& [k, v] : keyStatus.items()) {
+                    if (k != "local" && v.is_boolean() && v.get<bool>()) {
+                        prefs["provider"] = k;
+                        break;
+                    }
+                }
+            }
+        } catch (...) {}
+    }
 
     json state;
     state["settings"] = prefs;
@@ -2673,16 +2708,21 @@ void ServiceDispatcher::HandleChat(const json& payload, DispatchResponseCallback
         }
     }
 
-    const std::string text = payload.value("text", payload.value("prompt", ""));
+    std::string text = payload.value("text", payload.value("prompt", ""));
+    json images = json::array();
+    if (payload.contains("images") && payload["images"].is_array()) images = payload["images"];
+
     if (TrimText(text).empty()) {
-        callback("Enter a question before sending.", true);
-        return;
+        if (!images.empty()) {
+            text = "Answer the question or problem in this screenshot concisely and directly. State the final answer first.";
+        } else {
+            callback("Enter a question before sending.", true);
+            return;
+        }
     }
     const std::string sessionId = payload.value("sessionId", "");
     const std::string requestId = payload.value("requestId", "");
     const std::string mode = payload.value("mode", "general");
-    json images = json::array();
-    if (payload.contains("images") && payload["images"].is_array()) images = payload["images"];
 
     json prefs = m_storageMgr ? m_storageMgr->GetPreferences() : json::object();
     const std::string provider = prefs.value("provider", "openai");
@@ -2733,6 +2773,52 @@ void ServiceDispatcher::HandleChat(const json& payload, DispatchResponseCallback
     if (provider != "local") {
         apiKey = m_storageMgr ? m_storageMgr->GetApiKey(provider) : "";
         if (apiKey.empty()) {
+            // Check if cloud session can fulfill this chat using web-configured API key
+            bool cloudFulfilled = false;
+            {
+                std::lock_guard<std::mutex> cloudLock(m_cloudMutex);
+                if (m_cloud.HasSession()) {
+                    try {
+                        json chatPayload = payload;
+                        chatPayload["text"] = text;
+                        chatPayload["sessionId"] = session["id"];
+                        chatPayload["provider"] = provider;
+                        chatPayload["model"] = model;
+                        if (!images.empty()) chatPayload["images"] = images;
+
+                        json cloudRes = m_cloud.CloudRequest("chat", chatPayload);
+                        if (cloudRes.is_object() && cloudRes.contains("messages") && cloudRes["messages"].is_array() && !cloudRes["messages"].empty()) {
+                            json asstMsg = cloudRes["messages"].back();
+                            std::string asstContent = asstMsg.value("content", "");
+                            session["messages"].push_back(asstMsg);
+                            session["updatedAt"] = nowIso;
+                            session["version"] = session.value("version", 1) + 1;
+                            if (m_storageMgr) m_storageMgr->SaveSession(session);
+
+                            PostToUi([this, callback, requestId, asstContent, session]() {
+                                if (!requestId.empty()) {
+                                    BroadcastEvent("lens:chat", {
+                                        { "requestId", requestId },
+                                        { "type", "delta" },
+                                        { "text", asstContent }
+                                    });
+                                    BroadcastEvent("lens:chat", {
+                                        { "requestId", requestId },
+                                        { "type", "done" },
+                                        { "session", session }
+                                    });
+                                }
+                                callback(session, false);
+                            });
+                            cloudFulfilled = true;
+                        }
+                    } catch (...) {
+                        cloudFulfilled = false;
+                    }
+                }
+            }
+            if (cloudFulfilled) return;
+
             std::string fallbackAnswer = "LensDesk 2.0 Native Windows Host is fully active with native C++20 + DirectComposition.\n\n"
                                          "• Direct3D 11.1 hardware-accelerated transparent HUD\n"
                                          "• Dear ImGui native HUD overlay with status pill\n"

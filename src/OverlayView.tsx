@@ -481,6 +481,8 @@ export function OverlayView({
       const submitted = input;
       if (await onSend(text))
         setInput((value) => (value === submitted ? "" : value));
+    } else if (images.length > 0) {
+      await onSend("");
     } else {
       onSnapAndSolve?.();
     }
@@ -947,9 +949,11 @@ export function OverlayView({
       className={`lensdesk-overlay-shell hintlens-overlay-shell ${opacity <= 0.2 ? "ghost-mode" : ""} ${interviewLayout === "compact" ? "compact-interview-mode" : ""} ${notchDocked ? "mac-notch-docked" : ""}`}
       style={{
         opacity: Math.max(0.12, opacity),
-        backgroundColor: isDark
-          ? `rgba(15, 23, 42, 0.95)`
-          : `rgba(255, 255, 255, 0.95)`,
+        backgroundColor: activeView === "browser"
+          ? "transparent"
+          : isDark
+            ? `rgba(15, 23, 42, 0.95)`
+            : `rgba(255, 255, 255, 0.95)`,
       }}
       onMouseDownCapture={() => {
         window.lens?.invoke?.("desktop.focusWindow")?.catch?.(() => {});
@@ -1538,7 +1542,7 @@ export function OverlayView({
               )}
 
               {/* Error Alert */}
-              {error && (
+              {error && !error.includes("another device") && (
                 <div
                   className="lensdesk-error-banner hintlens-error-banner"
                   style={{
