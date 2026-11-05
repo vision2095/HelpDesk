@@ -252,7 +252,7 @@ bool WebView2Host::Initialize(
                                 // 10. Navigate to React 19 app
                                 m_webView->Navigate(L"https://lensdesk.local/index.html");
                             } else {
-                                LogInfo("Web assets ('dist' directory) absent or omitted; WebView2 HUD disabled, pure Dear ImGui native HUD active.");
+                                OutputDebugStringA("[WebView2Host] Web assets ('dist' directory) absent or omitted; WebView2 HUD disabled, pure Dear ImGui native HUD active.\n");
                                 m_controller->put_IsVisible(FALSE);
                             }
 

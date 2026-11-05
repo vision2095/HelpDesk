@@ -109,6 +109,7 @@ struct OverlayState {
 
     // Account & Auth
     bool isAuthenticated = true;
+    bool authValid = true;
     std::string userEmail = "user@lensdesk.local";
     std::string userPlan = "Pro";
     char loginEmailBuf[256] = "";

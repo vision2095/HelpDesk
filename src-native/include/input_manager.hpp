@@ -33,6 +33,7 @@ public:
 
     // Destination-verified auto-typing
     bool StartAutoType(const std::string& text, int delayMs = 15);
+    bool AutoType(const std::string& text, int delayMs = 15) { return StartAutoType(text, delayMs); }
     void StopAutoType();
     void TogglePauseAutoType();
     bool IsAutoTyping() const { return m_isAutoTyping; }
