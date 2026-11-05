@@ -40,6 +40,35 @@ function runPowerShell(script) {
   );
 }
 
+function ensureDistBundle() {
+  const distDir = path.resolve("dist");
+  if (!fs.existsSync(path.join(distDir, "index.html"))) {
+    return;
+  }
+  const targets = [
+    path.resolve("src-native/resources/dist_bundle.zip"),
+    path.resolve("apps/windows/src-native/resources/dist_bundle.zip"),
+  ];
+  for (const t of targets) {
+    fs.mkdirSync(path.dirname(t), { recursive: true });
+  }
+  const targetZip = targets[0];
+  if (isWindows) {
+    runPowerShell(
+      `Compress-Archive -Path ${powershellQuote(
+        path.join(distDir, "*"),
+      )} -DestinationPath ${powershellQuote(targetZip)} -Force`,
+    );
+  } else {
+    execFileSync("zip", ["-q", "-r", targetZip, "."], { cwd: distDir });
+  }
+  fs.copyFileSync(targetZip, targets[1]);
+  console.log(
+    `[package-windows-zip] Frontend resource bundle updated (${fs.statSync(targetZip).size} bytes).`,
+  );
+}
+ensureDistBundle();
+
 // The native host is the only supported Windows product. Never rewrite its PE
 // metadata or rename it to a system-process name.
 const { runtimeHost, webView2Dll } = resolveNativeWindowsInputs(process.cwd());

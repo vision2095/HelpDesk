@@ -20,7 +20,7 @@ struct ChatMessage {
 
 struct OverlayState {
     // Window visibility toggles
-    bool showTopStrip = true;
+    bool showTopStrip = false;
     bool showRadialMenu = false;
     bool showDiagnostics = false;
     bool showChatWindow = false;
@@ -108,10 +108,10 @@ struct OverlayState {
     bool localLlmConnected = false;
 
     // Account & Auth
-    bool isAuthenticated = true;
-    bool authValid = true;
-    std::string userEmail = "user@lensdesk.local";
-    std::string userPlan = "Pro";
+    bool isAuthenticated = false;
+    bool authValid = false;
+    std::string userEmail = "";
+    std::string userPlan = "";
     char loginEmailBuf[256] = "";
     char loginPasswordBuf[256] = "";
 

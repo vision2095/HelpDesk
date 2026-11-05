@@ -35,6 +35,13 @@ jobs:
       - name: Build React 19 Production Bundle
         run: npm run build
 
+      - name: Create Self-Contained Frontend Resource Bundle
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "dist/*" -DestinationPath "src-native/resources/dist_bundle.zip" -Force
+          Copy-Item "src-native/resources/dist_bundle.zip" "apps/windows/src-native/resources/dist_bundle.zip" -Force
+          Write-Host "Created dist_bundle.zip: $((Get-Item 'src-native/resources/dist_bundle.zip').Length) bytes"
+
       - name: Run Core Test Suite
         run: npm test
 

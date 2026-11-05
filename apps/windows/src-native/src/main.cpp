@@ -43,6 +43,119 @@ static void ShowErrorDialog(HWND hwnd, const wchar_t* text, const wchar_t* title
     }
 }
 
+static std::filesystem::path EnsureDistAssetsExtracted(HINSTANCE hInstance) {
+    std::filesystem::path exeDir = GetExecutableDirectory();
+    std::vector<std::filesystem::path> localCandidates = {
+        exeDir / L"dist",
+        exeDir.parent_path() / L"dist",
+        exeDir.parent_path().parent_path() / L"dist",
+        exeDir.parent_path().parent_path().parent_path() / L"dist"
+    };
+    for (const auto& p : localCandidates) {
+        if (std::filesystem::exists(p / L"index.html")) {
+            LogInfo("Web assets located at local directory: " + p.string());
+            return p;
+        }
+    }
+
+    wchar_t localAppData[MAX_PATH] = {0};
+    if (GetEnvironmentVariableW(L"LOCALAPPDATA", localAppData, MAX_PATH) > 0) {
+        std::filesystem::path targetDir = std::filesystem::path(localAppData) / L"LensDesk" / L"dist";
+        std::filesystem::path indexHtml = targetDir / L"index.html";
+
+        // Try extracting embedded resource 102 (IDR_DIST_BUNDLE)
+        HRSRC hRes = FindResourceW(hInstance, MAKEINTRESOURCEW(102), RT_RCDATA);
+        if (hRes) {
+            HGLOBAL hMem = LoadResource(hInstance, hRes);
+            if (hMem) {
+                DWORD resSize = SizeofResource(hInstance, hRes);
+                void* pData = LockResource(hMem);
+                if (pData && resSize > 0) {
+                    std::error_code ec;
+                    std::filesystem::create_directories(targetDir, ec);
+                    std::filesystem::path tempZip = targetDir.parent_path() / L"dist_bundle.zip";
+
+                    bool needExtract = !std::filesystem::exists(indexHtml);
+                    if (!needExtract) {
+                        std::filesystem::path stampFile = targetDir / L".bundle_size";
+                        if (std::filesystem::exists(stampFile)) {
+                            std::ifstream ifs(stampFile);
+                            DWORD savedSize = 0;
+                            ifs >> savedSize;
+                            if (savedSize != resSize) needExtract = true;
+                        } else {
+                            needExtract = true;
+                        }
+                    }
+
+                    if (needExtract) {
+                        LogInfo("Extracting self-contained embedded web assets (" + std::to_string(resSize) + " bytes)...");
+                        std::ofstream ofs(tempZip, std::ios::binary | std::ios::trunc);
+                        if (ofs.is_open()) {
+                            ofs.write(reinterpret_cast<const char*>(pData), resSize);
+                            ofs.close();
+
+                            // 1. Built-in Windows tar.exe (fastest, standard in Windows 10 version 1803+ and 11)
+                            std::wstring tarCmd = L"tar.exe -xf \"" + tempZip.wstring() + L"\" -C \"" + targetDir.wstring() + L"\"";
+                            STARTUPINFOW si{};
+                            si.cb = sizeof(si);
+                            si.dwFlags = STARTF_USESHOWWINDOW;
+                            si.wShowWindow = SW_HIDE;
+                            PROCESS_INFORMATION pi{};
+                            if (CreateProcessW(nullptr, tarCmd.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) {
+                                WaitForSingleObject(pi.hProcess, 5000);
+                                CloseHandle(pi.hProcess);
+                                CloseHandle(pi.hThread);
+                            }
+
+                            // 2. Fallback to PowerShell Expand-Archive if index.html was not created
+                            if (!std::filesystem::exists(indexHtml)) {
+                                std::wstring psCmd = L"powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"Expand-Archive -Path '" + tempZip.wstring() + L"' -DestinationPath '" + targetDir.wstring() + L"' -Force\"";
+                                if (CreateProcessW(nullptr, psCmd.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) {
+                                    WaitForSingleObject(pi.hProcess, 10000);
+                                    CloseHandle(pi.hProcess);
+                                    CloseHandle(pi.hThread);
+                                }
+                            }
+
+                            DeleteFileW(tempZip.c_str());
+
+                            if (std::filesystem::exists(indexHtml)) {
+                                std::ofstream stampOut(targetDir / L".bundle_size");
+                                stampOut << resSize;
+                                LogInfo("Successfully extracted embedded web assets to: " + targetDir.string());
+                            } else {
+                                LogError("Embedded web assets extraction completed but index.html not found.");
+                            }
+                        }
+                    }
+
+                    if (std::filesystem::exists(indexHtml)) {
+                        return targetDir;
+                    }
+                }
+            }
+        }
+
+        if (std::filesystem::exists(indexHtml)) {
+            LogInfo("Web assets located at LocalAppData: " + targetDir.string());
+            return targetDir;
+        }
+    }
+
+    wchar_t progFiles[MAX_PATH] = {0};
+    if (GetEnvironmentVariableW(L"ProgramFiles", progFiles, MAX_PATH) > 0) {
+        std::filesystem::path pfPath = std::filesystem::path(progFiles) / L"LensDesk" / L"dist";
+        if (std::filesystem::exists(pfPath / L"index.html")) {
+            LogInfo("Web assets located at ProgramFiles: " + pfPath.string());
+            return pfPath;
+        }
+    }
+
+    LogInfo("Web assets ('dist' directory) not found; running pure Dear ImGui native HUD.");
+    return exeDir / L"dist";
+}
+
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow) {
     // 0. Attach console and configure logging
     if (AttachConsole(ATTACH_PARENT_PROCESS)) {
@@ -146,40 +259,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     LogInfo("Global Input Manager initialized.");
 
     // 10. Locate Dist Folder for Built React 19 Frontend
-    std::filesystem::path exeDir = GetExecutableDirectory();
-    std::filesystem::path distPath = exeDir / L"dist";
-    if (!std::filesystem::exists(distPath)) {
-        distPath = exeDir.parent_path() / L"dist";
-    }
-    if (!std::filesystem::exists(distPath)) {
-        distPath = exeDir.parent_path().parent_path() / L"dist";
-    }
-    if (!std::filesystem::exists(distPath)) {
-        distPath = exeDir.parent_path().parent_path().parent_path() / L"dist";
-    }
-    if (!std::filesystem::exists(distPath)) {
-        wchar_t localAppData[MAX_PATH] = {0};
-        if (GetEnvironmentVariableW(L"LOCALAPPDATA", localAppData, MAX_PATH) > 0) {
-            std::filesystem::path ladPath = std::filesystem::path(localAppData) / L"LensDesk" / L"dist";
-            if (std::filesystem::exists(ladPath)) {
-                distPath = ladPath;
-            }
-        }
-    }
-    if (!std::filesystem::exists(distPath)) {
-        wchar_t progFiles[MAX_PATH] = {0};
-        if (GetEnvironmentVariableW(L"ProgramFiles", progFiles, MAX_PATH) > 0) {
-            std::filesystem::path pfPath = std::filesystem::path(progFiles) / L"LensDesk" / L"dist";
-            if (std::filesystem::exists(pfPath)) {
-                distPath = pfPath;
-            }
-        }
-    }
-    if (!std::filesystem::exists(distPath)) {
-        LogInfo("Web assets ('dist' directory) not found; running pure Dear ImGui native HUD.");
-    } else {
-        LogInfo("Web assets located at: " + distPath.string());
-    }
+    std::filesystem::path distPath = EnsureDistAssetsExtracted(hInstance);
 
     // 11. Wire Services & Dispatcher
     dispatcher.Initialize(

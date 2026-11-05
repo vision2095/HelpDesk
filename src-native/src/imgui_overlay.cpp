@@ -582,7 +582,9 @@ void ImGuiOverlay::RenderTopStrip() {
         ImGui::SameLine();
 
         // Status badge (##min_status)
-        ImGui::TextColored(ImVec4(0.70f, 0.75f, 0.85f, 1.0f), "%s##min_status", m_state.statusMessage.c_str());
+        ImGui::PushID("##min_status");
+        ImGui::TextColored(ImVec4(0.70f, 0.75f, 0.85f, 1.0f), "%s", m_state.statusMessage.c_str());
+        ImGui::PopID();
         ImGui::SameLine();
         ImGui::TextDisabled("|");
         ImGui::SameLine();
@@ -797,7 +799,9 @@ void ImGuiOverlay::RenderInterviewWorkspace() {
             ImGui::Separator();
 
             // Single-line transcript (##ivcompactline)
-            ImGui::TextColored(ImVec4(0.02f, 0.71f, 0.83f, 1.0f), "Interviewer (##ivcompactline):");
+            ImGui::PushID("##ivcompactline");
+            ImGui::TextColored(ImVec4(0.02f, 0.71f, 0.83f, 1.0f), "Interviewer:");
+            ImGui::PopID();
             if (m_state.interviewTranscriptLines.empty()) {
                 ImGui::TextDisabled("Listening... the interviewer's speech appears here.");
             } else {
@@ -920,7 +924,9 @@ void ImGuiOverlay::RenderInterviewWorkspace() {
         ImGui::EndChild();
 
         // Screenshots thumbnail panel (##ivshots)
-        ImGui::Text("Shots (%zu) (##ivshots):", m_state.capturedThumbnails.size());
+        ImGui::PushID("##ivshots");
+        ImGui::Text("Shots (%zu):", m_state.capturedThumbnails.size());
+        ImGui::PopID();
         ImGui::SameLine();
         if (ImGui::SmallButton("Snip Screen##iv_snip")) {
             if (m_actionCallback) m_actionCallback("action.snip");
@@ -1003,7 +1009,9 @@ void ImGuiOverlay::RenderModelSettings() {
     ImGui::Separator();
 
     // 1. Provider (##set_provider)
-    ImGui::Text("Provider (##set_provider):");
+    ImGui::PushID("##set_provider");
+    ImGui::Text("Provider:");
+    ImGui::PopID();
     static const char* providers[] = { "OpenAI", "Anthropic", "DeepSeek", "Groq", "Gemini", "Local LLM" };
     if (ImGui::Combo("##set_provider", &m_state.providerIndex, providers, IM_ARRAYSIZE(providers))) {
         m_state.provider = providers[m_state.providerIndex];
@@ -1016,7 +1024,9 @@ void ImGuiOverlay::RenderModelSettings() {
     ImGui::Spacing();
 
     // 2. Model (##set_model)
-    ImGui::Text("Model (##set_model):");
+    ImGui::PushID("##set_model");
+    ImGui::Text("Model:");
+    ImGui::PopID();
     static const char* models[] = { "gpt-4.1-mini", "gpt-4o", "claude-3-5-sonnet", "deepseek-chat", "gemini-2.5-flash", "llama3.2" };
     if (ImGui::Combo("##set_model", &m_state.modelIndex, models, IM_ARRAYSIZE(models))) {
         m_state.model = models[m_state.modelIndex];
@@ -1031,7 +1041,9 @@ void ImGuiOverlay::RenderModelSettings() {
     ImGui::Separator();
 
     // 3. System Prompt (##sysprompt)
-    ImGui::Text("System Prompt (##sysprompt):");
+    ImGui::PushID("##sysprompt");
+    ImGui::Text("System Prompt:");
+    ImGui::PopID();
     ImGui::TextWrapped("Instructions sent with every screenshot answer request. Click the box below and type to edit.");
     if (ImGui::InputTextMultiline("##sysprompt", m_state.systemPromptBuf, sizeof(m_state.systemPromptBuf), ImVec2(0, 70.0f))) {
         m_state.systemPrompt = m_state.systemPromptBuf;
@@ -1229,7 +1241,9 @@ void ImGuiOverlay::RenderCaptureSettings() {
     ImGui::Separator();
 
     // 1. Screenshot Area (##capmon)
-    ImGui::Text("Screenshot area (##capmon):");
+    ImGui::PushID("##capmon");
+    ImGui::Text("Screenshot area:");
+    ImGui::PopID();
     static const char* displays[] = {
         "Active monitor (where the mouse is)",
         "All monitors",
@@ -1430,7 +1444,9 @@ void ImGuiOverlay::RenderMouseSettings() {
     ImGui::Separator();
 
     // 1. Gesture Trigger (##gesture_trigger)
-    ImGui::Text("Trigger (##gesture_trigger):");
+    ImGui::PushID("##gesture_trigger");
+    ImGui::Text("Trigger:");
+    ImGui::PopID();
     static const char* triggers[] = {
         "Middle button (wheel click)",
         "Side button - Forward (XButton2)",
@@ -1507,7 +1523,9 @@ void ImGuiOverlay::RenderBrowserSettings() {
     ImGui::Separator();
 
     // 1. Home Page (##browser_home)
-    ImGui::Text("Home page (##browser_home):");
+    ImGui::PushID("##browser_home");
+    ImGui::Text("Home page:");
+    ImGui::PopID();
     static char homeBuf[256] = "https://www.google.com/";
     if (ImGui::InputText("##browser_home", homeBuf, sizeof(homeBuf))) {
         m_state.browserHomePage = homeBuf;
@@ -1519,7 +1537,9 @@ void ImGuiOverlay::RenderBrowserSettings() {
     ImGui::Separator();
 
     // 2. Search Engine Selector (GAP 07, ##browser_search)
-    ImGui::Text("Search engine (##browser_search):");
+    ImGui::PushID("##browser_search");
+    ImGui::Text("Search engine:");
+    ImGui::PopID();
     static const char* engines[] = { "Google", "DuckDuckGo", "Bing" };
     if (ImGui::Combo("##browser_search", &m_state.searchEngineIndex, engines, IM_ARRAYSIZE(engines))) {
         if (m_state.searchEngineIndex == 0) SetSearchEngine("google");
@@ -1539,7 +1559,9 @@ void ImGuiOverlay::RenderBrowserSettings() {
     ImGui::Separator();
 
     // 3. Page Zoom Selector (GAP 07, ##browser_zoom)
-    ImGui::Text("Page zoom (##browser_zoom):");
+    ImGui::PushID("##browser_zoom");
+    ImGui::Text("Page zoom:");
+    ImGui::PopID();
     static const char* zoomLabels[] = { "50%", "75%", "100%", "125%", "150%" };
     static const float zoomValues[] = { 0.50f, 0.75f, 1.00f, 1.25f, 1.50f };
     if (ImGui::Combo("##browser_zoom", &m_state.browserZoomIndex, zoomLabels, IM_ARRAYSIZE(zoomLabels))) {
@@ -1551,7 +1573,9 @@ void ImGuiOverlay::RenderBrowserSettings() {
     ImGui::Separator();
 
     // 4. Browser Data Clearing (##confirm_clear_browser)
-    ImGui::Text("Browser data (##confirm_clear_browser):");
+    ImGui::PushID("##confirm_clear_browser");
+    ImGui::Text("Browser data:");
+    ImGui::PopID();
     ImGui::TextWrapped("Clears the in-overlay browser's cookies, cache and saved logins - you'll be signed out of every site there. The app and your LensDesk account are not affected.");
     if (ImGui::Button("Clear browsing data##confirm_clear_browser")) {
         if (m_browserMgr) {
@@ -1570,13 +1594,19 @@ void ImGuiOverlay::RenderLocalLlmSettings() {
     ImGui::TextColored(ImVec4(0.02f, 0.71f, 0.83f, 1.0f), "Local LLM Inference (Ollama / Llama.cpp)");
     ImGui::Separator();
 
-    ImGui::Text("Local Server Host (##local_host):");
+    ImGui::PushID("##local_host");
+    ImGui::Text("Local Server Host:");
+    ImGui::PopID();
     ImGui::InputText("##local_host", m_state.localHostBuf, sizeof(m_state.localHostBuf));
 
-    ImGui::Text("Port (##local_port):");
+    ImGui::PushID("##local_port");
+    ImGui::Text("Port:");
+    ImGui::PopID();
     ImGui::InputInt("##local_port", &m_state.localPort);
 
-    ImGui::Text("Model (##local_model):");
+    ImGui::PushID("##local_model");
+    ImGui::Text("Model:");
+    ImGui::PopID();
     ImGui::InputText("##local_model", m_state.localModelBuf, sizeof(m_state.localModelBuf));
     ImGui::TextDisabled("Best results come from a vision model - llava, qwen2.5-vl, gemma3 or minicpm-v - which reads the screenshot directly.");
 
@@ -1617,7 +1647,9 @@ void ImGuiOverlay::RenderAccountSettings() {
     ImGui::Separator();
 
     // Danger Zone (##wipe_btn, ##confirm_wipe)
-    ImGui::TextColored(ImVec4(0.95f, 0.3f, 0.3f, 1.0f), "Danger Zone (##wipe_btn):");
+    ImGui::PushID("##wipe_btn");
+    ImGui::TextColored(ImVec4(0.95f, 0.3f, 0.3f, 1.0f), "Danger Zone:");
+    ImGui::PopID();
     ImGui::TextWrapped("Permanently erases everything on this PC - settings, saved logins, backups and cached files.");
     static bool confirmWipe = false;
     if (!confirmWipe) {
@@ -1766,15 +1798,21 @@ void ImGuiOverlay::RenderAuthGateWindow() {
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize;
 
     if (ImGui::Begin("LensDesk Sign In###AuthGateWin", &m_state.showAuthGate, flags)) {
-        ImGui::TextColored(ImVec4(0.02f, 0.71f, 0.83f, 1.0f), "Sign in to continue (##loginpanel)");
+        ImGui::PushID("##loginpanel");
+        ImGui::TextColored(ImVec4(0.02f, 0.71f, 0.83f, 1.0f), "Sign in to continue");
+        ImGui::PopID();
         ImGui::TextDisabled("Authenticate with your LensDesk account or use local mode.");
         ImGui::Separator();
 
-        ImGui::Text("Email (##login_email):");
+        ImGui::PushID("##login_email");
+        ImGui::Text("Email:");
+        ImGui::PopID();
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::InputText("##login_email", m_state.loginEmailBuf, sizeof(m_state.loginEmailBuf));
 
-        ImGui::Text("Password (##login_pwd):");
+        ImGui::PushID("##login_pwd");
+        ImGui::Text("Password:");
+        ImGui::PopID();
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::InputText("##login_pwd", m_state.loginPasswordBuf, sizeof(m_state.loginPasswordBuf), ImGuiInputTextFlags_Password);
 
@@ -1839,7 +1877,9 @@ void ImGuiOverlay::RenderHotkeyCheatSheet() {
     ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f - 240.0f, io.DisplaySize.y * 0.5f - 190.0f), ImGuiCond_FirstUseEver);
 
     if (ImGui::Begin("Hotkeys###CheatSheet", &m_state.showHotkeyCheatSheet)) {
-        ImGui::TextColored(ImVec4(0.02f, 0.71f, 0.83f, 1.0f), "Hotkey cheat-sheet (##CheatSheet)");
+        ImGui::PushID("##CheatSheet");
+        ImGui::TextColored(ImVec4(0.02f, 0.71f, 0.83f, 1.0f), "Hotkey cheat-sheet");
+        ImGui::PopID();
         ImGui::Separator();
 
         if (ImGui::BeginTable("##CheatSheetTable", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {

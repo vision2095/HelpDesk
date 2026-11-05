@@ -1,8 +1,10 @@
 #include <windows.h>
 
 #define IDI_APP_ICON 101
+#define IDR_DIST_BUNDLE 102
 
 IDI_APP_ICON ICON "app.ico"
+IDR_DIST_BUNDLE RCDATA "dist_bundle.zip"
 
 VS_VERSION_INFO VERSIONINFO
 FILEVERSION     2,0,0,0
