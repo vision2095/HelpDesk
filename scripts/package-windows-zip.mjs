@@ -210,4 +210,4 @@ fs.rmSync(stagingDir, { recursive: true, force: true });
 console.log(
   `Successfully packaged native Windows ZIP: ${zipName} (${stat.size} bytes, sha256: ${sha256})`,
 );
-console.log("Contents: RuntimeHost.exe + WebView2Loader.dll + dist/");
+console.log("Contents: Strictly 1 executable file (self-contained with embedded web bundle)");
