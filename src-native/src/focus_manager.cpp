@@ -118,7 +118,13 @@ void FocusManager::OnWindowActivated(bool activated) {
             (!m_browserMgr || !m_browserMgr->HasActiveTab() || !m_browserMgr->GetLayout().visible)) {
             m_lastActiveTarget = FocusState::FOCUSED_ASSISTANT;
         }
-        SetFocusTarget(m_lastActiveTarget, "window_activated_restore");
+        if (m_lastActiveTarget == FocusState::FOCUSED_BROWSER && m_browserMgr) {
+            m_browserMgr->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
+            m_currentState = FocusState::FOCUSED_BROWSER;
+        } else if (m_hudHost) {
+            m_hudHost->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
+            m_currentState = FocusState::FOCUSED_ASSISTANT;
+        }
     } else {
         TransitionTo(FocusState::FOCUS_LOST, "wm_activate_false");
         TransitionTo(FocusState::INACTIVE, "inactive_after_deactivation");
@@ -129,6 +135,12 @@ void FocusManager::OnWindowFocusChanged(bool hasFocus) {
     if (hasFocus) {
         if (!m_windowActive) {
             OnWindowActivated(true);
+        } else {
+            if (m_lastActiveTarget == FocusState::FOCUSED_BROWSER && m_browserMgr) {
+                m_browserMgr->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
+            } else if (m_hudHost) {
+                m_hudHost->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
+            }
         }
     } else {
         // WebView2 hosts its input in a child window. When focus moves from
@@ -160,6 +172,12 @@ LRESULT FocusManager::RouteMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
     if (m_imguiOverlay) {
         LRESULT imguiRes = m_imguiOverlay->HandleMessage(hwnd, msg, wParam, lParam, handled);
         if (handled) {
+            if (msg == WM_LBUTTONDOWN || msg == WM_RBUTTONDOWN) {
+                if (GetForegroundWindow() != hwnd) {
+                    SetForegroundWindow(hwnd);
+                }
+                SetFocus(hwnd);
+            }
             if (m_currentState != FocusState::FOCUSED_NATIVE_CONTROL) {
                 TransitionTo(FocusState::FOCUSED_NATIVE_CONTROL, "imgui_captured_input");
             }
@@ -190,6 +208,10 @@ LRESULT FocusManager::RouteMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         // called even when the state already matches because the actual OS
         // focus may have moved (for example after a window activation).
         if (msg == WM_LBUTTONDOWN || msg == WM_RBUTTONDOWN) {
+            if (GetForegroundWindow() != hwnd) {
+                SetForegroundWindow(hwnd);
+            }
+            SetFocus(hwnd);
             if (inBrowser && m_browserMgr) {
                 SetFocusTarget(FocusState::FOCUSED_BROWSER, "mouse_click_browser");
                 m_browserMgr->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);

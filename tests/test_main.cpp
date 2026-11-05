@@ -90,10 +90,9 @@ int main() {
     CHECK(std::wstring(expectedTitle) == L"");
 
     // Verify main window style flags
-    DWORD exStyle = 0x00080000 | 0x00000080 | 0x08000000 | 0x00000008; // WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST
+    DWORD exStyle = 0x00080000 | 0x00000080 | 0x00000008; // WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST
     CHECK((exStyle & 0x00080000) != 0); // WS_EX_LAYERED
     CHECK((exStyle & 0x00000080) != 0); // WS_EX_TOOLWINDOW
-    CHECK((exStyle & 0x08000000) != 0); // WS_EX_NOACTIVATE
     CHECK((exStyle & 0x00000008) != 0); // WS_EX_TOPMOST
 
     int cMain = LensDesk::Test::GetAssertionCount();

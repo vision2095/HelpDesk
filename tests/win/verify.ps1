@@ -101,9 +101,6 @@ foreach ($window in $windows) {
   if (($window.ExStyle -band $TOPMOST) -eq 0) {
     Fail "WS_EX_TOPMOST is missing"
   }
-  if (($window.ExStyle -band $NOACTIVATE) -eq 0) {
-    Fail "WS_EX_NOACTIVATE is missing"
-  }
   if ($window.Affinity -ne 17) {
     Fail "GetWindowDisplayAffinity must be WDA_EXCLUDEFROMCAPTURE (17), got $($window.Affinity)"
   }

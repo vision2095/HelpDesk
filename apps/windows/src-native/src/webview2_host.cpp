@@ -240,8 +240,12 @@ bool WebView2Host::Initialize(
                                 m_webView->add_NavigationCompleted(
                                     Callback<ICoreWebView2NavigationCompletedEventHandler>(
                                         [this](ICoreWebView2* sender, ICoreWebView2NavigationCompletedEventArgs* args) -> HRESULT {
-                                            if (!m_initialFocusDone && m_controller && GetForegroundWindow() == m_hwnd) {
+                                            if (!m_initialFocusDone && m_controller) {
                                                 m_initialFocusDone = true;
+                                                if (m_hwnd) {
+                                                    SetForegroundWindow(m_hwnd);
+                                                    SetFocus(m_hwnd);
+                                                }
                                                 m_controller->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
                                             }
                                             return S_OK;
@@ -266,8 +270,12 @@ bool WebView2Host::Initialize(
                                             if (args && SUCCEEDED(args->get_IsSuccess(&isSuccess)) && !isSuccess) {
                                                 // If offline, hide web controller so pure Dear ImGui HUD renders
                                                 m_controller->put_IsVisible(FALSE);
-                                            } else if (!m_initialFocusDone && m_controller && GetForegroundWindow() == m_hwnd) {
+                                            } else if (!m_initialFocusDone && m_controller) {
                                                 m_initialFocusDone = true;
+                                                if (m_hwnd) {
+                                                    SetForegroundWindow(m_hwnd);
+                                                    SetFocus(m_hwnd);
+                                                }
                                                 m_controller->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
                                             }
                                             return S_OK;

@@ -48,8 +48,8 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
     int initX = mi.rcWork.left + (screenW - initW) / 2;
     int initY = mi.rcWork.top + (screenH - initH) / 2;
 
-    // 4. Extended Window Styles: Topmost, ToolWindow (avoids alt-tab clutter if overlay), NoRedirectionBitmap for DirectComposition, Layered, NoActivate (1:1 HintLens parity)
-    DWORD exStyle = WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOREDIRECTIONBITMAP | WS_EX_LAYERED | WS_EX_NOACTIVATE;
+    // 4. Extended Window Styles: Topmost, ToolWindow (avoids alt-tab clutter if overlay), NoRedirectionBitmap for DirectComposition, Layered
+    DWORD exStyle = WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOREDIRECTIONBITMAP | WS_EX_LAYERED;
     DWORD style = WS_POPUP | WS_VISIBLE;
 
     m_hwnd = CreateWindowExW(
@@ -115,6 +115,7 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
     int showMode = (nCmdShow <= 0 || nCmdShow == SW_HIDE) ? SW_SHOWNORMAL : nCmdShow;
     ShowWindow(m_hwnd, showMode);
     SetForegroundWindow(m_hwnd);
+    SetFocus(m_hwnd);
     SetWindowPos(m_hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW | SWP_NOSENDCHANGING);
     UpdateWindow(m_hwnd);
 
@@ -194,6 +195,7 @@ void WindowManager::SetVisible(bool visible) {
         ShowWindow(m_hwnd, visible ? SW_SHOW : SW_HIDE);
         if (visible) {
             SetForegroundWindow(m_hwnd);
+            SetFocus(m_hwnd);
         }
     }
 }
