@@ -620,6 +620,13 @@ void ImGuiOverlay::RenderTopStrip() {
         if (ImGui::SmallButton(m_state.showSettingsWindow ? "Settings [X]##settings_btn" : "Settings##settings_btn")) {
             ToggleSettings();
         }
+
+        if (!m_state.isAuthenticated) {
+            ImGui::SameLine();
+            if (ImGui::SmallButton(m_state.showAuthGate ? "Sign In [X]##min_auth" : "Sign In##min_auth")) {
+                m_state.showAuthGate = !m_state.showAuthGate;
+            }
+        }
     }
     ImGui::End();
 }
@@ -1794,6 +1801,7 @@ void ImGuiOverlay::RenderAuthGateWindow() {
                             m_state.userEmail = m_state.loginEmailBuf;
                             m_state.isAuthenticated = true;
                             m_state.showAuthGate = false;
+                            m_state.showChatWindow = true;
                             m_state.authError.clear();
                         }
                     });
@@ -1809,6 +1817,7 @@ void ImGuiOverlay::RenderAuthGateWindow() {
                     if (!isError) {
                         m_state.isAuthenticated = true;
                         m_state.showAuthGate = false;
+                        m_state.showChatWindow = true;
                     }
                 });
             }
@@ -1817,6 +1826,7 @@ void ImGuiOverlay::RenderAuthGateWindow() {
         if (ImGui::Button("Local Mode##local_mode_btn")) {
             m_state.isAuthenticated = true;
             m_state.showAuthGate = false;
+            m_state.showChatWindow = true;
         }
 
         ImGui::Spacing();

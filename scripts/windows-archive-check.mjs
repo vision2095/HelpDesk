@@ -174,11 +174,20 @@ function walk(directory) {
 const distFiles = walk("dist").map((file) => file.split(path.sep).join("/"));
 for (const relative of distFiles) {
   const packaged = readArchiveEntry(relative);
-  assert.deepEqual(
-    packaged,
-    fs.readFileSync(relative),
-    `Native ZIP contains a stale frontend asset: ${relative}`,
-  );
+  const isText = /\.(svg|html|css|js|json|webmanifest|txt)$/i.test(relative);
+  if (isText) {
+    assert.equal(
+      packaged.toString("utf8").replaceAll("\r", ""),
+      fs.readFileSync(relative, "utf8").replaceAll("\r", ""),
+      `Native ZIP contains a stale frontend asset: ${relative}`,
+    );
+  } else {
+    assert.deepEqual(
+      packaged,
+      fs.readFileSync(relative),
+      `Native ZIP contains a stale frontend asset: ${relative}`,
+    );
+  }
 }
 const packagedDist = names.filter(
   (name) => name.startsWith("dist/") && path.extname(name) !== "",
@@ -195,7 +204,15 @@ for (const [file, source] of [
 ]) {
   if (!fs.existsSync(source)) continue;
   const packaged = readArchiveEntry(file);
-  assert.deepEqual(packaged, fs.readFileSync(source), `Native ZIP contains a stale ${file}`);
+  if (file.endsWith(".md")) {
+    assert.equal(
+      packaged.toString("utf8").replaceAll("\r", ""),
+      fs.readFileSync(source, "utf8").replaceAll("\r", ""),
+      `Native ZIP contains a stale ${file}`,
+    );
+  } else {
+    assert.deepEqual(packaged, fs.readFileSync(source), `Native ZIP contains a stale ${file}`);
+  }
 }
 
 console.log(

@@ -195,7 +195,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
 
     // 14. Connect Window Message Router
     winMgr.SetMessageCallback(
-        [&focusMgr, &d3dRenderer, &webHost, &browserMgr, &inputMgr, &dispatcher, &winMgr, wmActivateMsg](
+        [&focusMgr, &d3dRenderer, &webHost, &browserMgr, &inputMgr, &dispatcher, &winMgr, &imguiOverlay, wmActivateMsg](
             HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, bool& handled
         ) -> LRESULT {
             // GAP 09: Single-instance activation message
@@ -206,6 +206,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
                 ShowWindow(hWnd, SW_SHOW);
                 SetForegroundWindow(hWnd);
                 SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+                if (!dispatcher.HasSession()) {
+                    imguiOverlay.GetState().showAuthGate = true;
+                } else {
+                    imguiOverlay.GetState().showChatWindow = true;
+                }
                 handled = true;
                 return 0;
             }

@@ -39,6 +39,7 @@ public:
     void ForwardEventToImgui(const std::string& eventName, const json& eventData);
     void ProcessPendingUi();
     void Shutdown();
+    bool HasSession() const { return m_cloud.HasSession(); }
 
 private:
     void HandleChat(const json& payload, DispatchResponseCallback callback);

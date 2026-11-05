@@ -911,11 +911,36 @@ export function createCloudServer({
         });
         return;
       }
-      // Enforce: Desktop download authentication when configured or in test environments
+      if (
+        url.pathname === "/checksums.json" ||
+        url.pathname === "/release/checksums.json"
+      ) {
+        const checksumFile = path.resolve(
+          process.env.DOWNLOAD_DIRECTORY || "release",
+          "checksums.json",
+        );
+        if (fs.existsSync(checksumFile)) {
+          res.setHeader("Content-Type", "application/json; charset=utf-8");
+          res.setHeader("Cache-Control", "public, max-age=60");
+          fs.createReadStream(checksumFile).pipe(res);
+          return;
+        }
+        const m = await releases.manifest();
+        json(res, 200, {
+          version,
+          releases: Object.entries(m).map(([k, v]) => ({
+            platform: k,
+            name: v.name,
+            size: v.size,
+            sha256: v.sha256,
+            url: v.url,
+          })),
+        });
+        return;
+      }
+      // Enforce: Desktop download authentication by default (unless explicitly REQUIRE_DOWNLOAD_AUTH=false)
       const isDownloadPath =
-        (process.env.REQUIRE_DOWNLOAD_AUTH === "true" ||
-          process.env.NODE_ENV === "test" ||
-          Boolean(process.argv?.some((a) => a.includes("test")))) &&
+        process.env.REQUIRE_DOWNLOAD_AUTH !== "false" &&
         (url.pathname.startsWith("/downloads/") ||
           url.pathname.startsWith("/releases/") ||
           url.pathname.startsWith("/api/v1/download/") ||

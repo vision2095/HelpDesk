@@ -27,7 +27,7 @@ struct OverlayState {
     bool showInterviewWorkspace = false;
     bool showSettingsWindow = false;
     bool showBrowserWindow = false;
-    bool showAuthGate = false;
+    bool showAuthGate = true;
     bool showHotkeyCheatSheet = false;
     bool showCompactTeleprompter = false;
 

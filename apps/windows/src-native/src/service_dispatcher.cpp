@@ -552,6 +552,20 @@ void ServiceDispatcher::Initialize(
                 m_storageMgr->SavePreferences(current);
             }
         }
+        if (m_imguiOverlay) {
+            auto& state = m_imguiOverlay->GetState();
+            state.isAuthenticated = true;
+            state.userEmail = email;
+            state.showAuthGate = false;
+            state.showChatWindow = true;
+        }
+    } else {
+        if (m_imguiOverlay) {
+            auto& state = m_imguiOverlay->GetState();
+            state.isAuthenticated = false;
+            state.showAuthGate = true;
+            state.showChatWindow = false;
+        }
     }
 
     // Apply persisted desktop preferences before the UI reads its initial state.
@@ -854,6 +868,10 @@ void ServiceDispatcher::ForwardEventToImgui(const std::string& eventName, const 
             state.isAuthenticated = valid;
             if (valid) {
                 state.showAuthGate = false;
+                state.showChatWindow = true;
+            } else {
+                state.showAuthGate = true;
+                state.showChatWindow = false;
             }
         } else if (eventName == "lens:preferences") {
             if (eventData.contains("lightTextColor") && eventData["lightTextColor"].is_string()) {
@@ -876,6 +894,12 @@ void ServiceDispatcher::ForwardEventToImgui(const std::string& eventName, const 
             }
         } else if (eventName == "webview2:missing") {
             m_imguiOverlay->SetWebView2Available(false);
+            auto& state = m_imguiOverlay->GetState();
+            if (!state.isAuthenticated) {
+                state.showAuthGate = true;
+            } else {
+                state.showChatWindow = true;
+            }
         }
     } catch (...) {}
 }
@@ -2184,6 +2208,13 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
                 if (m_storageMgr) {
                     BroadcastEvent("lens:preferences", m_storageMgr->GetPreferences());
                 }
+                if (m_imguiOverlay) {
+                    auto& state = m_imguiOverlay->GetState();
+                    state.isAuthenticated = true;
+                    state.userEmail = email;
+                    state.showAuthGate = false;
+                    state.showChatWindow = true;
+                }
             }
             BroadcastEvent("lens:gate", gate);
             callback(result, false);
@@ -2223,6 +2254,13 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
                 if (m_storageMgr) {
                     BroadcastEvent("lens:preferences", m_storageMgr->GetPreferences());
                 }
+                if (m_imguiOverlay) {
+                    auto& state = m_imguiOverlay->GetState();
+                    state.isAuthenticated = true;
+                    state.userEmail = email;
+                    state.showAuthGate = false;
+                    state.showChatWindow = true;
+                }
             }
             BroadcastEvent("lens:gate", gate);
             callback(result, false);
@@ -2245,6 +2283,13 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
             if (m_storageMgr) {
                 m_storageMgr->SetCurrentAccount("", "");
                 BroadcastEvent("lens:preferences", m_storageMgr->GetPreferences());
+            }
+            if (m_imguiOverlay) {
+                auto& state = m_imguiOverlay->GetState();
+                state.isAuthenticated = false;
+                state.userEmail = "";
+                state.showAuthGate = true;
+                state.showChatWindow = false;
             }
             BroadcastEvent("lens:gate", gate);
             callback(gate, false);

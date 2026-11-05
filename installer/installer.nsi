@@ -65,6 +65,7 @@ Section "MainSection" SEC01
   SetOverwrite try
 
   File "..\build-native\bin\Release\RuntimeHost.exe"
+  File /nonfatal "..\build-native\bin\Release\RuntimeHostAccessibility.exe"
   File "..\src-native\third_party\webview2\lib\x64\WebView2Loader.dll"
   File "..\src-native\resources\app.ico"
   File /nonfatal "..\README.md"
@@ -109,6 +110,7 @@ Section Uninstall
   Delete "$INSTDIR\Uninstall.exe"
   Delete "$INSTDIR\uninst.exe"
   Delete "$INSTDIR\RuntimeHost.exe"
+  Delete "$INSTDIR\RuntimeHostAccessibility.exe"
   Delete "$INSTDIR\WebView2Loader.dll"
   Delete "$INSTDIR\app.ico"
   Delete "$INSTDIR\README.md"

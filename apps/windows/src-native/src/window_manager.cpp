@@ -68,6 +68,10 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
         return false;
     }
 
+    // 4b. Extend DWM desktop composition frame across entire client area (1:1 HintLens parity)
+    MARGINS margins = { -1, -1, -1, -1 };
+    DwmExtendFrameIntoClientArea(m_hwnd, &margins);
+
     // Set initial full opacity on layered overlay window (1:1 HintLens parity)
     SetLayeredWindowAttributes(m_hwnd, 0, 255, LWA_ALPHA);
 
