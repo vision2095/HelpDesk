@@ -27,7 +27,7 @@ struct OverlayState {
     bool showInterviewWorkspace = false;
     bool showSettingsWindow = false;
     bool showBrowserWindow = false;
-    bool showAuthGate = true;
+    bool showAuthGate = false; // Permanently false: React 19 + WebView2 (FloatingGate.tsx) is the sole login UI
     bool showHotkeyCheatSheet = false;
     bool showCompactTeleprompter = false;
 

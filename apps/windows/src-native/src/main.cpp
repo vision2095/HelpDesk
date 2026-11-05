@@ -207,7 +207,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
                 SetForegroundWindow(hWnd);
                 SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
                 if (!dispatcher.HasSession()) {
-                    imguiOverlay.GetState().showAuthGate = true;
+                    imguiOverlay.GetState().showAuthGate = false;
+                    focusMgr.SetFocusTarget(FocusState::FOCUSED_ASSISTANT, "activate_login_focus");
                 } else {
                     imguiOverlay.GetState().showChatWindow = true;
                 }

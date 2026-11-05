@@ -563,8 +563,11 @@ void ServiceDispatcher::Initialize(
         if (m_imguiOverlay) {
             auto& state = m_imguiOverlay->GetState();
             state.isAuthenticated = false;
-            state.showAuthGate = true;
+            state.showAuthGate = false;
             state.showChatWindow = false;
+            state.showInterviewWorkspace = false;
+            state.showSettingsWindow = false;
+            state.showBrowserWindow = false;
         }
     }
 
@@ -870,8 +873,11 @@ void ServiceDispatcher::ForwardEventToImgui(const std::string& eventName, const 
                 state.showAuthGate = false;
                 state.showChatWindow = true;
             } else {
-                state.showAuthGate = true;
+                state.showAuthGate = false;
                 state.showChatWindow = false;
+                state.showInterviewWorkspace = false;
+                state.showSettingsWindow = false;
+                state.showBrowserWindow = false;
             }
         } else if (eventName == "lens:preferences") {
             if (eventData.contains("lightTextColor") && eventData["lightTextColor"].is_string()) {
@@ -895,11 +901,8 @@ void ServiceDispatcher::ForwardEventToImgui(const std::string& eventName, const 
         } else if (eventName == "webview2:missing") {
             m_imguiOverlay->SetWebView2Available(false);
             auto& state = m_imguiOverlay->GetState();
-            if (!state.isAuthenticated) {
-                state.showAuthGate = true;
-            } else {
-                state.showChatWindow = true;
-            }
+            state.showAuthGate = false;
+            state.showChatWindow = false;
         }
     } catch (...) {}
 }
@@ -2288,8 +2291,11 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
                 auto& state = m_imguiOverlay->GetState();
                 state.isAuthenticated = false;
                 state.userEmail = "";
-                state.showAuthGate = true;
+                state.showAuthGate = false;
                 state.showChatWindow = false;
+                state.showInterviewWorkspace = false;
+                state.showSettingsWindow = false;
+                state.showBrowserWindow = false;
             }
             BroadcastEvent("lens:gate", gate);
             callback(gate, false);

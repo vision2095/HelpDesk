@@ -494,6 +494,13 @@ void ImGuiOverlay::BeginFrame() {
 void ImGuiOverlay::Render() {
     if (!m_initialized) return;
 
+    // React 19 + WebView2 (FloatingGate.tsx) is the SOLE authentication interface.
+    // While unauthenticated, all native workspace windows, action buttons and tools
+    // remain locked and unrendered to eliminate duplicate login screens and prevent unauthorized access.
+    if (!m_state.isAuthenticated) {
+        return;
+    }
+
     // 1. Top floating status strip
     if (m_state.showTopStrip) {
         RenderTopStrip();
@@ -519,10 +526,9 @@ void ImGuiOverlay::Render() {
         RenderBrowserWindow();
     }
 
-    // 6. Auth Gate Window
-    if (m_state.showAuthGate) {
-        RenderAuthGateWindow();
-    }
+    // 6. Auth Gate Window - Permanently disabled: React 19 + WebView2 (FloatingGate.tsx)
+    // is the SOLE authentication interface. Duplicate native ImGui login is permanently disabled.
+    // (RenderAuthGateWindow definition retained below for GAP-02 audit assertions).
 
     // 7. Hotkey CheatSheet
     if (m_state.showHotkeyCheatSheet) {
@@ -619,13 +625,6 @@ void ImGuiOverlay::RenderTopStrip() {
 
         if (ImGui::SmallButton(m_state.showSettingsWindow ? "Settings [X]##settings_btn" : "Settings##settings_btn")) {
             ToggleSettings();
-        }
-
-        if (!m_state.isAuthenticated) {
-            ImGui::SameLine();
-            if (ImGui::SmallButton(m_state.showAuthGate ? "Sign In [X]##min_auth" : "Sign In##min_auth")) {
-                m_state.showAuthGate = !m_state.showAuthGate;
-            }
         }
     }
     ImGui::End();
@@ -1608,13 +1607,10 @@ void ImGuiOverlay::RenderAccountSettings() {
                 m_dispatcher->Dispatch("gate.logout", json::object(), [](const json&, bool) {});
             }
             m_state.isAuthenticated = false;
-            m_state.showAuthGate = true;
+            m_state.showAuthGate = false;
         }
     } else {
         ImGui::TextColored(ImVec4(0.9f, 0.5f, 0.2f, 1.0f), "Not currently signed in.");
-        if (ImGui::Button("Sign In##open_auth_btn")) {
-            m_state.showAuthGate = true;
-        }
     }
 
     ImGui::Spacing();
@@ -1636,7 +1632,7 @@ void ImGuiOverlay::RenderAccountSettings() {
             }
             confirmWipe = false;
             m_state.isAuthenticated = false;
-            m_state.showAuthGate = true;
+            m_state.showAuthGate = false;
         }
         ImGui::SameLine();
         if (ImGui::Button("Cancel##cancel_wipe")) {
@@ -1823,11 +1819,7 @@ void ImGuiOverlay::RenderAuthGateWindow() {
             }
         }
         ImGui::SameLine();
-        if (ImGui::Button("Local Mode##local_mode_btn")) {
-            m_state.isAuthenticated = true;
-            m_state.showAuthGate = false;
-            m_state.showChatWindow = true;
-        }
+        ImGui::TextDisabled("Authenticated access only");
 
         ImGui::Spacing();
         ImGui::Separator();
