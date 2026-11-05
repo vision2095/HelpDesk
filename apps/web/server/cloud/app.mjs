@@ -804,15 +804,19 @@ export function createCloudServer({
     process.env.DOWNLOAD_DIRECTORY,
     path.resolve(fileURLToPath(new URL("../../release", import.meta.url))),
     path.resolve(fileURLToPath(new URL("../../../release", import.meta.url))),
+    path.resolve(fileURLToPath(new URL("../../../../release", import.meta.url))),
     path.resolve("release"),
+    path.resolve("../release"),
+    path.resolve("../../release"),
     path.resolve("apps/web/release"),
   ].filter(Boolean);
   const resolvedReleaseDir =
+    releaseDirectoryCandidates.find((d) => fs.existsSync(d) && (fs.existsSync(path.join(d, "checksums.json")) || (fs.existsSync(d) && fs.readdirSync(d).length > 0))) ||
     releaseDirectoryCandidates.find((d) => fs.existsSync(d)) ||
     path.resolve(process.env.DOWNLOAD_DIRECTORY || "release");
 
   let appVersion = "2.0.0";
-  for (const rel of ["../../package.json", "../../../package.json", "./package.json"]) {
+  for (const rel of ["../../package.json", "../../../package.json", "../../../../package.json", "./package.json"]) {
     try {
       const p = fileURLToPath(new URL(rel, import.meta.url));
       if (fs.existsSync(p)) {
@@ -827,9 +831,15 @@ export function createCloudServer({
     origin,
   );
   let publicPrice = { value: null, until: 0 };
-  const staticRoot = path.resolve(
-    fileURLToPath(new URL("../../dist/", import.meta.url)),
-  );
+  const staticRootCandidates = [
+    path.resolve(fileURLToPath(new URL("../../dist/", import.meta.url))),
+    path.resolve(fileURLToPath(new URL("../../../../dist/", import.meta.url))),
+    path.resolve("dist"),
+    path.resolve("../../dist"),
+  ];
+  const staticRoot =
+    staticRootCandidates.find((d) => fs.existsSync(path.join(d, "index.html"))) ||
+    staticRootCandidates[0];
   const metrics = { requests: 0, errors: 0, active: 0, totalDurationMs: 0 };
   const server = http.createServer(async (req, res) => {
     const started = performance.now(),
@@ -941,7 +951,10 @@ export function createCloudServer({
           path.resolve(resolvedReleaseDir, "checksums.json"),
           path.resolve(fileURLToPath(new URL("../../release/checksums.json", import.meta.url))),
           path.resolve(fileURLToPath(new URL("../../../release/checksums.json", import.meta.url))),
+          path.resolve(fileURLToPath(new URL("../../../../release/checksums.json", import.meta.url))),
           path.resolve("release/checksums.json"),
+          path.resolve("../release/checksums.json"),
+          path.resolve("../../release/checksums.json"),
           path.resolve("apps/web/release/checksums.json"),
         ];
         const checksumFile = checksumFileCandidates.find((f) => fs.existsSync(f));
