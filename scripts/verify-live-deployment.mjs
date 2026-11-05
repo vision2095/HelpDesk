@@ -82,7 +82,7 @@ console.log("   Headers:", {
 const setupBuf = Buffer.from(await setupRes.arrayBuffer());
 const setupSha = createHash("sha256").update(setupBuf).digest("hex");
 console.log(`   ✓ Setup downloaded: ${setupBuf.length} bytes, SHA-256: ${setupSha}`);
-assert.equal(setupSha, "26360217bb9bf39bfc2a6aac71c0cdf8ccc9fb308b79e11b10fad876bfefecc3", "Setup SHA-256 mismatch!");
+assert.equal(setupSha, "c5281e762ddad7528cd8c4b08b463630b3fa3fd1ea442abe98796c4b17f68ef5", "Setup SHA-256 mismatch!");
 
 console.log(`[6/6] Downloading and verifying Windows Portable ZIP (.zip)...`);
 const zipRes = await fetch(`${ORIGIN}/downloads/windows-zip?token=${token}`);
@@ -95,7 +95,7 @@ console.log("   Headers:", {
 const zipBuf = Buffer.from(await zipRes.arrayBuffer());
 const zipSha = createHash("sha256").update(zipBuf).digest("hex");
 console.log(`   ✓ Portable ZIP downloaded: ${zipBuf.length} bytes, SHA-256: ${zipSha}`);
-assert.equal(zipSha, "06dddb0bbed91e7f38e496f0eb325df7fcfd92d18f2e8541ba149a53cbcd75e8", "ZIP SHA-256 mismatch!");
+assert.equal(zipSha, "060e7bb71dd38216df1002cf151881ffaab1eb63b4c6318aae6b886697fd886f", "ZIP SHA-256 mismatch!");
 
 // Verify ZIP contents in temporary directory
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "lensdesk-verify-live-"));
