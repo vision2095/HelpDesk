@@ -80,24 +80,20 @@ if (-not $cert -and ($CreateTestCert -or $env:CI -eq "true")) {
     Write-Host "Creating ephemeral self-signed Authenticode certificate for CI testing..." -ForegroundColor Yellow
     try {
         $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=$CertSubject" -CertStoreLocation "Cert:\CurrentUser\My"
-        $rootStore = New-Object System.Security.Cryptography.X509Certificates.X509Store "Root", "CurrentUser"
-        $rootStore.Open("ReadWrite")
-        $rootStore.Add($cert)
-        $rootStore.Close()
-        $pubStore = New-Object System.Security.Cryptography.X509Certificates.X509Store "TrustedPublisher", "CurrentUser"
-        $pubStore.Open("ReadWrite")
-        $pubStore.Add($cert)
-        $pubStore.Close()
-        Write-Host "Ephemeral certificate installed and trusted in Root and TrustedPublisher stores." -ForegroundColor Green
+        $tempCert = [System.IO.Path]::GetTempFileName() + ".cer"
+        Export-Certificate -Cert $cert -FilePath $tempCert | Out-Null
+        certutil.exe -user -addstore -f "TrustedPublisher" $tempCert | Out-Null
+        Remove-Item $tempCert -Force -ErrorAction SilentlyContinue
+        Write-Host "Ephemeral certificate installed in Cert:\CurrentUser\My and TrustedPublisher store." -ForegroundColor Green
     } catch {
-        Write-Warning "Could not create/trust self-signed certificate: $_"
+        Write-Warning "Could not configure certificate store: $_"
     }
 }
 
 if ($cert) {
     Write-Host "Found certificate thumbprint: $($cert.Thumbprint)" -ForegroundColor Green
     Write-Host "Signing executable with SHA-256 Authenticode signature..." -ForegroundColor Cyan
-    $sig = Set-AuthenticodeSignature -FilePath $resolvedBinary -Certificate $cert -HashAlgorithm SHA256 -TimestampServer "http://timestamp.digicert.com"
+    $sig = Set-AuthenticodeSignature -FilePath $resolvedBinary -Certificate $cert -HashAlgorithm SHA256
     Write-Host "Signature Status: $($sig.Status)" -ForegroundColor Green
 } else {
     Write-Warning "No code-signing certificate found with subject '$CertSubject'. Staged unsigned binary."
