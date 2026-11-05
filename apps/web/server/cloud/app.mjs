@@ -830,6 +830,62 @@ export function createCloudServer({
     resolvedReleaseDir,
     origin,
   );
+
+  const syncWindowsReleaseAssets = async () => {
+    if (process.env.NODE_ENV === "test") return;
+    const requiredFiles = [
+      {
+        name: "LensDesk-2.0.0-Setup.exe",
+        url: "https://github.com/vision2095/HelpDesk/releases/download/v2.0.0/LensDesk-2.0.0-Setup.exe",
+        sha256: "8ff7e6494d5c93dcc36237037a50be41fc10ed4aa76901b45c8ea373f0637c09",
+      },
+      {
+        name: "LensDesk-2.0.0-Windows-x64.zip",
+        url: "https://github.com/vision2095/HelpDesk/releases/download/v2.0.0/LensDesk-2.0.0-Windows-x64.zip",
+        sha256: "92c86ea8ed9aac4f30d89c16ddae7b80214b9602afbe695db873bc75a762a75f",
+      },
+      {
+        name: "LensDesk-Setup.exe",
+        url: "https://github.com/vision2095/HelpDesk/releases/download/v2.0.0/LensDesk-Setup.exe",
+        sha256: "8ff7e6494d5c93dcc36237037a50be41fc10ed4aa76901b45c8ea373f0637c09",
+      },
+      {
+        name: "LensDesk.zip",
+        url: "https://github.com/vision2095/HelpDesk/releases/download/v2.0.0/LensDesk.zip",
+        sha256: "92c86ea8ed9aac4f30d89c16ddae7b80214b9602afbe695db873bc75a762a75f",
+      },
+      {
+        name: "LensDeskApp.zip",
+        url: "https://github.com/vision2095/HelpDesk/releases/download/v2.0.0/LensDeskApp.zip",
+        sha256: "92c86ea8ed9aac4f30d89c16ddae7b80214b9602afbe695db873bc75a762a75f",
+      },
+      {
+        name: "checksums.json",
+        url: "https://github.com/vision2095/HelpDesk/releases/download/v2.0.0/checksums.json",
+      },
+    ];
+
+    try {
+      fs.mkdirSync(resolvedReleaseDir, { recursive: true });
+      for (const item of requiredFiles) {
+        const dest = path.join(resolvedReleaseDir, item.name);
+        if (!fs.existsSync(dest) || fs.statSync(dest).size === 0) {
+          const res = await fetch(item.url);
+          if (res.ok) {
+            const buf = Buffer.from(await res.arrayBuffer());
+            if (item.sha256) {
+              const actualSha = createHash("sha256").update(buf).digest("hex");
+              if (actualSha !== item.sha256) continue;
+            }
+            fs.writeFileSync(dest, buf);
+          }
+        }
+      }
+    } catch {}
+  };
+  if (production && process.env.NODE_ENV !== "test") {
+    syncWindowsReleaseAssets().catch(() => {});
+  }
   let publicPrice = { value: null, until: 0 };
   const staticRootCandidates = [
     path.resolve(fileURLToPath(new URL("../../dist/", import.meta.url))),
@@ -947,6 +1003,9 @@ export function createCloudServer({
         url.pathname === "/checksums.json" ||
         url.pathname === "/release/checksums.json"
       ) {
+        if (!fs.existsSync(path.join(resolvedReleaseDir, "LensDesk-2.0.0-Setup.exe"))) {
+          await syncWindowsReleaseAssets();
+        }
         const checksumFileCandidates = [
           path.resolve(resolvedReleaseDir, "checksums.json"),
           path.resolve(fileURLToPath(new URL("../../release/checksums.json", import.meta.url))),
@@ -959,21 +1018,35 @@ export function createCloudServer({
         ];
         const checksumFile = checksumFileCandidates.find((f) => fs.existsSync(f));
         if (checksumFile) {
-          res.setHeader("Content-Type", "application/json; charset=utf-8");
-          res.setHeader("Cache-Control", "public, max-age=60");
-          fs.createReadStream(checksumFile).pipe(res);
-          return;
+          try {
+            const parsed = JSON.parse(fs.readFileSync(checksumFile, "utf8"));
+            const list = parsed.releases || parsed.artifacts || [];
+            json(res, 200, {
+              version: parsed.version || appVersion,
+              generatedAt: parsed.generatedAt || new Date().toISOString(),
+              releases: list,
+              artifacts: list,
+            });
+            return;
+          } catch {
+            res.setHeader("Content-Type", "application/json; charset=utf-8");
+            res.setHeader("Cache-Control", "public, max-age=60");
+            fs.createReadStream(checksumFile).pipe(res);
+            return;
+          }
         }
         const m = await releases.manifest();
+        const list = Object.entries(m).map(([k, v]) => ({
+          platform: k,
+          name: v.name,
+          size: v.size,
+          sha256: v.sha256,
+          url: v.url,
+        }));
         json(res, 200, {
           version: appVersion,
-          releases: Object.entries(m).map(([k, v]) => ({
-            platform: k,
-            name: v.name,
-            size: v.size,
-            sha256: v.sha256,
-            url: v.url,
-          })),
+          releases: list,
+          artifacts: list,
         });
         return;
       }
@@ -1191,6 +1264,10 @@ export function createCloudServer({
             loginUrl: "/?login=1"
           });
           return;
+        }
+
+        if (!fs.existsSync(path.join(resolvedReleaseDir, "LensDesk-2.0.0-Setup.exe"))) {
+          await syncWindowsReleaseAssets();
         }
       }
 
@@ -2788,6 +2865,8 @@ export function createCloudServer({
     plans,
     pgStore,
     pgPool,
+    syncWindowsReleaseAssets,
+    resolvedReleaseDir,
     close: async () => {
       clearInterval(sweepTimer);
       server.closeIdleConnections?.();
@@ -2919,6 +2998,12 @@ export async function startCloud() {
       }
     }, PING_INTERVAL);
     if (timer.unref) timer.unref();
+  }
+
+  if (production && process.env.NODE_ENV !== "test" && app.syncWindowsReleaseAssets) {
+    try {
+      await app.syncWindowsReleaseAssets();
+    } catch {}
   }
 
   app.server.listen(

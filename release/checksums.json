@@ -22,16 +22,16 @@
       "platform": "windows",
       "label": "Windows (x64 Setup Installer)",
       "name": "LensDesk-2.0.0-Setup.exe",
-      "size": 1720267,
-      "sha256": "8ff7e6494d5c93dcc36237037a50be41fc10ed4aa76901b45c8ea373f0637c09",
+      "size": 2737720,
+      "sha256": "12899028e47b0aeed64678e4665cf41f03da9e7e118368a83d3c8edc064abf0f",
       "url": "/downloads/windows"
     },
     {
       "platform": "windows-zip",
       "label": "Windows (x64 Portable ZIP)",
       "name": "LensDesk-2.0.0-Windows-x64.zip",
-      "size": 1704363,
-      "sha256": "92c86ea8ed9aac4f30d89c16ddae7b80214b9602afbe695db873bc75a762a75f",
+      "size": 1704743,
+      "sha256": "c5806be0c58565df6256a41098603cf65bba47a9d40fd2bdc8c5a9adab842458",
       "url": "/downloads/windows-zip"
     }
   ]
