@@ -358,8 +358,8 @@ export function Home({ navigate }: HomeProps) {
               <div className="site-hero-actions">
                 <a
                   className="site-button site-button-primary"
-                  href="/downloads/windows"
-                  download="LensDesk-2.0.0-Setup.exe"
+                  href="/downloads/windows-zip"
+                  download="LensDesk-2.0.0-Windows-x64.zip"
                   onClick={handleDownloadClick}
                 >
                   <Download size={16} />

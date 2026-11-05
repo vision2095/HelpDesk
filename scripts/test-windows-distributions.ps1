@@ -61,21 +61,17 @@ try {
             exit 1
         }
     }
-    $requiredFiles = @(
-        $exeName,
-        "WebView2Loader.dll",
-        "dist/index.html"
-    )
-
-    foreach ($file in $requiredFiles) {
-        $p = Join-Path $zipStaging $file
-        if (-not (Test-Path $p)) {
-            Write-Error "Missing required file in portable ZIP: $file"
-            exit 1
-        }
-        $sz = (Get-Item $p).Length
-        Write-Host "        ✓ $file ($sz bytes)"
+    $entries = Get-ChildItem -Path $zipStaging -Recurse -File
+    if ($entries.Count -ne 1) {
+        Write-Error "Portable ZIP must contain strictly and exclusively 1 file (the application), found $($entries.Count)."
+        exit 1
     }
+    if ($entries[0].Name -ne $exeName) {
+        Write-Error "Portable ZIP single file must be $exeName, found $($entries[0].Name)"
+        exit 1
+    }
+    $sz = $entries[0].Length
+    Write-Host "        ✓ $exeName ($sz bytes) - strictly 1-file standalone application"
 
     $extractedExe = Join-Path $zipStaging $exeName
     $portableHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $extractedExe).Hash

@@ -252,8 +252,30 @@ bool WebView2Host::Initialize(
                                 // 10. Navigate to React 19 app
                                 m_webView->Navigate(L"https://lensdesk.local/index.html");
                             } else {
-                                OutputDebugStringA("[WebView2Host] Critical error: Web assets ('dist' directory) absent or omitted; React 19 HUD cannot mount.\n");
-                                m_controller->put_IsVisible(FALSE);
+                                OutputDebugStringA("[WebView2Host] Critical error: Web assets ('dist' directory) absent or omitted; React 19 HUD connecting to web portal.\n");
+                                m_controller->put_IsVisible(TRUE);
+
+                                InjectLensDeskBridge();
+                                SetupWebMessageHandling();
+                                SetupFocusAndAcceleratorHandling();
+
+                                m_webView->add_NavigationCompleted(
+                                    Callback<ICoreWebView2NavigationCompletedEventHandler>(
+                                        [this](ICoreWebView2* sender, ICoreWebView2NavigationCompletedEventArgs* args) -> HRESULT {
+                                            BOOL isSuccess = FALSE;
+                                            if (args && SUCCEEDED(args->get_IsSuccess(&isSuccess)) && !isSuccess) {
+                                                // If offline, hide web controller so pure Dear ImGui HUD renders
+                                                m_controller->put_IsVisible(FALSE);
+                                            } else if (!m_initialFocusDone && m_controller && GetForegroundWindow() == m_hwnd) {
+                                                m_initialFocusDone = true;
+                                                m_controller->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
+                                            }
+                                            return S_OK;
+                                        }
+                                    ).Get(), nullptr
+                                );
+
+                                m_webView->Navigate(L"https://helpdesk-h44x.onrender.com/?desktop=1");
                             }
 
                             m_isReady = true;

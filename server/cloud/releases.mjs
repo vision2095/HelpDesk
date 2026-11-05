@@ -643,10 +643,10 @@ export function createReleases(
       }
 
       if (isGeneralDownload) {
-        const queryPlatform = (url.searchParams?.get("platform") || "windows").toLowerCase();
+        const queryPlatform = (url.searchParams?.get("platform") || "windows-zip").toLowerCase();
         const queryFormat = (url.searchParams?.get("format") || "").toLowerCase();
-        if (queryFormat === "zip" || queryPlatform === "windows-zip") {
-          const artifact = artifacts["windows-zip"] || artifacts.windows;
+        if (queryFormat === "installer" || queryFormat === "exe" || queryPlatform === "windows-setup" || queryPlatform === "windows-installer") {
+          const artifact = artifacts.windows || artifacts["windows-zip"];
           if (!artifact) {
             res.writeHead(404);
             res.end("Windows download not available.");
@@ -654,8 +654,8 @@ export function createReleases(
           }
           return serveFile(req, res, artifact, artifact.name, false, url);
         }
-        if (["windows", "win", "win32"].includes(queryPlatform)) {
-          const artifact = artifacts.windows;
+        if (queryFormat === "zip" || queryPlatform === "windows-zip" || ["windows", "win", "win32"].includes(queryPlatform)) {
+          const artifact = artifacts["windows-zip"] || artifacts.windows;
           if (!artifact) {
             res.writeHead(404);
             res.end("Windows download not available.");
