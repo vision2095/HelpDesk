@@ -837,27 +837,27 @@ export function createCloudServer({
       {
         name: "LensDesk-2.0.0-Setup.exe",
         url: "https://github.com/vision2095/HelpDesk/releases/download/v2.0.0/LensDesk-2.0.0-Setup.exe",
-        sha256: "12899028e47b0aeed64678e4665cf41f03da9e7e118368a83d3c8edc064abf0f",
+        sha256: "26360217bb9bf39bfc2a6aac71c0cdf8ccc9fb308b79e11b10fad876bfefecc3",
       },
       {
         name: "LensDesk-2.0.0-Windows-x64.zip",
         url: "https://github.com/vision2095/HelpDesk/releases/download/v2.0.0/LensDesk-2.0.0-Windows-x64.zip",
-        sha256: "c5806be0c58565df6256a41098603cf65bba47a9d40fd2bdc8c5a9adab842458",
+        sha256: "d4160f587cd68f8da4471a8d555d449e7541c40c6ab6d910a59be223b9f5b7ac",
       },
       {
         name: "LensDesk-Setup.exe",
         url: "https://github.com/vision2095/HelpDesk/releases/download/v2.0.0/LensDesk-Setup.exe",
-        sha256: "12899028e47b0aeed64678e4665cf41f03da9e7e118368a83d3c8edc064abf0f",
+        sha256: "26360217bb9bf39bfc2a6aac71c0cdf8ccc9fb308b79e11b10fad876bfefecc3",
       },
       {
         name: "LensDesk.zip",
         url: "https://github.com/vision2095/HelpDesk/releases/download/v2.0.0/LensDesk.zip",
-        sha256: "c5806be0c58565df6256a41098603cf65bba47a9d40fd2bdc8c5a9adab842458",
+        sha256: "d4160f587cd68f8da4471a8d555d449e7541c40c6ab6d910a59be223b9f5b7ac",
       },
       {
         name: "LensDeskApp.zip",
         url: "https://github.com/vision2095/HelpDesk/releases/download/v2.0.0/LensDeskApp.zip",
-        sha256: "c5806be0c58565df6256a41098603cf65bba47a9d40fd2bdc8c5a9adab842458",
+        sha256: "d4160f587cd68f8da4471a8d555d449e7541c40c6ab6d910a59be223b9f5b7ac",
       },
       {
         name: "checksums.json",
