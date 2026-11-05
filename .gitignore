@@ -3,12 +3,7 @@ build-native/
 node_modules/
 dist/
 release/*
-!release/checksums.json
-!release/LensDesk-2.0.0-Setup.exe
-!release/LensDesk-2.0.0-Windows-x64.zip
-!release/LensDesk-Setup.exe
-!release/LensDesk.zip
-!release/LensDeskApp.zip
+apps/web/release/*
 .data/
 *.tsbuildinfo
 test-results/

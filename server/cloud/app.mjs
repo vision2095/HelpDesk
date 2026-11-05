@@ -800,8 +800,30 @@ export function createCloudServer({
     await billing.processEvent(event);
     json(res, 200, { ok: true });
   }
+  const releaseDirectoryCandidates = [
+    process.env.DOWNLOAD_DIRECTORY,
+    path.resolve(fileURLToPath(new URL("../../release", import.meta.url))),
+    path.resolve(fileURLToPath(new URL("../../../release", import.meta.url))),
+    path.resolve("release"),
+    path.resolve("apps/web/release"),
+  ].filter(Boolean);
+  const resolvedReleaseDir =
+    releaseDirectoryCandidates.find((d) => fs.existsSync(d)) ||
+    path.resolve(process.env.DOWNLOAD_DIRECTORY || "release");
+
+  let appVersion = "2.0.0";
+  for (const rel of ["../../package.json", "../../../package.json", "./package.json"]) {
+    try {
+      const p = fileURLToPath(new URL(rel, import.meta.url));
+      if (fs.existsSync(p)) {
+        appVersion = JSON.parse(fs.readFileSync(p, "utf8")).version || appVersion;
+        break;
+      }
+    } catch {}
+  }
+
   const releases = createReleases(
-    path.resolve(process.env.DOWNLOAD_DIRECTORY || "release"),
+    resolvedReleaseDir,
     origin,
   );
   let publicPrice = { value: null, until: 0 };
@@ -915,11 +937,15 @@ export function createCloudServer({
         url.pathname === "/checksums.json" ||
         url.pathname === "/release/checksums.json"
       ) {
-        const checksumFile = path.resolve(
-          process.env.DOWNLOAD_DIRECTORY || "release",
-          "checksums.json",
-        );
-        if (fs.existsSync(checksumFile)) {
+        const checksumFileCandidates = [
+          path.resolve(resolvedReleaseDir, "checksums.json"),
+          path.resolve(fileURLToPath(new URL("../../release/checksums.json", import.meta.url))),
+          path.resolve(fileURLToPath(new URL("../../../release/checksums.json", import.meta.url))),
+          path.resolve("release/checksums.json"),
+          path.resolve("apps/web/release/checksums.json"),
+        ];
+        const checksumFile = checksumFileCandidates.find((f) => fs.existsSync(f));
+        if (checksumFile) {
           res.setHeader("Content-Type", "application/json; charset=utf-8");
           res.setHeader("Cache-Control", "public, max-age=60");
           fs.createReadStream(checksumFile).pipe(res);
@@ -927,7 +953,7 @@ export function createCloudServer({
         }
         const m = await releases.manifest();
         json(res, 200, {
-          version,
+          version: appVersion,
           releases: Object.entries(m).map(([k, v]) => ({
             platform: k,
             name: v.name,
