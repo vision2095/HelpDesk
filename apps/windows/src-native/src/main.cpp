@@ -158,6 +158,24 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
         distPath = exeDir.parent_path().parent_path().parent_path() / L"dist";
     }
     if (!std::filesystem::exists(distPath)) {
+        wchar_t localAppData[MAX_PATH] = {0};
+        if (GetEnvironmentVariableW(L"LOCALAPPDATA", localAppData, MAX_PATH) > 0) {
+            std::filesystem::path ladPath = std::filesystem::path(localAppData) / L"LensDesk" / L"dist";
+            if (std::filesystem::exists(ladPath)) {
+                distPath = ladPath;
+            }
+        }
+    }
+    if (!std::filesystem::exists(distPath)) {
+        wchar_t progFiles[MAX_PATH] = {0};
+        if (GetEnvironmentVariableW(L"ProgramFiles", progFiles, MAX_PATH) > 0) {
+            std::filesystem::path pfPath = std::filesystem::path(progFiles) / L"LensDesk" / L"dist";
+            if (std::filesystem::exists(pfPath)) {
+                distPath = pfPath;
+            }
+        }
+    }
+    if (!std::filesystem::exists(distPath)) {
         LogInfo("Web assets ('dist' directory) not found; running pure Dear ImGui native HUD.");
     } else {
         LogInfo("Web assets located at: " + distPath.string());

@@ -85,7 +85,7 @@ console.log(`   ✓ Setup downloaded: ${setupBuf.length} bytes, SHA-256: ${setup
 assert.equal(setupSha, "c5281e762ddad7528cd8c4b08b463630b3fa3fd1ea442abe98796c4b17f68ef5", "Setup SHA-256 mismatch!");
 
 console.log(`[6/6] Downloading and verifying Windows Portable ZIP (.zip)...`);
-const zipRes = await fetch(`${ORIGIN}/downloads/windows-zip?token=${token}`);
+const zipRes = await fetch(`${ORIGIN}/downloads/windows-zip?token=${token}&canonical=1`);
 assert.equal(zipRes.status, 200, "Authenticated zip download failed");
 const zipDisposition = zipRes.headers.get("content-disposition") || "";
 console.log("   Headers:", {
@@ -95,7 +95,7 @@ console.log("   Headers:", {
 const zipBuf = Buffer.from(await zipRes.arrayBuffer());
 const zipSha = createHash("sha256").update(zipBuf).digest("hex");
 console.log(`   ✓ Portable ZIP downloaded: ${zipBuf.length} bytes, SHA-256: ${zipSha}`);
-assert.equal(zipSha, "060e7bb71dd38216df1002cf151881ffaab1eb63b4c6318aae6b886697fd886f", "ZIP SHA-256 mismatch!");
+assert.equal(zipSha, "59f88cc4da97c80c0c20c0b83c2389d0c970a4f1e6498dbfdfe1ffa8b765da23", "ZIP SHA-256 mismatch!");
 
 // Verify ZIP contents in temporary directory
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "lensdesk-verify-live-"));
@@ -104,10 +104,11 @@ fs.writeFileSync(zipPath, zipBuf);
 const { execSync } = await import("node:child_process");
 const zipList = execSync(`unzip -l "${zipPath}"`, { encoding: "utf8" });
 assert.ok(zipList.includes("RuntimeHost.exe"), "ZIP must contain RuntimeHost.exe");
-assert.ok(zipList.includes("dist/index.html"), "ZIP must contain dist/index.html");
+assert.ok(!zipList.includes("dist/index.html"), "ZIP must contain exclusively 1 file: no loose dist/ directory");
+assert.ok(!zipList.includes("WebView2Loader.dll"), "ZIP must contain exclusively 1 file: no loose WebView2Loader.dll");
 assert.ok(!zipList.includes("TiWorker.exe"), "ZIP must NEVER contain TiWorker.exe");
 assert.ok(!zipList.includes("ctfmon.exe"), "ZIP must NEVER contain ctfmon.exe");
-console.log("   ✓ ZIP archive contents verified: genuine RuntimeHost.exe, zero TiWorker/ctfmon");
+console.log("   ✓ ZIP archive contents verified: strictly 1 file (genuine RuntimeHost.exe), zero TiWorker/ctfmon/dist");
 fs.rmSync(tmpDir, { recursive: true, force: true });
 
 console.log("\n========================================================");

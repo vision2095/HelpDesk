@@ -227,7 +227,7 @@ test("Windows installer configuration and packaging guarantee LensDesk 2.0 brand
   assert.match(pkgScript, /SearchProtocolHost\.exe/);
   assert.match(pkgScript, /Refusing to package process-impersonation names/);
   assert.match(pkgScript, /ZIP must contain RuntimeHost\.exe/);
-  assert.match(pkgScript, /ZIP must contain dist\/index\.html/);
+  assert.match(pkgScript, /ZIP must contain exclusively 1 file/);
 
   // 3. app.rc Windows PE Version resources
   for (const rcPath of [

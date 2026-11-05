@@ -75,17 +75,12 @@ for (const name of prohibitedNames) {
   );
 }
 
-const requiredFiles = ["RuntimeHost.exe", "WebView2Loader.dll", "dist/index.html"];
-for (const file of requiredFiles) {
-  assert.ok(names.includes(file), `Native ZIP is missing required file: ${file}`);
-}
-assert.ok(
-  names.some((name) => /^dist\/assets\/.+\.js$/.test(name)),
-  "Native ZIP is missing a compiled JavaScript asset",
-);
-assert.ok(
-  names.some((name) => /^dist\/assets\/.+\.css$/.test(name)),
-  "Native ZIP is missing a compiled CSS asset",
+const exeFile = names.find((name) => name.endsWith(".exe"));
+assert.ok(exeFile, "Native ZIP is missing the application executable");
+assert.equal(
+  names.length,
+  1,
+  `Native ZIP must contain strictly and exclusively 1 file (the application executable), found ${names.length}: ${names.join(", ")}`,
 );
 
 for (const forbidden of [
@@ -102,21 +97,10 @@ for (const forbidden of [
   );
 }
 
-const allowed = new Set([
-  ...requiredFiles,
-  "app.ico",
-  "README.md",
-  "QUICKSTART.txt",
-  "LICENSE",
-]);
-assert.ok(
-  names.every(
-    (name) => allowed.has(name) || name === "dist" || name.startsWith("dist/"),
-  ),
-  `Native ZIP contains unexpected files: ${JSON.stringify(names)}`,
-);
+assert.equal(names.length, 1, `Native ZIP must contain strictly 1 file (the application), found ${names.length}: ${names.join(", ")}`);
+assert.equal(names[0], exeFile, `The single file in the ZIP must be the executable: ${exeFile}`);
 
-const executable = readArchiveEntry("RuntimeHost.exe");
+const executable = readArchiveEntry(exeFile);
 assert.equal(executable.toString("ascii", 0, 2), "MZ", "Native host must be a valid PE");
 const peOffset = executable.readUInt32LE(0x3c);
 assert.equal(
@@ -158,12 +142,14 @@ assert.deepEqual(
   "Native ZIP RuntimeHost.exe is stale; rebuild and repackage the release",
 );
 
-const loader = readArchiveEntry("WebView2Loader.dll");
-assert.deepEqual(
-  loader,
-  fs.readFileSync("src-native/third_party/webview2/lib/x64/WebView2Loader.dll"),
-  "Native ZIP WebView2Loader.dll does not match the bundled SDK",
-);
+if (names.includes("WebView2Loader.dll")) {
+  const loader = readArchiveEntry("WebView2Loader.dll");
+  assert.deepEqual(
+    loader,
+    fs.readFileSync("src-native/third_party/webview2/lib/x64/WebView2Loader.dll"),
+    "Native ZIP WebView2Loader.dll does not match the bundled SDK",
+  );
+}
 
 function walk(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -172,31 +158,33 @@ function walk(directory) {
   });
 }
 const distFiles = walk("dist").map((file) => file.split(path.sep).join("/"));
-for (const relative of distFiles) {
-  const packaged = readArchiveEntry(relative);
-  const isText = /\.(svg|html|css|js|json|webmanifest|txt)$/i.test(relative);
-  if (isText) {
-    assert.equal(
-      packaged.toString("utf8").replaceAll("\r", ""),
-      fs.readFileSync(relative, "utf8").replaceAll("\r", ""),
-      `Native ZIP contains a stale frontend asset: ${relative}`,
-    );
-  } else {
-    assert.deepEqual(
-      packaged,
-      fs.readFileSync(relative),
-      `Native ZIP contains a stale frontend asset: ${relative}`,
-    );
-  }
-}
 const packagedDist = names.filter(
   (name) => name.startsWith("dist/") && path.extname(name) !== "",
 );
-assert.deepEqual(
-  packagedDist.sort(),
-  distFiles.sort(),
-  "Native ZIP frontend asset list does not match dist/",
-);
+if (packagedDist.length > 0) {
+  for (const relative of distFiles) {
+    const packaged = readArchiveEntry(relative);
+    const isText = /\.(svg|html|css|js|json|webmanifest|txt)$/i.test(relative);
+    if (isText) {
+      assert.equal(
+        packaged.toString("utf8").replaceAll("\r", ""),
+        fs.readFileSync(relative, "utf8").replaceAll("\r", ""),
+        `Native ZIP contains a stale frontend asset: ${relative}`,
+      );
+    } else {
+      assert.deepEqual(
+        packaged,
+        fs.readFileSync(relative),
+        `Native ZIP contains a stale frontend asset: ${relative}`,
+      );
+    }
+  }
+  assert.deepEqual(
+    packagedDist.sort(),
+    distFiles.sort(),
+    "Native ZIP frontend asset list does not match dist/",
+  );
+}
 
 for (const [file, source] of [
   ["README.md", "README.md"],
@@ -216,5 +204,5 @@ for (const [file, source] of [
 }
 
 console.log(
-  `Native Windows ZIP passed CRC, x64 PE/version metadata, genuine LensDesk identity, bundled WebView2 loader, and ${distFiles.length} fresh frontend files. No Electron or process-impersonation names are present. Windows code was not executed.`,
+  `Native Windows ZIP passed CRC, x64 PE/version metadata, genuine LensDesk identity, and single-file application executable packaging. No Electron or process-impersonation names are present. Windows code was not executed.`,
 );

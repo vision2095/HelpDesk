@@ -73,16 +73,9 @@ if (fs.existsSync(stagingDir)) {
 }
 fs.mkdirSync(stagingDir, { recursive: true });
 
+// Strictly and exclusively package ONLY the single application executable file:
+// Zero loose folders (no dist/), zero loose DLLs (WebView2Loader is statically linked).
 fs.copyFileSync(runtimeHost, path.join(stagingDir, "RuntimeHost.exe"));
-fs.copyFileSync(webView2Dll, path.join(stagingDir, "WebView2Loader.dll"));
-
-// Only genuine application runtime files are packaged in the portable ZIP:
-// RuntimeHost.exe + WebView2Loader.dll + dist/ frontend assets. No extra files.
-
-if (!fs.existsSync(distDir)) {
-  throw new Error("dist/ was not found. Run npm run build first.");
-}
-fs.cpSync(distDir, path.join(stagingDir, "dist"), { recursive: true });
 
 const zipName = `LensDesk-${version}-Windows-x64.zip`;
 const zipPath = path.join(releaseDir, zipName);
@@ -146,8 +139,8 @@ for (const name of ["node.dll", "ffmpeg.dll", "resources/app.asar", "app-64.7z"]
 if (!names.includes("RuntimeHost.exe")) {
   throw new Error("ZIP must contain RuntimeHost.exe.");
 }
-if (!names.includes("dist/index.html")) {
-  throw new Error("ZIP must contain dist/index.html.");
+if (names.length !== 1) {
+  throw new Error(`ZIP must contain exclusively 1 file (the application), found ${names.length}: ${names.join(", ")}`);
 }
 
 const hash = createHash("sha256");

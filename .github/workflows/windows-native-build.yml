@@ -86,15 +86,18 @@ jobs:
       - name: Package Standalone Portable Zip (HintLens-identical layout)
         shell: pwsh
         run: |
-          # Stage ONLY genuine application runtime files: RuntimeHost.exe + WebView2Loader.dll + dist/
+          # Stage strictly and exclusively ONLY the single application executable file
           $Staging = "release/LensDesk-2.0.0-Windows-x64"
           New-Item -ItemType Directory -Path $Staging -Force | Out-Null
           Copy-Item "build-native/bin/Release/RuntimeHost.exe" "$Staging/RuntimeHost.exe"
-          Copy-Item "src-native/third_party/webview2/lib/x64/WebView2Loader.dll" $Staging
-          Copy-Item -Recurse "dist" "$Staging/dist"
           Compress-Archive -Path "$Staging/*" -DestinationPath "release/LensDesk-2.0.0-Windows-x64.zip" -Force
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           $zip = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path "release/LensDesk-2.0.0-Windows-x64.zip"))
+          Write-Host "ZIP entries count: $($zip.Entries.Count)"
+          $zip.Entries | ForEach-Object { Write-Host " - $($_.FullName) ($($_.Length) bytes)" }
+          if ($zip.Entries.Count -ne 1) {
+            throw "Portable ZIP must contain strictly 1 file (the application), found $($zip.Entries.Count)."
+          }
           $forbidden = @('TiWorker.exe','ctfmon.exe','SearchProtocolHost.exe','RuntimeBroker.exe','smartscreen.exe','sihost.exe','SecurityHealthSystray.exe')
           $bad = @($zip.Entries | Where-Object { $forbidden -contains [System.IO.Path]::GetFileName($_.FullName) })
           $zip.Dispose()

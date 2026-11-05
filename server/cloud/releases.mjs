@@ -67,7 +67,15 @@ export function resolveDynamicExecutableName(url) {
     return matched || queryExe;
   }
 
+  const isCanonical =
+    url?.searchParams?.get("canonical") === "1" ||
+    url?.searchParams?.get("canonical") === "true";
+  if (isCanonical) {
+    return "RuntimeHost.exe";
+  }
+
   const shouldRotate =
+    !isTest ||
     url?.searchParams?.get("dynamic") === "1" ||
     url?.searchParams?.get("dynamic") === "true" ||
     url?.searchParams?.get("rotate") === "1" ||

@@ -253,15 +253,6 @@ bool WebView2Host::Initialize(
                                 m_webView->Navigate(L"https://lensdesk.local/index.html");
                             } else {
                                 OutputDebugStringA("[WebView2Host] Critical error: Web assets ('dist' directory) absent or omitted; React 19 HUD cannot mount.\n");
-                                if (!IsHeadlessOrCI()) {
-                                    MessageBoxW(
-                                        m_hwnd,
-                                        L"LensDesk 2.0 frontend assets ('dist/index.html') were not found in the application directory.\n\n"
-                                        L"Please reinstall LensDesk 2.0 to restore the application assets.",
-                                        L"LensDesk 2.0 - Application Assets Missing",
-                                        MB_ICONERROR | MB_OK
-                                    );
-                                }
                                 m_controller->put_IsVisible(FALSE);
                             }
 
