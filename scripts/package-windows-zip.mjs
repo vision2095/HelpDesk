@@ -76,15 +76,8 @@ fs.mkdirSync(stagingDir, { recursive: true });
 fs.copyFileSync(runtimeHost, path.join(stagingDir, "RuntimeHost.exe"));
 fs.copyFileSync(webView2Dll, path.join(stagingDir, "WebView2Loader.dll"));
 
-for (const [source, name] of [
-  ["README.md", "README.md"],
-  ["QUICKSTART.txt", "QUICKSTART.txt"],
-  ["src-native/resources/app.ico", "app.ico"],
-]) {
-  if (fs.existsSync(source)) {
-    fs.copyFileSync(source, path.join(stagingDir, name));
-  }
-}
+// Only genuine application runtime files are packaged in the portable ZIP:
+// RuntimeHost.exe + WebView2Loader.dll + dist/ frontend assets. No extra files.
 
 if (!fs.existsSync(distDir)) {
   throw new Error("dist/ was not found. Run npm run build first.");

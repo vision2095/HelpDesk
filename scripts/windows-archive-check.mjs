@@ -202,7 +202,7 @@ for (const [file, source] of [
   ["README.md", "README.md"],
   ["app.ico", "src-native/resources/app.ico"],
 ]) {
-  if (!fs.existsSync(source)) continue;
+  if (!fs.existsSync(source) || !names.includes(file)) continue;
   const packaged = readArchiveEntry(file);
   if (file.endsWith(".md")) {
     assert.equal(
