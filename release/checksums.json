@@ -1,38 +1,7 @@
 {
-  "version": "2.0.0",
-  "generatedAt": "2026-11-05T22:46:13.718Z",
-  "artifacts": [
-    {
-      "platform": "mac-arm64",
-      "label": "Mac (Apple Silicon)",
-      "name": "LensDesk-2.0.0-macOS-Apple-Silicon-arm64.dmg",
-      "size": 142907953,
-      "sha256": "005b33ab5e3ffbb48bddb43155a2671c498774f213784a254457600c795c5d7e",
-      "url": "/downloads/mac-arm64"
-    },
-    {
-      "platform": "mac-x64",
-      "label": "Mac (Intel)",
-      "name": "LensDesk-2.0.0-macOS-Intel-x64.dmg",
-      "size": 149602846,
-      "sha256": "303df750bbb919c103f12c16a072054c47d4db318aee1c713fd8b3b06b85ba7b",
-      "url": "/downloads/mac-x64"
-    },
-    {
-      "platform": "windows",
-      "label": "Windows (x64 Setup Installer)",
-      "name": "LensDesk-2.0.0-Setup.exe",
-      "size": 3797725,
-      "sha256": "a1cddbd2232813db5a354cf0b2818ac1cb2f31f110b6ac4e98d21ee6a838f883",
-      "url": "/downloads/windows"
-    },
-    {
-      "platform": "windows-zip",
-      "label": "Windows (x64 Portable ZIP)",
-      "name": "LensDesk-2.0.0-Windows-x64.zip",
-      "size": 1547631,
-      "sha256": "a3e5660dbcb3b5ba98626f80e3045f18f28286bbd6cf4f80e5c4f6dd32cbb8b0",
-      "url": "/downloads/windows-zip"
-    }
-  ]
+  "LensDesk-2.0.0-Windows-x64.zip": "62279f8f5e24857685e58b37840abb86f77a49b91516235f843f1b6ebf71bc92",
+  "LensDesk.zip": "62279f8f5e24857685e58b37840abb86f77a49b91516235f843f1b6ebf71bc92",
+  "LensDeskApp.zip": "62279f8f5e24857685e58b37840abb86f77a49b91516235f843f1b6ebf71bc92",
+  "LensDesk-2.0.0-Setup.exe": "be461978cf383dca66d8d790bc99361ca22c56cf50ae0e219d2eb1839730883a",
+  "RuntimeHost.exe": "6db814f8bb456c04ce143625669a5e2d409f7465fcc0ed2780d0c259a5119afe"
 }
