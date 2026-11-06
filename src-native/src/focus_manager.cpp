@@ -208,10 +208,23 @@ LRESULT FocusManager::RouteMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         // called even when the state already matches because the actual OS
         // focus may have moved (for example after a window activation).
         if (msg == WM_LBUTTONDOWN || msg == WM_RBUTTONDOWN) {
-            if (GetForegroundWindow() != hwnd) {
+            HWND curFg = GetForegroundWindow();
+            if (curFg != hwnd) {
+                DWORD fgThread = curFg ? GetWindowThreadProcessId(curFg, nullptr) : 0;
+                DWORD curThread = GetCurrentThreadId();
+                if (fgThread != 0 && fgThread != curThread) {
+                    AttachThreadInput(curThread, fgThread, TRUE);
+                }
+                BringWindowToTop(hwnd);
                 SetForegroundWindow(hwnd);
+                SetActiveWindow(hwnd);
+                SetFocus(hwnd);
+                if (fgThread != 0 && fgThread != curThread) {
+                    AttachThreadInput(curThread, fgThread, FALSE);
+                }
+            } else {
+                SetFocus(hwnd);
             }
-            SetFocus(hwnd);
             if (inBrowser && m_browserMgr) {
                 SetFocusTarget(FocusState::FOCUSED_BROWSER, "mouse_click_browser");
                 m_browserMgr->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);

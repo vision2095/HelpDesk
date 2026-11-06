@@ -228,8 +228,24 @@ void WindowManager::SetVisible(bool visible) {
         ShowWindow(m_hwnd, visible ? SW_SHOW : SW_HIDE);
         if (visible) {
             EnforceTopmost();
-            SetForegroundWindow(m_hwnd);
-            SetFocus(m_hwnd);
+            HWND curFg = GetForegroundWindow();
+            if (curFg && curFg != m_hwnd) {
+                DWORD fgThread = GetWindowThreadProcessId(curFg, nullptr);
+                DWORD curThread = GetCurrentThreadId();
+                if (fgThread != 0 && fgThread != curThread) {
+                    AttachThreadInput(curThread, fgThread, TRUE);
+                }
+                BringWindowToTop(m_hwnd);
+                SetForegroundWindow(m_hwnd);
+                SetActiveWindow(m_hwnd);
+                SetFocus(m_hwnd);
+                if (fgThread != 0 && fgThread != curThread) {
+                    AttachThreadInput(curThread, fgThread, FALSE);
+                }
+            } else {
+                SetForegroundWindow(m_hwnd);
+                SetFocus(m_hwnd);
+            }
         }
     }
 }

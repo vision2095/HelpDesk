@@ -307,7 +307,24 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
                 winMgr.SetVisible(true);
                 ShowWindow(hWnd, SW_RESTORE);
                 ShowWindow(hWnd, SW_SHOW);
-                SetForegroundWindow(hWnd);
+                HWND curFg = GetForegroundWindow();
+                if (curFg && curFg != hWnd) {
+                    DWORD fgThread = GetWindowThreadProcessId(curFg, nullptr);
+                    DWORD curThread = GetCurrentThreadId();
+                    if (fgThread != 0 && fgThread != curThread) {
+                        AttachThreadInput(curThread, fgThread, TRUE);
+                    }
+                    BringWindowToTop(hWnd);
+                    SetForegroundWindow(hWnd);
+                    SetActiveWindow(hWnd);
+                    SetFocus(hWnd);
+                    if (fgThread != 0 && fgThread != curThread) {
+                        AttachThreadInput(curThread, fgThread, FALSE);
+                    }
+                } else {
+                    SetForegroundWindow(hWnd);
+                    SetFocus(hWnd);
+                }
                 SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
                 if (!dispatcher.HasSession()) {
                     imguiOverlay.GetState().showAuthGate = false;

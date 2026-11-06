@@ -239,7 +239,18 @@ void InputManager::AutoTypeWorker(std::wstring wideText, int delayMs) {
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
     // 2. Query target window
+    // If LensDesk itself is currently foreground (e.g. user clicked the "Type" button in HUD),
+    // wait up to 3 seconds for user to switch or click their target editor/window.
     HWND targetHwnd = GetForegroundWindow();
+    if (targetHwnd == m_hwnd) {
+        for (int wait = 0; wait < 30 && !m_stopAutoTyping; ++wait) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            targetHwnd = GetForegroundWindow();
+            if (targetHwnd && targetHwnd != m_hwnd) {
+                break;
+            }
+        }
+    }
 
     // 3. Safety validation: never type into LensDesk itself
     if (!targetHwnd || targetHwnd == m_hwnd) {
