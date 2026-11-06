@@ -20,7 +20,7 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
     // 2a. Register Owner Window Class (1:1 HintLens Parity at 0x140036518 - 0x140036571)
     WNDCLASSEXW owc{};
     owc.cbSize = sizeof(WNDCLASSEXW);
-    owc.lpfnWndProc = DefWindowProcW;
+    owc.lpfnWndProc = StaticOwnerWndProc;
     owc.hInstance = hInstance;
     owc.lpszClassName = WINDOW_CLASS_NAME_OWNER;
     RegisterClassExW(&owc);
@@ -46,7 +46,7 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
     // 2c. Register Main Overlay Window Class (1:1 HintLens Parity at 0x1400364c6 - 0x1400364db)
     WNDCLASSEXW wc{};
     wc.cbSize = sizeof(WNDCLASSEXW);
-    wc.style = CS_HREDRAW | CS_VREDRAW;
+    wc.style = CS_CLASSDC;
     wc.lpfnWndProc = StaticWndProc;
     wc.hInstance = hInstance;
     wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
@@ -117,8 +117,8 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
 
     s_instance = this;
 
-    // 8. Foreground and Reorder Event Hooks for 1:1 HintLens Z-order topmost parity
-    // Uses WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS (0x2) exactly like HintLens native architecture (0x14000cf87 and 0x1400111b9)
+    // 8. Foreground Event Hook (EVENT_SYSTEM_FOREGROUND = 3)
+    // Uses WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS (0x2) matching HintLens architecture (0x14000cf87)
     m_hForegroundHook = SetWinEventHook(
         EVENT_SYSTEM_FOREGROUND,
         EVENT_SYSTEM_FOREGROUND,
@@ -129,15 +129,8 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
         WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS
     );
 
-    m_hReorderHook = SetWinEventHook(
-        EVENT_OBJECT_REORDER,
-        EVENT_OBJECT_REORDER,
-        nullptr,
-        StaticWinEventProc,
-        0,
-        0,
-        WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS
-    );
+    // 8b. Dedicated Reorder Monitor Thread for 1:1 HintLens Z-Order Topmost Parity (0x140011040 / 0x140011190)
+    StartReorderMonitorThread();
 
     // 9. Watchdog heartbeat timer (250ms, 4Hz - matching 0xFA in HintLens native architecture)
     SetTimer(m_hwnd, 1002, 250, nullptr);
@@ -151,6 +144,8 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
 }
 
 void WindowManager::Shutdown() {
+    StopReorderMonitorThread();
+
     if (m_hwnd) {
         KillTimer(m_hwnd, 1002);
     }
@@ -158,21 +153,19 @@ void WindowManager::Shutdown() {
         UnhookWinEvent(m_hForegroundHook);
         m_hForegroundHook = nullptr;
     }
-    if (m_hReorderHook) {
-        UnhookWinEvent(m_hReorderHook);
-        m_hReorderHook = nullptr;
-    }
     if (s_instance == this) {
         s_instance = nullptr;
     }
     RemoveTrayIcon();
     if (m_hwnd) {
-        DestroyWindow(m_hwnd);
+        HWND h = m_hwnd;
         m_hwnd = nullptr;
+        DestroyWindow(h);
     }
     if (m_hOwnerWnd) {
-        DestroyWindow(m_hOwnerWnd);
+        HWND hOwner = m_hOwnerWnd;
         m_hOwnerWnd = nullptr;
+        DestroyWindow(hOwner);
     }
     if (m_hInstance) {
         UnregisterClassW(WINDOW_CLASS_NAME, m_hInstance);
@@ -218,19 +211,6 @@ void WindowManager::EnforceTopmost() {
         return;
     }
 
-    // Atomic re-entrancy and throttling guard (prevents DWM message storms and thread starvation)
-    static std::atomic<bool> s_inEnforce{false};
-    static std::atomic<ULONGLONG> s_lastEnforceTick{0};
-
-    ULONGLONG now = GetTickCount64();
-    if (now - s_lastEnforceTick.load() < 100) {
-        return;
-    }
-    if (s_inEnforce.exchange(true)) {
-        return;
-    }
-    s_lastEnforceTick.store(now);
-
     // 1. Ensure WS_EX_TOPMOST style bit is always explicitly present in extended style
     LONG_PTR exStyle = GetWindowLongPtrW(m_hwnd, GWL_EXSTYLE);
     if (!(exStyle & WS_EX_TOPMOST)) {
@@ -245,8 +225,96 @@ void WindowManager::EnforceTopmost() {
         0, 0, 0, 0,
         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS
     );
+}
 
-    s_inEnforce.store(false);
+void WindowManager::StartReorderMonitorThread() {
+    m_reorderThreadStop.store(false);
+    m_reorderThread = std::thread([this]() {
+        m_reorderThreadId = GetCurrentThreadId();
+
+        // 1:1 HintLens Parity at 0x140011190: Dedicated thread with EVENT_OBJECT_REORDER hook
+        HWINEVENTHOOK hHook = SetWinEventHook(
+            EVENT_OBJECT_REORDER,
+            EVENT_OBJECT_REORDER,
+            nullptr,
+            StaticReorderEventProc,
+            0,
+            0,
+            WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS
+        );
+
+        while (!m_reorderThreadStop.load()) {
+            MsgWaitForMultipleObjectsEx(0, nullptr, 250, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
+            MSG msg{};
+            while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
+                if (msg.message == WM_QUIT) {
+                    break;
+                }
+                TranslateMessage(&msg);
+                DispatchMessageW(&msg);
+            }
+
+            // Periodic watchdog check on the monitor thread (matching 0xFA in HintLens)
+            if (m_alwaysOnTop && m_isVisible && m_hwnd) {
+                HWND prev = GetWindow(m_hwnd, GW_HWNDPREV);
+                if (prev != nullptr && prev != m_hOwnerWnd && prev != m_hwnd) {
+                    EnforceTopmost();
+                }
+            }
+        }
+
+        if (hHook) {
+            UnhookWinEvent(hHook);
+        }
+    });
+}
+
+void WindowManager::StopReorderMonitorThread() {
+    if (m_reorderThread.joinable()) {
+        m_reorderThreadStop.store(true);
+        if (m_reorderThreadId != 0) {
+            PostThreadMessageW(m_reorderThreadId, WM_QUIT, 0, 0);
+        }
+        m_reorderThread.join();
+        m_reorderThreadId = 0;
+    }
+}
+
+void CALLBACK WindowManager::StaticReorderEventProc(
+    HWINEVENTHOOK,
+    DWORD event,
+    HWND hwndEvent,
+    LONG idObject,
+    LONG,
+    DWORD,
+    DWORD
+) {
+    if (!s_instance || !s_instance->m_hwnd || !s_instance->m_alwaysOnTop || !s_instance->m_isVisible) {
+        return;
+    }
+
+    // 1:1 HintLens parity at 0x140011104: idObject must be OBJID_WINDOW (0)
+    if (idObject != 0) {
+        return;
+    }
+
+    // Ignore events generated by our own overlay or owner window
+    if (hwndEvent == s_instance->m_hwnd || hwndEvent == s_instance->m_hOwnerWnd) {
+        return;
+    }
+
+    if (!IsWindowVisible(s_instance->m_hwnd)) {
+        return;
+    }
+
+    if (event == EVENT_OBJECT_REORDER) {
+        // 1:1 HintLens Parity at 0x140011138 - 0x140011149:
+        // GetWindow(m_hwnd, GW_HWNDPREV == 3)
+        HWND prev = GetWindow(s_instance->m_hwnd, GW_HWNDPREV);
+        if (prev != nullptr && prev != s_instance->m_hOwnerWnd && prev != s_instance->m_hwnd) {
+            s_instance->EnforceTopmost();
+        }
+    }
 }
 
 void CALLBACK WindowManager::StaticWinEventProc(
@@ -280,13 +348,6 @@ void CALLBACK WindowManager::StaticWinEventProc(
         // In HintLens native architecture:
         // When foreground window changes, check if it covers our overlay
         if (s_instance->IsCoveredByAnotherWindow()) {
-            s_instance->EnforceTopmost();
-        }
-    } else if (event == EVENT_OBJECT_REORDER) {
-        // 1:1 HintLens Parity at 0x140011138 - 0x140011149:
-        // GetWindow(m_hwnd, GW_HWNDPREV == 3)
-        HWND prev = GetWindow(s_instance->m_hwnd, GW_HWNDPREV);
-        if (prev != nullptr && prev != s_instance->m_hOwnerWnd && prev != s_instance->m_hwnd) {
             s_instance->EnforceTopmost();
         }
     }
@@ -423,6 +484,18 @@ void WindowManager::RemoveTrayIcon() {
     }
 }
 
+LRESULT CALLBACK WindowManager::StaticOwnerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    if (msg == WM_CLOSE) {
+        if (s_instance && s_instance->m_hwnd) {
+            PostMessageW(s_instance->m_hwnd, WM_CLOSE, 0, 0);
+        } else {
+            PostQuitMessage(0);
+        }
+        return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wParam, lParam);
+}
+
 LRESULT CALLBACK WindowManager::StaticWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     WindowManager* pThis = nullptr;
     if (msg == WM_NCCREATE) {
@@ -481,7 +554,7 @@ LRESULT WindowManager::HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
         }
 
         case WM_CLOSE: {
-            DestroyWindow(hwnd);
+            PostQuitMessage(0);
             return 0;
         }
 

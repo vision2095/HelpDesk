@@ -60,7 +60,17 @@ public:
 
 private:
     static LRESULT CALLBACK StaticWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+    static LRESULT CALLBACK StaticOwnerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
     static void CALLBACK StaticWinEventProc(
+        HWINEVENTHOOK hWinEventHook,
+        DWORD event,
+        HWND hwnd,
+        LONG idObject,
+        LONG idChild,
+        DWORD idEventThread,
+        DWORD dwmsEventTime
+    );
+    static void CALLBACK StaticReorderEventProc(
         HWINEVENTHOOK hWinEventHook,
         DWORD event,
         HWND hwnd,
@@ -71,11 +81,13 @@ private:
     );
     LRESULT HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
+    void StartReorderMonitorThread();
+    void StopReorderMonitorThread();
+
     HWND m_hwnd = nullptr;
     HWND m_hOwnerWnd = nullptr;
     HINSTANCE m_hInstance = nullptr;
     HWINEVENTHOOK m_hForegroundHook = nullptr;
-    HWINEVENTHOOK m_hReorderHook = nullptr;
     static WindowManager* s_instance;
     bool m_isVisible = true;
     bool m_alwaysOnTop = true;
@@ -84,6 +96,10 @@ private:
     bool m_captureProtection = true;
     float m_opacity = 1.0f;
     UINT m_dpi = 96;
+
+    std::thread m_reorderThread;
+    std::atomic<bool> m_reorderThreadStop{false};
+    DWORD m_reorderThreadId = 0;
 
     NOTIFYICONDATAW m_trayData{};
     bool m_hasTrayIcon = false;

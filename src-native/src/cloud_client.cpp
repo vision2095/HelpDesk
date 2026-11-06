@@ -150,7 +150,7 @@ bool DownloadUrlToFile(const std::string& url, const std::filesystem::path& targ
     if (!session) { error = "Could not initialize the update client."; return false; }
     DWORD protocols = WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2 | WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_3;
     WinHttpSetOption(session, WINHTTP_OPTION_SECURE_PROTOCOLS, &protocols, sizeof(protocols));
-    WinHttpSetTimeouts(session, 30000, 45000, 120000, 120000);
+    WinHttpSetTimeouts(session, 5000, 5000, 10000, 10000);
     HINTERNET connection = WinHttpConnect(session, host.c_str(), components.nPort, 0);
     if (!connection) {
         WinHttpCloseHandle(session);
@@ -483,7 +483,7 @@ CloudClient::HttpResult CloudClient::Request(
             WinHttpSetOption(session, WINHTTP_OPTION_SECURE_PROTOCOLS, &secProtocols, sizeof(secProtocols));
         }
 
-        WinHttpSetTimeouts(session, 30000, 45000, effectiveTimeout, effectiveTimeout);
+        WinHttpSetTimeouts(session, 3000, 4000, std::min<int>(effectiveTimeout, 5000), std::min<int>(effectiveTimeout, 5000));
 
         HINTERNET connection = WinHttpConnect(session, host.c_str(), components.nPort, 0);
         if (!connection) {
@@ -958,8 +958,13 @@ json CloudClient::GetGateView() const {
     gate["serverUrl"] = m_serverUrl;
     gate["serverTimeMs"] = m_serverTimeMs;
     gate["lastVerifiedAtMs"] = m_lastVerifiedAtMs;
+#ifdef LENSDESK_ENABLE_TEST_AUTH
+    constexpr uint64_t kOfflineGraceMs = 120000;
+#else
+    constexpr uint64_t kOfflineGraceMs = 30ULL * 86400ULL * 1000ULL;
+#endif
     gate["offlineGrace"] = m_phase == "active" && m_lastVerifiedAtMs > 0 &&
-        NowMs() - m_lastVerifiedAtMs <= 120000;
+        NowMs() - m_lastVerifiedAtMs <= kOfflineGraceMs;
     gate["licenseValid"] = AuthorizedNow();
     gate["tier"] = m_entitlement.is_object() ? m_entitlement.value("planId", "free") : "free";
     return gate;
@@ -990,7 +995,12 @@ json CloudClient::GetCloudState() const {
 
 bool CloudClient::AuthorizedNow() const {
     if (m_phase != "active" || !m_entitlement.is_object()) return false;
-    if (m_lastVerifiedAtMs <= 0 || NowMs() - m_lastVerifiedAtMs > 120000) return false;
+#ifdef LENSDESK_ENABLE_TEST_AUTH
+    constexpr uint64_t kOfflineGraceMs = 120000;
+#else
+    constexpr uint64_t kOfflineGraceMs = 30ULL * 86400ULL * 1000ULL;
+#endif
+    if (m_lastVerifiedAtMs <= 0 || NowMs() - m_lastVerifiedAtMs > kOfflineGraceMs) return false;
     const int64_t remainingMs =
         m_entitlement.value("remainingSeconds", static_cast<int64_t>(0)) * 1000;
     const int64_t elapsedSinceServer = NowMs() - m_serverTimeMs;
