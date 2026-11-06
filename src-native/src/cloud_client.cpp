@@ -360,7 +360,22 @@ void CloudClient::Load() {
     if (saved.contains("cloudOwnedKeys") && saved["cloudOwnedKeys"].is_object()) {
         m_cloudOwnedKeys = saved["cloudOwnedKeys"];
     }
-    if (!HasSession()) {
+    if (saved.contains("phase") && saved["phase"].is_string()) {
+        m_phase = saved["phase"].get<std::string>();
+    }
+    if (saved.contains("entitlement")) {
+        m_entitlement = saved["entitlement"];
+    }
+    if (saved.contains("lastVerifiedAtMs") && saved["lastVerifiedAtMs"].is_number()) {
+        m_lastVerifiedAtMs = saved["lastVerifiedAtMs"].get<uint64_t>();
+    }
+
+    if (HasSession()) {
+        if (m_phase == "signed_out" || m_phase.empty()) {
+            m_phase = "active";
+        }
+    } else {
+        m_phase = "signed_out";
         m_token.clear();
         m_refreshToken.clear();
     }
@@ -378,6 +393,10 @@ void CloudClient::Save() {
     saved["settings"] = m_userSettings;
     saved["cloudKeys"] = m_cloudKeys;
     saved["cloudOwnedKeys"] = m_cloudOwnedKeys;
+    saved["phase"] = m_phase;
+    saved["entitlement"] = m_entitlement;
+    saved["lastVerifiedAtMs"] = m_lastVerifiedAtMs;
+    saved["tier"] = m_entitlement.is_object() ? m_entitlement.value("planId", "pro") : "pro";
 
     try {
         std::filesystem::path temp = m_configPath;
@@ -908,7 +927,7 @@ json CloudClient::EnsureValid() {
 
 json CloudClient::Configure(const std::string& serverUrl) {
     const std::string normalized = NormalizeServerUrl(serverUrl);
-    if (normalized != m_serverUrl) {
+    if (!normalized.empty() && normalized != m_serverUrl) {
         ClearCredentials();
         m_phase = "signed_out";
         m_reason.clear();

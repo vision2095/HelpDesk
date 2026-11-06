@@ -31,7 +31,7 @@ public:
     json GetCloudState() const;
 
     bool AuthorizedNow() const;
-    bool HasSession() const { return !m_token.empty() && !m_refreshToken.empty(); }
+    bool HasSession() const { return !m_token.empty(); }
     std::string GetServerUrl() const { return m_serverUrl; }
     std::string GetPurchaseUrl() const;
     std::string GetUserId() const {

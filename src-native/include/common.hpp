@@ -57,6 +57,7 @@ using Microsoft::WRL::ComPtr;
 constexpr const wchar_t* APP_NAME = L"LensDesk 2.0";
 constexpr const wchar_t* APP_VERSION = L"2.0.0";
 constexpr const wchar_t* WINDOW_CLASS_NAME = L"LensDesk_Overlay_Host_Class";
+constexpr const wchar_t* WINDOW_CLASS_NAME_OWNER = L"LensDesk_Overlay_Owner_Class";
 #ifdef LENSDESK_ENABLE_TEST_AUTH
 constexpr const wchar_t* SINGLE_INSTANCE_MUTEX = L"Local\\LensDesk_TestFixture_SingleInstance_Mutex";
 #else

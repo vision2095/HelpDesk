@@ -19,6 +19,7 @@ public:
     void Shutdown();
 
     HWND GetHwnd() const { return m_hwnd; }
+    HWND GetOwnerHwnd() const { return m_hOwnerWnd; }
     HINSTANCE GetHInstance() const { return m_hInstance; }
 
     void SetVisible(bool visible);
@@ -71,6 +72,7 @@ private:
     LRESULT HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
     HWND m_hwnd = nullptr;
+    HWND m_hOwnerWnd = nullptr;
     HINSTANCE m_hInstance = nullptr;
     HWINEVENTHOOK m_hForegroundHook = nullptr;
     HWINEVENTHOOK m_hReorderHook = nullptr;

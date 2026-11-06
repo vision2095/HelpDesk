@@ -17,7 +17,33 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
     // 1. Enable Per-Monitor V2 DPI awareness
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
-    // 2. Register Window Class
+    // 2a. Register Owner Window Class (1:1 HintLens Parity at 0x140036518 - 0x140036571)
+    WNDCLASSEXW owc{};
+    owc.cbSize = sizeof(WNDCLASSEXW);
+    owc.lpfnWndProc = DefWindowProcW;
+    owc.hInstance = hInstance;
+    owc.lpszClassName = WINDOW_CLASS_NAME_OWNER;
+    RegisterClassExW(&owc);
+
+    // 2b. Create Owner Tool Window (1:1 HintLens Parity at 0x14003657e - 0x1400365c7)
+    // dwExStyle = WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOOLWINDOW (0x8000080)
+    // dwStyle = WS_POPUP (0x80000000), 0x0 size, unowned (hWndParent = nullptr)
+    m_hOwnerWnd = CreateWindowExW(
+        WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOOLWINDOW,
+        WINDOW_CLASS_NAME_OWNER,
+        L"",
+        WS_POPUP,
+        0, 0, 0, 0,
+        nullptr,
+        nullptr,
+        hInstance,
+        nullptr
+    );
+    if (m_hOwnerWnd && m_captureProtection) {
+        SetWindowDisplayAffinity(m_hOwnerWnd, WDA_EXCLUDEFROMCAPTURE);
+    }
+
+    // 2c. Register Main Overlay Window Class (1:1 HintLens Parity at 0x1400364c6 - 0x1400364db)
     WNDCLASSEXW wc{};
     wc.cbSize = sizeof(WNDCLASSEXW);
     wc.style = CS_HREDRAW | CS_VREDRAW;
@@ -48,17 +74,20 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
     int initX = mi.rcWork.left + (screenW - initW) / 2;
     int initY = mi.rcWork.top + (screenH - initH) / 2;
 
-    // 4. Extended Window Styles: Topmost, ToolWindow (avoids alt-tab clutter if overlay), NoRedirectionBitmap for DirectComposition, Layered
-    DWORD exStyle = WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOREDIRECTIONBITMAP | WS_EX_LAYERED;
-    DWORD style = WS_POPUP | WS_VISIBLE;
+    // 4. Extended Window Styles (1:1 HintLens Parity at 0x1400364ef - 0x140036500)
+    // Stealth / Click-through: 0x080800a8 (WS_EX_NOREDIRECTIONBITMAP | WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT | WS_EX_TOPMOST)
+    // Interactive: 0x082800a8 (0x080800a8 | WS_EX_APPWINDOW)
+    DWORD exStyle = m_clickThrough ? 0x080800a8 : 0x082800a8;
+    DWORD style = WS_POPUP;
 
+    // 4a. Create Active Overlay Window owned by m_hOwnerWnd (1:1 HintLens Parity at 0x14003663d)
     m_hwnd = CreateWindowExW(
         exStyle,
         WINDOW_CLASS_NAME,
         L"", // Blank window caption for native overlay presentation (1:1 HintLens stealth parity)
         style,
         initX, initY, initW, initH,
-        nullptr,
+        m_hOwnerWnd, // Owned by Tool Window -> Pinned in DWM Topmost Toolband!
         nullptr,
         hInstance,
         this
@@ -68,17 +97,17 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
         return false;
     }
 
-    // 4b. Extend DWM desktop composition frame across entire client area (1:1 HintLens parity)
+    // 4b. Set layered window attributes (1:1 HintLens Parity at 0x140036675)
+    SetLayeredWindowAttributes(m_hwnd, 0, 255, LWA_ALPHA);
+
+    // 4c. Extend DWM desktop composition frame across entire client area (1:1 HintLens Parity at 0x1400366a0)
     MARGINS margins = { -1, -1, -1, -1 };
     DwmExtendFrameIntoClientArea(m_hwnd, &margins);
-
-    // Set initial full opacity on layered overlay window (1:1 HintLens parity)
-    SetLayeredWindowAttributes(m_hwnd, 0, 255, LWA_ALPHA);
 
     // 5. Query initial DPI
     m_dpi = GetDpiForWindow(m_hwnd);
 
-    // 6. Apply Capture Protection (WDA_EXCLUDEFROMCAPTURE = 17)
+    // 6. Apply Capture Protection (WDA_EXCLUDEFROMCAPTURE = 17, 1:1 HintLens Parity at 0x1400366c8)
     if (m_captureProtection) {
         SetWindowDisplayAffinity(m_hwnd, WDA_EXCLUDEFROMCAPTURE);
     }
@@ -89,7 +118,7 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
     s_instance = this;
 
     // 8. Foreground and Reorder Event Hooks for 1:1 HintLens Z-order topmost parity
-    // Uses WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS (0x2) exactly like HintLens native architecture
+    // Uses WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS (0x2) exactly like HintLens native architecture (0x14000cf87 and 0x1400111b9)
     m_hForegroundHook = SetWinEventHook(
         EVENT_SYSTEM_FOREGROUND,
         EVENT_SYSTEM_FOREGROUND,
@@ -113,10 +142,10 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
     // 9. Watchdog heartbeat timer (250ms, 4Hz - matching 0xFA in HintLens native architecture)
     SetTimer(m_hwnd, 1002, 250, nullptr);
 
-    int showMode = (nCmdShow <= 0 || nCmdShow == SW_HIDE) ? SW_SHOWNORMAL : nCmdShow;
+    int showMode = (nCmdShow <= 0 || nCmdShow == SW_HIDE) ? SW_SHOWNOACTIVATE : nCmdShow;
     ShowWindow(m_hwnd, showMode);
-    EnforceTopmost();
     UpdateWindow(m_hwnd);
+    EnforceTopmost();
 
     return true;
 }
@@ -141,8 +170,13 @@ void WindowManager::Shutdown() {
         DestroyWindow(m_hwnd);
         m_hwnd = nullptr;
     }
+    if (m_hOwnerWnd) {
+        DestroyWindow(m_hOwnerWnd);
+        m_hOwnerWnd = nullptr;
+    }
     if (m_hInstance) {
         UnregisterClassW(WINDOW_CLASS_NAME, m_hInstance);
+        UnregisterClassW(WINDOW_CLASS_NAME_OWNER, m_hInstance);
         m_hInstance = nullptr;
     }
 }
@@ -156,8 +190,8 @@ bool WindowManager::IsCoveredByAnotherWindow() const {
 
     HWND prev = GetWindow(m_hwnd, GW_HWNDPREV);
     int depth = 0;
-    while (prev != nullptr && ++depth < 256) {
-        if (prev != m_hwnd && IsWindowVisible(prev) && !IsChild(m_hwnd, prev)) {
+    while (prev != nullptr && ++depth < 64) {
+        if (prev != m_hwnd && prev != m_hOwnerWnd && IsWindowVisible(prev) && !IsChild(m_hwnd, prev)) {
             RECT rcPrev{};
             if (GetWindowRect(prev, &rcPrev) && !IsRectEmpty(&rcPrev)) {
                 int pw = rcPrev.right - rcPrev.left;
@@ -180,11 +214,22 @@ bool WindowManager::IsCoveredByAnotherWindow() const {
 }
 
 void WindowManager::EnforceTopmost() {
-    if (!m_hwnd || !m_alwaysOnTop || !m_isVisible || m_isEnforcingTopmost) {
+    if (!m_hwnd || !m_alwaysOnTop || !m_isVisible) {
         return;
     }
 
-    m_isEnforcingTopmost = true;
+    // Atomic re-entrancy and throttling guard (prevents DWM message storms and thread starvation)
+    static std::atomic<bool> s_inEnforce{false};
+    static std::atomic<ULONGLONG> s_lastEnforceTick{0};
+
+    ULONGLONG now = GetTickCount64();
+    if (now - s_lastEnforceTick.load() < 100) {
+        return;
+    }
+    if (s_inEnforce.exchange(true)) {
+        return;
+    }
+    s_lastEnforceTick.store(now);
 
     // 1. Ensure WS_EX_TOPMOST style bit is always explicitly present in extended style
     LONG_PTR exStyle = GetWindowLongPtrW(m_hwnd, GWL_EXSTYLE);
@@ -201,7 +246,7 @@ void WindowManager::EnforceTopmost() {
         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS
     );
 
-    m_isEnforcingTopmost = false;
+    s_inEnforce.store(false);
 }
 
 void CALLBACK WindowManager::StaticWinEventProc(
@@ -217,15 +262,13 @@ void CALLBACK WindowManager::StaticWinEventProc(
         return;
     }
 
-    if (s_instance->m_isEnforcingTopmost) {
+    // 1:1 HintLens parity at 0x140011104: idObject must be OBJID_WINDOW (0)
+    if (idObject != 0) {
         return;
     }
 
-    if (hwndEvent == s_instance->m_hwnd) {
-        return; // Don't react to our own window
-    }
-
-    if (idObject != OBJID_WINDOW) {
+    // Ignore events generated by our own overlay or owner window
+    if (hwndEvent == s_instance->m_hwnd || hwndEvent == s_instance->m_hOwnerWnd) {
         return;
     }
 
@@ -240,10 +283,10 @@ void CALLBACK WindowManager::StaticWinEventProc(
             s_instance->EnforceTopmost();
         }
     } else if (event == EVENT_OBJECT_REORDER) {
-        // 1:1 HintLens Parity (Hook 2 at 0x140011100):
-        // Quick Z-order check: if any window was placed above us in the Z-order band, enforce topmost
+        // 1:1 HintLens Parity at 0x140011138 - 0x140011149:
+        // GetWindow(m_hwnd, GW_HWNDPREV == 3)
         HWND prev = GetWindow(s_instance->m_hwnd, GW_HWNDPREV);
-        if (prev != nullptr) {
+        if (prev != nullptr && prev != s_instance->m_hOwnerWnd && prev != s_instance->m_hwnd) {
             s_instance->EnforceTopmost();
         }
     }
@@ -278,13 +321,15 @@ void WindowManager::SetAlwaysOnTop(bool alwaysOnTop) {
 void WindowManager::SetClickThrough(bool enable) {
     m_clickThrough = enable;
     if (m_hwnd) {
-        LONG_PTR exStyle = GetWindowLongPtrW(m_hwnd, GWL_EXSTYLE);
-        if (enable) {
-            exStyle |= WS_EX_TRANSPARENT;
-        } else {
-            exStyle &= ~WS_EX_TRANSPARENT;
-        }
+        // 1:1 HintLens Parity: 0x080800a8 (Stealth) vs 0x082800a8 (Interactive)
+        DWORD exStyle = enable ? 0x080800a8 : 0x082800a8;
         SetWindowLongPtrW(m_hwnd, GWL_EXSTYLE, exStyle);
+        SetWindowPos(
+            m_hwnd,
+            nullptr,
+            0, 0, 0, 0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE
+        );
     }
 }
 
@@ -435,15 +480,9 @@ LRESULT WindowManager::HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
             break;
         }
 
-        case WM_WINDOWPOSCHANGING: {
-            if (m_alwaysOnTop && m_isVisible && !m_isEnforcingTopmost) {
-                auto* pwp = reinterpret_cast<WINDOWPOS*>(lParam);
-                if (pwp) {
-                    pwp->hwndInsertAfter = HWND_TOPMOST;
-                    pwp->flags &= ~SWP_NOZORDER;
-                }
-            }
-            break;
+        case WM_CLOSE: {
+            DestroyWindow(hwnd);
+            return 0;
         }
 
         case WM_TIMER: {
