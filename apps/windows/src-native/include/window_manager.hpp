@@ -26,6 +26,8 @@ public:
 
     void SetAlwaysOnTop(bool alwaysOnTop);
     bool IsAlwaysOnTop() const { return m_alwaysOnTop; }
+    void EnforceTopmost();
+    bool IsCoveredByAnotherWindow() const;
 
     void SetClickThrough(bool enable);
     bool IsClickThrough() const { return m_clickThrough; }
@@ -72,9 +74,11 @@ private:
     HINSTANCE m_hInstance = nullptr;
     HWINEVENTHOOK m_hForegroundHook = nullptr;
     HWINEVENTHOOK m_hLocationHook = nullptr;
+    HWINEVENTHOOK m_hShowHook = nullptr;
     static WindowManager* s_instance;
     bool m_isVisible = true;
     bool m_alwaysOnTop = true;
+    bool m_isEnforcingTopmost = false;
     bool m_clickThrough = false;
     bool m_captureProtection = true;
     float m_opacity = 1.0f;
