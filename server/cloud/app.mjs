@@ -837,27 +837,27 @@ export function createCloudServer({
       {
         name: "LensDesk-2.0.0-Setup.exe",
         url: "https://github.com/vision2095/HelpDesk/releases/download/v2.0.0/LensDesk-2.0.0-Setup.exe",
-        sha256: "9caac9c295f505c68cdcec7b1a96b81877f68e5b8abdbee7dc875c44acb0adf1",
+        sha256: "d829c37e4b2996ec207b6d7dde2eee8002ee85aaa8f53b0ba511c2234ba3403e",
       },
       {
         name: "LensDesk-2.0.0-Windows-x64.zip",
         url: "https://github.com/vision2095/HelpDesk/releases/download/v2.0.0/LensDesk-2.0.0-Windows-x64.zip",
-        sha256: "96d277db1bdbd6efb2dfe218186a485c019eb192249333ae28cd834026ce7864",
+        sha256: "096866091b005881a8c735ddc2a83b1ab0309e1ce518641f94780bb2e3c5c64c",
       },
       {
         name: "LensDesk-Setup.exe",
         url: "https://github.com/vision2095/HelpDesk/releases/download/v2.0.0/LensDesk-Setup.exe",
-        sha256: "9caac9c295f505c68cdcec7b1a96b81877f68e5b8abdbee7dc875c44acb0adf1",
+        sha256: "d829c37e4b2996ec207b6d7dde2eee8002ee85aaa8f53b0ba511c2234ba3403e",
       },
       {
         name: "LensDesk.zip",
         url: "https://github.com/vision2095/HelpDesk/releases/download/v2.0.0/LensDesk.zip",
-        sha256: "96d277db1bdbd6efb2dfe218186a485c019eb192249333ae28cd834026ce7864",
+        sha256: "096866091b005881a8c735ddc2a83b1ab0309e1ce518641f94780bb2e3c5c64c",
       },
       {
         name: "LensDeskApp.zip",
         url: "https://github.com/vision2095/HelpDesk/releases/download/v2.0.0/LensDeskApp.zip",
-        sha256: "96d277db1bdbd6efb2dfe218186a485c019eb192249333ae28cd834026ce7864",
+        sha256: "096866091b005881a8c735ddc2a83b1ab0309e1ce518641f94780bb2e3c5c64c",
       },
       {
         name: "checksums.json",
@@ -869,7 +869,14 @@ export function createCloudServer({
       fs.mkdirSync(resolvedReleaseDir, { recursive: true });
       for (const item of requiredFiles) {
         const dest = path.join(resolvedReleaseDir, item.name);
-        if (!fs.existsSync(dest) || fs.statSync(dest).size === 0) {
+        let shouldDownload = !fs.existsSync(dest) || fs.statSync(dest).size === 0;
+        if (!shouldDownload && item.sha256) {
+          const curSha = createHash("sha256").update(fs.readFileSync(dest)).digest("hex");
+          if (curSha !== item.sha256) {
+            shouldDownload = true;
+          }
+        }
+        if (shouldDownload) {
           const res = await fetch(item.url);
           if (res.ok) {
             const buf = Buffer.from(await res.arrayBuffer());
