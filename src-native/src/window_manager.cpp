@@ -110,7 +110,7 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
     );
 
     m_hShowHook = SetWinEventHook(
-        EVENT_OBJECT_SHOW,
+        EVENT_OBJECT_CREATE,
         EVENT_OBJECT_REORDER,
         nullptr,
         StaticWinEventProc,
@@ -119,8 +119,8 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
         WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS
     );
 
-    // 9. Watchdog heartbeat timer (50ms) to ensure DWM does not bury overlay
-    SetTimer(m_hwnd, 1002, 50, nullptr);
+    // 9. Watchdog heartbeat timer (25ms, 40Hz) to ensure DWM never buries overlay under any window
+    SetTimer(m_hwnd, 1002, 25, nullptr);
 
     int showMode = (nCmdShow <= 0 || nCmdShow == SW_HIDE) ? SW_SHOWNORMAL : nCmdShow;
     ShowWindow(m_hwnd, showMode);
@@ -167,10 +167,7 @@ bool WindowManager::IsCoveredByAnotherWindow() const {
     HWND prev = GetWindow(m_hwnd, GW_HWNDPREV);
     while (prev != nullptr) {
         if (IsWindowVisible(prev) && prev != m_hwnd && !IsChild(m_hwnd, prev)) {
-            RECT rc{};
-            if (GetWindowRect(prev, &rc) && (rc.right - rc.left) > 10 && (rc.bottom - rc.top) > 10) {
-                return true;
-            }
+            return true;
         }
         prev = GetWindow(prev, GW_HWNDPREV);
     }
@@ -182,41 +179,32 @@ void WindowManager::EnforceTopmost() {
         return;
     }
 
-    if (!IsCoveredByAnotherWindow()) {
-        return; // Already at the absolute top of the Z-order! No-op, 0 CPU overhead.
+    struct EnforceGuard {
+        bool& flag;
+        explicit EnforceGuard(bool& f) : flag(f) { flag = true; }
+        ~EnforceGuard() { flag = false; }
+    } guard(m_isEnforcingTopmost);
+
+    // 1. Ensure WS_EX_TOPMOST style bit is always explicitly present in extended style
+    LONG_PTR exStyle = GetWindowLongPtrW(m_hwnd, GWL_EXSTYLE);
+    if (!(exStyle & WS_EX_TOPMOST)) {
+        SetWindowLongPtrW(m_hwnd, GWL_EXSTYLE, exStyle | WS_EX_TOPMOST);
     }
 
-    m_isEnforcingTopmost = true;
-
-    // Windows DWM Z-Order re-assertion mechanics:
-    // Calling HWND_TOPMOST on an already-topmost window is treated as a no-op if another
-    // topmost or foreground window was created after it. Toggling HWND_NOTOPMOST -> HWND_TOPMOST -> HWND_TOP
-    // forces Windows DWM to re-insert m_hwnd at index 0 of the topmost band without stealing user focus (SWP_NOACTIVATE).
-    SetWindowPos(
-        m_hwnd,
-        HWND_NOTOPMOST,
-        0, 0, 0, 0,
-        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOSENDCHANGING
-    );
+    // 2. Unconditionally position m_hwnd at the absolute head of the HWND_TOPMOST band.
+    // Crucially: We NEVER call HWND_TOP or HWND_NOTOPMOST, which demote the window to normal z-order!
+    // SWP_NOACTIVATE ensures user focus and typing in other applications is completely uninterrupted.
     SetWindowPos(
         m_hwnd,
         HWND_TOPMOST,
         0, 0, 0, 0,
-        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOSENDCHANGING
+        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER
     );
-    SetWindowPos(
-        m_hwnd,
-        HWND_TOP,
-        0, 0, 0, 0,
-        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOSENDCHANGING
-    );
-
-    m_isEnforcingTopmost = false;
 }
 
 void CALLBACK WindowManager::StaticWinEventProc(
     HWINEVENTHOOK,
-    DWORD event,
+    DWORD,
     HWND hwndEvent,
     LONG,
     LONG,
@@ -231,14 +219,7 @@ void CALLBACK WindowManager::StaticWinEventProc(
         return; // Don't react to our own window
     }
 
-    if (event == EVENT_SYSTEM_FOREGROUND) {
-        HWND fg = GetForegroundWindow();
-        if (fg && fg != s_instance->m_hwnd) {
-            s_instance->EnforceTopmost();
-        }
-    } else {
-        s_instance->EnforceTopmost();
-    }
+    s_instance->EnforceTopmost();
 }
 
 void WindowManager::SetVisible(bool visible) {
