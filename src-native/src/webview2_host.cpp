@@ -251,11 +251,9 @@ bool WebView2Host::Initialize(
                                         [this](ICoreWebView2* sender, ICoreWebView2NavigationCompletedEventArgs* args) -> HRESULT {
                                             if (!m_initialFocusDone && m_controller) {
                                                 m_initialFocusDone = true;
-                                                if (m_hwnd) {
-                                                    SetForegroundWindow(m_hwnd);
-                                                    SetFocus(m_hwnd);
+                                                if (m_hwnd && GetForegroundWindow() == m_hwnd) {
+                                                    m_controller->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
                                                 }
-                                                m_controller->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
                                             }
                                             return S_OK;
                                         }
@@ -289,11 +287,9 @@ bool WebView2Host::Initialize(
                                                 m_controller->put_IsVisible(FALSE);
                                             } else if (!m_initialFocusDone && m_controller) {
                                                 m_initialFocusDone = true;
-                                                if (m_hwnd) {
-                                                    SetForegroundWindow(m_hwnd);
-                                                    SetFocus(m_hwnd);
+                                                if (m_hwnd && GetForegroundWindow() == m_hwnd) {
+                                                    m_controller->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
                                                 }
-                                                m_controller->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
                                             }
                                             return S_OK;
                                         }

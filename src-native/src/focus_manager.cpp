@@ -208,9 +208,9 @@ LRESULT FocusManager::RouteMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         // called even when the state already matches because the actual OS
         // focus may have moved (for example after a window activation).
         if (msg == WM_LBUTTONDOWN || msg == WM_RBUTTONDOWN) {
-            BringWindowToTop(hwnd);
-            SetForegroundWindow(hwnd);
-            SetActiveWindow(hwnd);
+            if (GetForegroundWindow() != hwnd) {
+                SetForegroundWindow(hwnd);
+            }
             SetFocus(hwnd);
             if (inBrowser && m_browserMgr) {
                 SetFocusTarget(FocusState::FOCUSED_BROWSER, "mouse_click_browser");

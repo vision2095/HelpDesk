@@ -37,6 +37,13 @@ ShowUnInstDetails show
 RequestExecutionLevel user
 
 Function .onInit
+  ; Detect running LensDesk host and request graceful closure before installation
+  FindWindow $0 "LensDesk_Overlay_Host_Class" ""
+  ${If} $0 != 0
+    SendMessage $0 16 0 0 ; WM_CLOSE
+    Sleep 500
+  ${EndIf}
+
   ; Detect Microsoft Edge WebView2 Runtime across 64-bit and 32-bit registry hives
   SetRegView 64
   ReadRegStr $0 HKLM "SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" "pv"
@@ -62,7 +69,7 @@ FunctionEnd
 
 Section "MainSection" SEC01
   SetOutPath "$INSTDIR"
-  SetOverwrite try
+  SetOverwrite on
 
   File "..\build-native\bin\Release\RuntimeHost.exe"
   File /nonfatal "..\build-native\bin\Release\RuntimeHostAccessibility.exe"
@@ -103,6 +110,11 @@ Function un.onUninstSuccess
 FunctionEnd
 
 Function un.onInit
+  FindWindow $0 "LensDesk_Overlay_Host_Class" ""
+  ${If} $0 != 0
+    SendMessage $0 16 0 0 ; WM_CLOSE
+    Sleep 500
+  ${EndIf}
 FunctionEnd
 
 Section Uninstall

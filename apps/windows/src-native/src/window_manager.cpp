@@ -115,8 +115,6 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
 
     int showMode = (nCmdShow <= 0 || nCmdShow == SW_HIDE) ? SW_SHOWNORMAL : nCmdShow;
     ShowWindow(m_hwnd, showMode);
-    SetForegroundWindow(m_hwnd);
-    SetFocus(m_hwnd);
     EnforceTopmost();
     UpdateWindow(m_hwnd);
 
@@ -242,9 +240,10 @@ void CALLBACK WindowManager::StaticWinEventProc(
             s_instance->EnforceTopmost();
         }
     } else if (event == EVENT_OBJECT_REORDER) {
-        // In HintLens native architecture:
-        // When OS reorders Z-order, check if another window was placed above us
-        if (s_instance->IsCoveredByAnotherWindow()) {
+        // 1:1 HintLens Parity (Hook 2 at 0x140011100):
+        // Quick Z-order check: if any window was placed above us in the Z-order band, enforce topmost
+        HWND prev = GetWindow(s_instance->m_hwnd, GW_HWNDPREV);
+        if (prev != nullptr) {
             s_instance->EnforceTopmost();
         }
     }
@@ -253,13 +252,9 @@ void CALLBACK WindowManager::StaticWinEventProc(
 void WindowManager::SetVisible(bool visible) {
     m_isVisible = visible;
     if (m_hwnd) {
-        ShowWindow(m_hwnd, visible ? SW_SHOW : SW_HIDE);
+        ShowWindow(m_hwnd, visible ? SW_SHOWNOACTIVATE : SW_HIDE);
         if (visible) {
             EnforceTopmost();
-            if (GetForegroundWindow() != m_hwnd) {
-                SetForegroundWindow(m_hwnd);
-            }
-            SetFocus(m_hwnd);
         }
     }
 }

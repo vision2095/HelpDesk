@@ -309,9 +309,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
                 winMgr.SetVisible(true);
                 ShowWindow(hWnd, SW_RESTORE);
                 ShowWindow(hWnd, SW_SHOW);
-                BringWindowToTop(hWnd);
                 SetForegroundWindow(hWnd);
-                SetActiveWindow(hWnd);
                 SetFocus(hWnd);
                 SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
                 if (!dispatcher.HasSession()) {

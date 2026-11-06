@@ -1371,9 +1371,7 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
         if (action == "desktop.focusWindow") {
             HWND hwnd = m_winMgr ? m_winMgr->GetHwnd() : nullptr;
             if (hwnd) {
-                BringWindowToTop(hwnd);
                 SetForegroundWindow(hwnd);
-                SetActiveWindow(hwnd);
                 SetFocus(hwnd);
 
                 if (m_webHost) {
