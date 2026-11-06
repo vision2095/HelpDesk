@@ -76,8 +76,10 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
 
     // 4. Extended Window Styles (1:1 HintLens Parity at 0x1400364ef - 0x140036500)
     // Stealth / Click-through: 0x080800a8 (WS_EX_NOACTIVATE | WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT | WS_EX_TOPMOST)
-    // Interactive: 0x08280088 (WS_EX_NOREDIRECTIONBITMAP | WS_EX_NOACTIVATE | WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST)
-    DWORD exStyle = m_clickThrough ? 0x080800a8 : 0x08280088;
+    // Interactive: 0x00280088 (WS_EX_NOREDIRECTIONBITMAP | WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST)
+    // In interactive mode, neither WS_EX_TRANSPARENT (0x20) nor WS_EX_NOACTIVATE (0x08000000) is set,
+    // ensuring 100% responsive mouse clicks, window closing, button clicks, and keyboard typing.
+    DWORD exStyle = m_clickThrough ? 0x080800a8 : 0x00280088;
     DWORD style = WS_POPUP;
 
     // 4a. Create Active Overlay Window owned by m_hOwnerWnd (1:1 HintLens Parity at 0x14003663d)
@@ -211,13 +213,7 @@ void WindowManager::EnforceTopmost() {
         return;
     }
 
-    // 1. Ensure WS_EX_TOPMOST style bit is always explicitly present in extended style
-    LONG_PTR exStyle = GetWindowLongPtrW(m_hwnd, GWL_EXSTYLE);
-    if (!(exStyle & WS_EX_TOPMOST)) {
-        SetWindowLongPtrW(m_hwnd, GWL_EXSTYLE, exStyle | WS_EX_TOPMOST);
-    }
-
-    // 2. Unconditionally position m_hwnd at the absolute head of the HWND_TOPMOST band (1:1 HintLens parity at 0x140010b70)
+    // Unconditionally position m_hwnd at the absolute head of the HWND_TOPMOST band (1:1 HintLens parity at 0x140010b70)
     // SWP_ASYNCWINDOWPOS (0x400) | SWP_NOACTIVATE (0x010) | SWP_NOMOVE (0x002) | SWP_NOSIZE (0x001) = 0x413
     SetWindowPos(
         m_hwnd,
@@ -243,27 +239,11 @@ void WindowManager::StartReorderMonitorThread() {
             WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS
         );
 
-        bool threadRunning = true;
-        while (threadRunning && !m_reorderThreadStop.load()) {
-            MsgWaitForMultipleObjectsEx(0, nullptr, 250, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
-            MSG msg{};
-            while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
-                if (msg.message == WM_QUIT) {
-                    threadRunning = false;
-                    break;
-                }
-                TranslateMessage(&msg);
-                DispatchMessageW(&msg);
-            }
-            if (!threadRunning) break;
-
-            // Periodic watchdog check on the monitor thread (matching 0xFA in HintLens)
-            if (m_alwaysOnTop && m_isVisible && m_hwnd) {
-                HWND prev = GetWindow(m_hwnd, GW_HWNDPREV);
-                if (prev != nullptr && prev != m_hOwnerWnd && prev != m_hwnd) {
-                    EnforceTopmost();
-                }
-            }
+        // Standard Win32 message loop (1:1 HintLens parity at 0x1400111d0 - 0x140011209)
+        MSG msg{};
+        while (!m_reorderThreadStop.load() && GetMessageW(&msg, nullptr, 0, 0) > 0) {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
         }
 
         if (hHook) {
@@ -311,11 +291,16 @@ void CALLBACK WindowManager::StaticReorderEventProc(
     }
 
     if (event == EVENT_OBJECT_REORDER) {
-        // 1:1 HintLens Parity at 0x140011138 - 0x140011149:
+        // 1:1 HintLens Parity at 0x140011138 - 0x140011176:
         // GetWindow(m_hwnd, GW_HWNDPREV == 3)
         HWND prev = GetWindow(s_instance->m_hwnd, GW_HWNDPREV);
         if (prev != nullptr && prev != s_instance->m_hOwnerWnd && prev != s_instance->m_hwnd) {
-            s_instance->EnforceTopmost();
+            SetWindowPos(
+                s_instance->m_hwnd,
+                HWND_TOPMOST,
+                0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS
+            );
         }
     }
 }
@@ -348,9 +333,10 @@ void CALLBACK WindowManager::StaticWinEventProc(
     }
 
     if (event == EVENT_SYSTEM_FOREGROUND) {
-        // In HintLens native architecture:
-        // When foreground window changes, check if it covers our overlay
-        if (s_instance->IsCoveredByAnotherWindow()) {
+        // 1:1 HintLens Parity at 0x140010c3b:
+        // When foreground window changes, check if another window precedes us in Z-order
+        HWND prev = GetWindow(s_instance->m_hwnd, GW_HWNDPREV);
+        if (prev != nullptr && prev != s_instance->m_hOwnerWnd && prev != s_instance->m_hwnd) {
             s_instance->EnforceTopmost();
         }
     }
@@ -387,16 +373,16 @@ void WindowManager::SetClickThrough(bool enable) {
     if (m_hwnd) {
         LONG_PTR exStyle = GetWindowLongPtrW(m_hwnd, GWL_EXSTYLE);
         if (enable) {
-            exStyle |= WS_EX_TRANSPARENT;
+            exStyle |= (WS_EX_TRANSPARENT | WS_EX_NOACTIVATE);
         } else {
-            exStyle &= ~WS_EX_TRANSPARENT;
+            exStyle &= ~(WS_EX_TRANSPARENT | WS_EX_NOACTIVATE);
         }
         SetWindowLongPtrW(m_hwnd, GWL_EXSTYLE, exStyle);
         SetWindowPos(
             m_hwnd,
-            nullptr,
+            HWND_TOPMOST,
             0, 0, 0, 0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_ASYNCWINDOWPOS
         );
     }
 }
@@ -538,6 +524,12 @@ LRESULT WindowManager::HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
         }
 
         case WM_NCHITTEST: {
+            // 1:1 HintLens Parity at 0x140036a19 - 0x140036a3d:
+            // When click-through is active (stealth), return HTTRANSPARENT (-1) so all clicks pass through to background window.
+            if (m_clickThrough) {
+                return HTTRANSPARENT;
+            }
+
             POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
             RECT rc{};
             GetWindowRect(hwnd, &rc);
