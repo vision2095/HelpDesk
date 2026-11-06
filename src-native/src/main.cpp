@@ -381,6 +381,13 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
 
         if (!running) break;
 
+        // 1:1 HintLens Topmost Parity: Check if any overlapping window has moved above overlay
+        if (winMgr.IsAlwaysOnTop() && winMgr.IsVisible()) {
+            if (winMgr.IsCoveredByAnotherWindow() || GetWindow(winMgr.GetHwnd(), GW_HWNDPREV) != nullptr) {
+                winMgr.EnforceTopmost();
+            }
+        }
+
         // Render Frame
         d3dRenderer.BeginFrame();
         imguiOverlay.BeginFrame();

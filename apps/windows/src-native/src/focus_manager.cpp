@@ -173,10 +173,24 @@ LRESULT FocusManager::RouteMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         LRESULT imguiRes = m_imguiOverlay->HandleMessage(hwnd, msg, wParam, lParam, handled);
         if (handled) {
             if (msg == WM_LBUTTONDOWN || msg == WM_RBUTTONDOWN) {
-                if (GetForegroundWindow() != hwnd) {
+                HWND curFg = GetForegroundWindow();
+                if (curFg && curFg != hwnd) {
+                    DWORD fgThread = GetWindowThreadProcessId(curFg, nullptr);
+                    DWORD curThread = GetCurrentThreadId();
+                    if (fgThread != 0 && fgThread != curThread) {
+                        AttachThreadInput(curThread, fgThread, TRUE);
+                    }
+                    BringWindowToTop(hwnd);
                     SetForegroundWindow(hwnd);
+                    SetActiveWindow(hwnd);
+                    SetFocus(hwnd);
+                    if (fgThread != 0 && fgThread != curThread) {
+                        AttachThreadInput(curThread, fgThread, FALSE);
+                    }
+                } else {
+                    SetForegroundWindow(hwnd);
+                    SetFocus(hwnd);
                 }
-                SetFocus(hwnd);
             }
             if (m_currentState != FocusState::FOCUSED_NATIVE_CONTROL) {
                 TransitionTo(FocusState::FOCUSED_NATIVE_CONTROL, "imgui_captured_input");

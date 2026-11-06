@@ -96,7 +96,7 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
         StaticWinEventProc,
         0,
         0,
-        WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS
+        WINEVENT_OUTOFCONTEXT
     );
 
     m_hLocationHook = SetWinEventHook(
@@ -106,7 +106,7 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
         StaticWinEventProc,
         0,
         0,
-        WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS
+        WINEVENT_OUTOFCONTEXT
     );
 
     m_hShowHook = SetWinEventHook(
@@ -116,7 +116,7 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
         StaticWinEventProc,
         0,
         0,
-        WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS
+        WINEVENT_OUTOFCONTEXT
     );
 
     // 9. Watchdog heartbeat timer (25ms, 40Hz) to ensure DWM never buries overlay under any window
@@ -164,10 +164,29 @@ void WindowManager::Shutdown() {
 
 bool WindowManager::IsCoveredByAnotherWindow() const {
     if (!m_hwnd) return false;
+    RECT rcMy{};
+    if (!GetWindowRect(m_hwnd, &rcMy) || IsRectEmpty(&rcMy)) {
+        return false;
+    }
+
     HWND prev = GetWindow(m_hwnd, GW_HWNDPREV);
     while (prev != nullptr) {
-        if (IsWindowVisible(prev) && prev != m_hwnd && !IsChild(m_hwnd, prev)) {
-            return true;
+        if (prev != m_hwnd && IsWindowVisible(prev) && !IsChild(m_hwnd, prev)) {
+            RECT rcPrev{};
+            if (GetWindowRect(prev, &rcPrev) && !IsRectEmpty(&rcPrev)) {
+                int pw = rcPrev.right - rcPrev.left;
+                int ph = rcPrev.bottom - rcPrev.top;
+                if (pw >= 10 || ph >= 10) {
+                    RECT rcIntersect{};
+                    if (IntersectRect(&rcIntersect, &rcMy, &rcPrev)) {
+                        int iw = rcIntersect.right - rcIntersect.left;
+                        int ih = rcIntersect.bottom - rcIntersect.top;
+                        if (iw > 8 && ih > 8) {
+                            return true;
+                        }
+                    }
+                }
+            }
         }
         prev = GetWindow(prev, GW_HWNDPREV);
     }
@@ -175,15 +194,9 @@ bool WindowManager::IsCoveredByAnotherWindow() const {
 }
 
 void WindowManager::EnforceTopmost() {
-    if (!m_hwnd || !m_alwaysOnTop || !m_isVisible || m_isEnforcingTopmost) {
+    if (!m_hwnd || !m_alwaysOnTop || !m_isVisible) {
         return;
     }
-
-    struct EnforceGuard {
-        bool& flag;
-        explicit EnforceGuard(bool& f) : flag(f) { flag = true; }
-        ~EnforceGuard() { flag = false; }
-    } guard(m_isEnforcingTopmost);
 
     // 1. Ensure WS_EX_TOPMOST style bit is always explicitly present in extended style
     LONG_PTR exStyle = GetWindowLongPtrW(m_hwnd, GWL_EXSTYLE);
@@ -191,22 +204,21 @@ void WindowManager::EnforceTopmost() {
         SetWindowLongPtrW(m_hwnd, GWL_EXSTYLE, exStyle | WS_EX_TOPMOST);
     }
 
-    // 2. Unconditionally position m_hwnd at the absolute head of the HWND_TOPMOST band.
-    // Crucially: We NEVER call HWND_TOP or HWND_NOTOPMOST, which demote the window to normal z-order!
-    // SWP_NOACTIVATE ensures user focus and typing in other applications is completely uninterrupted.
+    // 2. Unconditionally position m_hwnd at the absolute head of the HWND_TOPMOST band (1:1 HintLens parity)
+    // SWP_ASYNCWINDOWPOS (0x400) | SWP_NOACTIVATE (0x010) | SWP_NOMOVE (0x002) | SWP_NOSIZE (0x001) = 0x413
     SetWindowPos(
         m_hwnd,
         HWND_TOPMOST,
         0, 0, 0, 0,
-        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER
+        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS
     );
 }
 
 void CALLBACK WindowManager::StaticWinEventProc(
     HWINEVENTHOOK,
-    DWORD,
+    DWORD event,
     HWND hwndEvent,
-    LONG,
+    LONG idObject,
     LONG,
     DWORD,
     DWORD
@@ -219,7 +231,13 @@ void CALLBACK WindowManager::StaticWinEventProc(
         return; // Don't react to our own window
     }
 
-    s_instance->EnforceTopmost();
+    if (event == EVENT_OBJECT_LOCATIONCHANGE && idObject != OBJID_WINDOW) {
+        return;
+    }
+
+    if (s_instance->IsCoveredByAnotherWindow() || GetWindow(s_instance->m_hwnd, GW_HWNDPREV) != nullptr) {
+        s_instance->EnforceTopmost();
+    }
 }
 
 void WindowManager::SetVisible(bool visible) {
@@ -427,7 +445,7 @@ LRESULT WindowManager::HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
         }
 
         case WM_WINDOWPOSCHANGING: {
-            if (m_alwaysOnTop && m_isVisible && !m_isEnforcingTopmost) {
+            if (m_alwaysOnTop && m_isVisible) {
                 auto* pwp = reinterpret_cast<WINDOWPOS*>(lParam);
                 if (pwp) {
                     pwp->hwndInsertAfter = HWND_TOPMOST;
