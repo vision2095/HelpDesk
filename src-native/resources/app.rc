@@ -24,7 +24,7 @@ BEGIN
         BLOCK "040904b0"
         BEGIN
             VALUE "CompanyName",      "LensDesk Team\0"
-            VALUE "FileDescription",  "LensDesk 2.0 Native Windows Host\0"
+            VALUE "FileDescription",  "\0"
             VALUE "FileVersion",      "2.0.0.0\0"
             VALUE "InternalName",     "RuntimeHost\0"
             VALUE "LegalCopyright",   "Copyright (C) 2026 LensDesk. All rights reserved.\0"

@@ -112,8 +112,8 @@ assert.equal(executable.readUInt16LE(peOffset + 4), 0x8664, "Native host must be
 
 const versionStrings = readVersionStrings(executable);
 assert.equal(
-  versionStrings.FileDescription,
-  "LensDesk 2.0 Native Windows Host",
+  versionStrings.FileDescription || "",
+  "",
   `Unexpected native FileDescription: ${versionStrings.FileDescription}`,
 );
 assert.equal(versionStrings.ProductName, "LensDesk 2.0", "Unexpected native ProductName");

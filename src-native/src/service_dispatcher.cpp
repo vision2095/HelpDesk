@@ -2826,7 +2826,7 @@ void ServiceDispatcher::HandleChat(const json& payload, DispatchResponseCallback
             }
             if (cloudFulfilled) return;
 
-            std::string fallbackAnswer = "LensDesk 2.0 Native Windows Host is fully active with native C++20 + DirectComposition.\n\n"
+            std::string fallbackAnswer = "LensDesk is fully active with native C++20 + DirectComposition.\n\n"
                                          "• Direct3D 11.1 hardware-accelerated transparent HUD\n"
                                          "• Dear ImGui native HUD overlay with status pill\n"
                                          "• Microsoft Edge WebView2 hosting React 19\n"

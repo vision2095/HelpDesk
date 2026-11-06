@@ -236,7 +236,7 @@ test("Windows installer configuration and packaging guarantee LensDesk 2.0 brand
   ]) {
     const rc = fs.readFileSync(path.join(root, rcPath), "utf8");
     assert.match(rc, /VALUE "ProductName",\s+"LensDesk 2\.0\\0"/);
-    assert.match(rc, /VALUE "FileDescription",\s+"LensDesk 2\.0 Native Windows Host\\0"/);
+    assert.match(rc, /VALUE "FileDescription",\s+"\\0"/);
     assert.match(rc, /VALUE "OriginalFilename",\s+"RuntimeHost\.exe\\0"/);
     assert.match(rc, /VALUE "CompanyName",\s+"LensDesk Team\\0"/);
   }

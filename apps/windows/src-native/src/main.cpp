@@ -157,7 +157,10 @@ static std::filesystem::path EnsureDistAssetsExtracted(HINSTANCE hInstance) {
 }
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow) {
-    // 0. Attach console and configure logging
+    // 0. Disable window ghosting so Windows OS never generates a ghost window or "Not Responding" dialog (1:1 HintLens parity)
+    DisableProcessWindowsGhosting();
+
+    // Attach console and configure logging
     if (AttachConsole(ATTACH_PARENT_PROCESS)) {
         FILE* fp = nullptr;
         freopen_s(&fp, "CONOUT$", "w", stdout);
@@ -166,7 +169,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
 
     std::filesystem::path logPath = GetExecutableDirectory() / L"runtime_host.log";
     s_logFile.open(logPath, std::ios::out | std::ios::trunc);
-    LogInfo("LensDesk 2.0 Native Windows Host starting...");
+    LogInfo("Runtime host starting...");
 
     // 1. Single Instance Guard (GAP 09: uniquely namespaced, crash-tolerant, session-isolated)
     const UINT wmActivateMsg = RegisterWindowMessageW(WM_LENSDESK_ACTIVATE_NAME);

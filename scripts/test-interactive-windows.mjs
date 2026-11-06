@@ -284,6 +284,7 @@ try {
   );
 
   assert.ok(
+    asstText.includes("LensDesk is fully active") ||
     asstText.includes("LensDesk 2.0 Native Windows Host is fully active") ||
     asstText.includes("LensDesk 2.0 Native Windows Host is active"),
     "Assistant response must contain native host response signature.",
