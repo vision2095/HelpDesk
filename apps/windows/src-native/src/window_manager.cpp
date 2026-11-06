@@ -55,7 +55,7 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
     m_hwnd = CreateWindowExW(
         exStyle,
         WINDOW_CLASS_NAME,
-        APP_NAME,
+        L"", // Blank window caption for native overlay presentation (1:1 HintLens stealth parity)
         style,
         initX, initY, initW, initH,
         nullptr,
