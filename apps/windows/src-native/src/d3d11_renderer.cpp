@@ -194,7 +194,8 @@ void D3D11Renderer::BeginFrame() {
 
 void D3D11Renderer::EndFrame() {
     if (m_swapChain) {
-        HRESULT hr = m_swapChain->Present(1, 0);
+        // Non-blocking present (SyncInterval = 0) with frame pacing governed by MsgWaitForMultipleObjectsEx (1:1 HintLens parity)
+        HRESULT hr = m_swapChain->Present(0, 0);
         if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET) {
             // Recreate device and swap chain after sleep/wake or GPU reset
             CleanupRenderTarget();

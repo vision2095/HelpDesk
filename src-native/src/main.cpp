@@ -356,6 +356,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     MSG msg{};
     bool running = true;
     while (running) {
+        // 1:1 HintLens Parity at 0x14000e1e0: MsgWaitForMultipleObjectsEx with 15ms timeout (~60Hz frame pacing)
+        MsgWaitForMultipleObjectsEx(0, nullptr, 15, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
+
         while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
             if (msg.message == WM_QUIT) {
                 running = false;
@@ -387,9 +390,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
 
         // DirectComposition commit
         dcompEngine.Commit();
-
-        // Yield time-slice without dropping frame rate (VSync in EndFrame handles 60/120Hz pacing)
-        Sleep(1);
     }
 
     // 16. Teardown
