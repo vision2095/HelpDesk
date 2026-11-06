@@ -499,6 +499,7 @@ export function WorkspaceBrowser({
         ref={viewport}
         hidden={!tab}
         tabIndex={-1}
+        style={{ background: "transparent" }}
         onClick={() => {
           void command("focus");
         }}

@@ -490,6 +490,13 @@ function App() {
       window.removeEventListener("lensdesk:account-changed", changed);
   }, []);
   useEffect(() => {
+    if (desktop) {
+      document.documentElement.classList.add("desktop-app");
+      document.documentElement.style.background = "transparent";
+      document.body.style.background = "transparent";
+    }
+  }, [desktop]);
+  useEffect(() => {
     // Subscription gate snapshots: authoritative phase, session, and
     // entitlement pushed by the main-process arbitraritor.
     let alive = true;

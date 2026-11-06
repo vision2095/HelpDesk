@@ -87,8 +87,13 @@ void DCompEngine::SetBrowserVisualVisible(bool visible) {
     if (m_browserVisible == visible) return;
     m_browserVisible = visible;
     if (visible) {
-        // Place browser visual below HUD visual
-        m_rootVisual->AddVisual(m_browserVisual.Get(), FALSE, m_hudVisual.Get());
+        // Place browser visual ABOVE HUD visual so the embedded web page is 100% bright,
+        // clear and never obscured by HUD backgrounds at 100% opacity, while remaining
+        // below the topmost Direct3D 11 / ImGui status visual.
+        m_rootVisual->AddVisual(m_browserVisual.Get(), TRUE, m_hudVisual.Get());
+        if (m_d3dVisual) {
+            m_rootVisual->AddVisual(m_d3dVisual.Get(), TRUE, m_browserVisual.Get());
+        }
     } else {
         m_rootVisual->RemoveVisual(m_browserVisual.Get());
     }
@@ -104,9 +109,6 @@ void DCompEngine::SetOpacity(float opacity) {
     if (SUCCEEDED(hr) && effectGroup) {
         effectGroup->SetOpacity(opacity);
         if (m_rootVisual) m_rootVisual->SetEffect(effectGroup.Get());
-        if (m_hudVisual) m_hudVisual->SetEffect(effectGroup.Get());
-        if (m_browserVisual) m_browserVisual->SetEffect(effectGroup.Get());
-        if (m_d3dVisual) m_d3dVisual->SetEffect(effectGroup.Get());
         Commit();
     }
 #else
