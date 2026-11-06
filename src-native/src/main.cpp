@@ -218,6 +218,13 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     captureSvc.Initialize();
     LogInfo("Storage and Capture services initialized.");
 
+    // 4b. Ensure Web Assets are extracted before window creation (prevents UI thread wait while window is visible)
+    std::filesystem::path distPath = EnsureDistAssetsExtracted(hInstance);
+    if (std::filesystem::exists(distPath / L"index.html")) {
+        imguiOverlay.SetWebSuppressed(true);
+        LogInfo("React 19 web assets active; suppressing duplicate native ImGui windows.");
+    }
+
     // 5. Initialize Window Manager
     if (!winMgr.Initialize(hInstance, nCmdShow)) {
         ShowErrorDialog(nullptr, L"Failed to initialize LensDesk 2.0 native window.", L"Error");
@@ -258,12 +265,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     inputMgr.Initialize(hwnd);
     LogInfo("Global Input Manager initialized.");
 
-    // 10. Locate Dist Folder for Built React 19 Frontend
-    std::filesystem::path distPath = EnsureDistAssetsExtracted(hInstance);
-    if (std::filesystem::exists(distPath / L"index.html")) {
-        imguiOverlay.SetWebSuppressed(true);
-        LogInfo("React 19 web assets active; suppressing duplicate native ImGui windows.");
-    }
+    // 10. Dist Folder is already located and extracted at step 4b
 
     // 11. Wire Services & Dispatcher
     dispatcher.Initialize(
@@ -307,24 +309,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
                 winMgr.SetVisible(true);
                 ShowWindow(hWnd, SW_RESTORE);
                 ShowWindow(hWnd, SW_SHOW);
-                HWND curFg = GetForegroundWindow();
-                if (curFg && curFg != hWnd) {
-                    DWORD fgThread = GetWindowThreadProcessId(curFg, nullptr);
-                    DWORD curThread = GetCurrentThreadId();
-                    if (fgThread != 0 && fgThread != curThread) {
-                        AttachThreadInput(curThread, fgThread, TRUE);
-                    }
-                    BringWindowToTop(hWnd);
-                    SetForegroundWindow(hWnd);
-                    SetActiveWindow(hWnd);
-                    SetFocus(hWnd);
-                    if (fgThread != 0 && fgThread != curThread) {
-                        AttachThreadInput(curThread, fgThread, FALSE);
-                    }
-                } else {
-                    SetForegroundWindow(hWnd);
-                    SetFocus(hWnd);
-                }
+                BringWindowToTop(hWnd);
+                SetForegroundWindow(hWnd);
+                SetActiveWindow(hWnd);
+                SetFocus(hWnd);
                 SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
                 if (!dispatcher.HasSession()) {
                     imguiOverlay.GetState().showAuthGate = false;

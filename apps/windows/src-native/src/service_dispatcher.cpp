@@ -1371,22 +1371,10 @@ void ServiceDispatcher::Dispatch(const std::string& action, const json& payload,
         if (action == "desktop.focusWindow") {
             HWND hwnd = m_winMgr ? m_winMgr->GetHwnd() : nullptr;
             if (hwnd) {
-                HWND curFg = GetForegroundWindow();
-                DWORD fgThread = curFg ? GetWindowThreadProcessId(curFg, nullptr) : 0;
-                DWORD curThread = GetCurrentThreadId();
-
-                if (fgThread != 0 && fgThread != curThread) {
-                    AttachThreadInput(curThread, fgThread, TRUE);
-                }
-
                 BringWindowToTop(hwnd);
                 SetForegroundWindow(hwnd);
                 SetActiveWindow(hwnd);
                 SetFocus(hwnd);
-
-                if (fgThread != 0 && fgThread != curThread) {
-                    AttachThreadInput(curThread, fgThread, FALSE);
-                }
 
                 if (m_webHost) {
                     m_webHost->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);

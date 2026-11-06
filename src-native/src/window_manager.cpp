@@ -157,7 +157,8 @@ bool WindowManager::IsCoveredByAnotherWindow() const {
     }
 
     HWND prev = GetWindow(m_hwnd, GW_HWNDPREV);
-    while (prev != nullptr) {
+    int depth = 0;
+    while (prev != nullptr && ++depth < 256) {
         if (prev != m_hwnd && IsWindowVisible(prev) && !IsChild(m_hwnd, prev)) {
             RECT rcPrev{};
             if (GetWindowRect(prev, &rcPrev) && !IsRectEmpty(&rcPrev)) {
@@ -243,7 +244,7 @@ void CALLBACK WindowManager::StaticWinEventProc(
     } else if (event == EVENT_OBJECT_REORDER) {
         // In HintLens native architecture:
         // When OS reorders Z-order, check if another window was placed above us
-        if (GetWindow(s_instance->m_hwnd, GW_HWNDPREV) != nullptr) {
+        if (s_instance->IsCoveredByAnotherWindow()) {
             s_instance->EnforceTopmost();
         }
     }
