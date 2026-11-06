@@ -75,9 +75,9 @@ bool WindowManager::Initialize(HINSTANCE hInstance, int nCmdShow) {
     int initY = mi.rcWork.top + (screenH - initH) / 2;
 
     // 4. Extended Window Styles (1:1 HintLens Parity at 0x1400364ef - 0x140036500)
-    // Stealth / Click-through: 0x080800a8 (WS_EX_NOREDIRECTIONBITMAP | WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT | WS_EX_TOPMOST)
-    // Interactive: 0x082800a8 (0x080800a8 | WS_EX_APPWINDOW)
-    DWORD exStyle = m_clickThrough ? 0x080800a8 : 0x082800a8;
+    // Stealth / Click-through: 0x080800a8 (WS_EX_NOACTIVATE | WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT | WS_EX_TOPMOST)
+    // Interactive: 0x08280088 (WS_EX_NOREDIRECTIONBITMAP | WS_EX_NOACTIVATE | WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST)
+    DWORD exStyle = m_clickThrough ? 0x080800a8 : 0x08280088;
     DWORD style = WS_POPUP;
 
     // 4a. Create Active Overlay Window owned by m_hOwnerWnd (1:1 HintLens Parity at 0x14003663d)
@@ -243,16 +243,19 @@ void WindowManager::StartReorderMonitorThread() {
             WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS
         );
 
-        while (!m_reorderThreadStop.load()) {
+        bool threadRunning = true;
+        while (threadRunning && !m_reorderThreadStop.load()) {
             MsgWaitForMultipleObjectsEx(0, nullptr, 250, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
             MSG msg{};
             while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
                 if (msg.message == WM_QUIT) {
+                    threadRunning = false;
                     break;
                 }
                 TranslateMessage(&msg);
                 DispatchMessageW(&msg);
             }
+            if (!threadRunning) break;
 
             // Periodic watchdog check on the monitor thread (matching 0xFA in HintLens)
             if (m_alwaysOnTop && m_isVisible && m_hwnd) {
@@ -382,8 +385,12 @@ void WindowManager::SetAlwaysOnTop(bool alwaysOnTop) {
 void WindowManager::SetClickThrough(bool enable) {
     m_clickThrough = enable;
     if (m_hwnd) {
-        // 1:1 HintLens Parity: 0x080800a8 (Stealth) vs 0x082800a8 (Interactive)
-        DWORD exStyle = enable ? 0x080800a8 : 0x082800a8;
+        LONG_PTR exStyle = GetWindowLongPtrW(m_hwnd, GWL_EXSTYLE);
+        if (enable) {
+            exStyle |= WS_EX_TRANSPARENT;
+        } else {
+            exStyle &= ~WS_EX_TRANSPARENT;
+        }
         SetWindowLongPtrW(m_hwnd, GWL_EXSTYLE, exStyle);
         SetWindowPos(
             m_hwnd,

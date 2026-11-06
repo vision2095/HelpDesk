@@ -669,9 +669,14 @@ void CloudClient::HandleGateError(const HttpResult& result) {
     }
 
     // Network or server trouble. The last authoritative snapshot remains
-    // usable only inside the 120 second offline grace window.
+    // usable inside the offline grace window (30 days in production, 120s in tests).
+#ifdef LENSDESK_ENABLE_TEST_AUTH
+    constexpr uint64_t kOfflineGraceMs = 120000;
+#else
+    constexpr uint64_t kOfflineGraceMs = 30ULL * 86400ULL * 1000ULL;
+#endif
     const bool grace = m_lastVerifiedAtMs > 0 &&
-        NowMs() - m_lastVerifiedAtMs <= 120000 &&
+        NowMs() - m_lastVerifiedAtMs <= kOfflineGraceMs &&
         !m_entitlement.is_null() && m_entitlement.is_object() &&
         m_entitlement.value("remainingSeconds", static_cast<int64_t>(0)) > 0;
     if (!grace) {

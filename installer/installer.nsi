@@ -40,12 +40,12 @@ Function .onInit
   ; Detect running LensDesk host and request graceful closure before installation
   FindWindow $0 "LensDesk_Overlay_Host_Class" ""
   ${If} $0 != 0
-    PostMessage $0 16 0 0 ; WM_CLOSE (asynchronous post - never blocks installer)
+    SendMessage $0 16 0 0 $1 /TIMEOUT=1000
     Sleep 500
   ${EndIf}
   FindWindow $0 "LensDesk_Overlay_Owner_Class" ""
   ${If} $0 != 0
-    PostMessage $0 16 0 0 ; WM_CLOSE (asynchronous post - never blocks installer)
+    SendMessage $0 16 0 0 $1 /TIMEOUT=1000
     Sleep 500
   ${EndIf}
 
@@ -117,12 +117,12 @@ FunctionEnd
 Function un.onInit
   FindWindow $0 "LensDesk_Overlay_Host_Class" ""
   ${If} $0 != 0
-    PostMessage $0 16 0 0 ; WM_CLOSE (asynchronous post - never blocks installer)
+    SendMessage $0 16 0 0 $1 /TIMEOUT=1000
     Sleep 500
   ${EndIf}
   FindWindow $0 "LensDesk_Overlay_Owner_Class" ""
   ${If} $0 != 0
-    PostMessage $0 16 0 0 ; WM_CLOSE (asynchronous post - never blocks installer)
+    SendMessage $0 16 0 0 $1 /TIMEOUT=1000
     Sleep 500
   ${EndIf}
 FunctionEnd
