@@ -386,4 +386,30 @@ test('LensDesk 2.0 Native Windows Host Architecture', async (t) => {
       assert.equal(fs.existsSync(path.join(ROOT, retired)), false, `${retired} must be removed`);
     }
   });
+
+  await t.test('25. Phase 1 & Phase 2: Host lifecycle, DComp rendering, topmost pinning, and non-blocking input', () => {
+    const mainCpp = fs.readFileSync(path.join(ROOT, 'src-native/src/main.cpp'), 'utf8');
+    assert.match(mainCpp, /DisableProcessWindowsGhosting/, 'Main must suppress Windows ghosting dialogs');
+    assert.match(mainCpp, /FindResourceW\(hInstance,\s*MAKEINTRESOURCEW\(102\),\s*RT_RCDATA\)/, 'Main must load embedded bundle via Resource 102');
+
+    const wmCpp = fs.readFileSync(path.join(ROOT, 'src-native/src/window_manager.cpp'), 'utf8');
+    assert.match(wmCpp, /WM_WINDOWPOSCHANGING/, 'WindowManager must handle WM_WINDOWPOSCHANGING to pin topmost');
+    assert.match(wmCpp, /EVENT_OBJECT_REORDER/, 'WindowManager must hook EVENT_OBJECT_REORDER');
+    assert.match(wmCpp, /WM_NCHITTEST/, 'WindowManager must handle WM_NCHITTEST');
+    assert.match(wmCpp, /HTTRANSPARENT/, 'WM_NCHITTEST must support HTTRANSPARENT for click-through');
+    assert.doesNotMatch(wmCpp, /SetWindowLongPtrW.*StaticReorderEventProc/, 'Hook callback must not call SetWindowLongPtrW across threads');
+
+    const d3dCpp = fs.readFileSync(path.join(ROOT, 'src-native/src/d3d11_renderer.cpp'), 'utf8');
+    assert.match(d3dCpp, /DXGI_ALPHA_MODE_PREMULTIPLIED/, 'D3D11 renderer must use premultiplied alpha for DComp');
+    assert.match(d3dCpp, /D3D_DRIVER_TYPE_HARDWARE/, 'D3D11 renderer must use hardware acceleration');
+    assert.match(d3dCpp, /D3D_DRIVER_TYPE_WARP/, 'D3D11 renderer must provide WARP fallback');
+
+    const dcompCpp = fs.readFileSync(path.join(ROOT, 'src-native/src/dcomp_engine.cpp'), 'utf8');
+    assert.match(dcompCpp, /CreateTargetForHwnd/, 'DComp engine must target overlay HWND');
+    assert.match(dcompCpp, /m_rootVisual->AddVisual/, 'DComp engine must build multi-layer visual tree');
+
+    const focusCpp = fs.readFileSync(path.join(ROOT, 'src-native/src/focus_manager.cpp'), 'utf8');
+    assert.match(focusCpp, /MA_ACTIVATE/, 'Focus manager must handle WM_MOUSEACTIVATE with MA_ACTIVATE');
+    assert.match(focusCpp, /COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC/, 'Focus manager must route focus into WebView2');
+  });
 });

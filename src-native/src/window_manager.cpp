@@ -552,6 +552,16 @@ LRESULT WindowManager::HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
             break;
         }
 
+        case WM_WINDOWPOSCHANGING: {
+            if (m_alwaysOnTop && m_isVisible) {
+                auto* wp = reinterpret_cast<WINDOWPOS*>(lParam);
+                if (wp && !(wp->flags & SWP_NOZORDER)) {
+                    wp->hwndInsertAfter = HWND_TOPMOST;
+                }
+            }
+            break;
+        }
+
         case WM_CLOSE: {
             PostQuitMessage(0);
             return 0;
